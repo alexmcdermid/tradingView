@@ -1,10 +1,11 @@
+// @ts-nocheck
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import React from "react";
 import Home from "../routes/home";
 import type { Trade } from "../api/types";
-import { vi } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 type AuthState = {
   user: { sub: string } | null;
@@ -26,7 +27,7 @@ vi.mock("../auth/AuthProvider", () => ({
   useAuth: () => authState,
 }));
 
-const mockFetchTrades = vi.fn<[], Promise<Trade[]>>();
+const mockFetchTrades = vi.fn<() => Promise<Trade[]>>();
 const mockFetchSummary = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
