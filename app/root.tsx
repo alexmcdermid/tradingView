@@ -7,8 +7,10 @@ import {
   ScrollRestoration,
 } from "react-router";
 
+import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import type { Route } from "./+types/root";
 import "./app.css";
+import { AuthWrapper } from "./auth/AuthProvider";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -25,7 +27,7 @@ export const links: Route.LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -42,7 +44,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const theme = createTheme({
+    palette: {
+      mode: "light",
+      primary: { main: "#0f4d92" },
+      secondary: { main: "#ff7043" },
+      background: { default: "#f4f7fb" },
+    },
+    shape: { borderRadius: 10 },
+    typography: { fontFamily: "Inter, system-ui, -apple-system, sans-serif" },
+  });
+
+  return (
+    <AuthWrapper>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Outlet />
+      </ThemeProvider>
+    </AuthWrapper>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
