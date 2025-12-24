@@ -1,0 +1,45 @@
+# noinspection YAMLSchemaValidation,GithubUnresolvedReference
+name: Frontend CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Tests
+        run: npm test -- --watch=false
+        env:
+          CI: true
+          VITEST_WATCH: false
+
+  # todo
+  # deploy:
+  #   needs: test
+  #   if: false # disabled for now
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Use Node
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: npm
+  #     - name: Install
+  #       run: npm ci
+  #     - name: Build
+  #       run: npm run build
