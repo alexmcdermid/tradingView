@@ -9,6 +9,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { alpha, type Theme } from "@mui/material/styles";
 import { useEffect, useMemo, useState } from "react";
 import type { PnlBucket } from "../api/types";
 
@@ -27,6 +28,18 @@ function toDate(value?: string) {
     const month = Number(parts[1]) - 1;
     if (!Number.isNaN(year) && !Number.isNaN(month)) {
       return new Date(year, month, 1);
+    }
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function toDay(value: string) {
+  const parts = value.split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts.map(Number);
+    if (!parts.some((p) => Number.isNaN(Number(p)))) {
+      return new Date(year, month - 1, day);
     }
   }
   const parsed = new Date(value);
@@ -133,14 +146,29 @@ export function MonthlyCalendar({ daily, initialMonth, month, onMonthChange }: M
           }
           const dayNumber = Number(date.split("-")[2]);
           const pnl = pnlByDate.get(date) ?? null;
+          const cellDate = toDay(date);
+          const today = new Date();
+          const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          const isPastNoTrade = pnl == null && cellDate < todayStart;
           const color =
             pnl == null
-              ? "text.secondary"
+              ? isPastNoTrade
+                ? "text.disabled"
+                : "text.secondary"
               : pnl > 0
                 ? "success.main"
                 : pnl < 0
                   ? "error.main"
                   : "text.primary";
+          const backgroundColor = (theme: Theme) => {
+            if (pnl == null) {
+              if (isPastNoTrade) return theme.palette.action.disabledBackground;
+              return "transparent";
+            }
+            if (pnl > 0) return alpha(theme.palette.success.main, 0.12);
+            if (pnl < 0) return alpha(theme.palette.error.main, 0.12);
+            return alpha(theme.palette.text.primary, 0.06);
+          };
 
           const content = (
             <Box
@@ -150,7 +178,7 @@ export function MonthlyCalendar({ daily, initialMonth, month, onMonthChange }: M
                 border: "1px solid",
                 borderColor: "divider",
                 textAlign: "center",
-                backgroundColor: pnl == null ? "transparent" : "rgba(0,0,0,0.02)",
+                backgroundColor,
               }}
             >
               <Typography variant="body2" fontWeight={600}>
