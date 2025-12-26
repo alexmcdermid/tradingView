@@ -89,7 +89,8 @@ function TablePaginationActions({
 }
 
 function formatDate(value: string) {
-  return new Date(value).toLocaleDateString();
+  const iso = value.slice(0, 10);
+  return iso.replace(/-/g, "/");
 }
 
 function formatNumber(value?: number | null, digits = 2) {
