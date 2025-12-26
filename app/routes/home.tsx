@@ -15,7 +15,7 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Route } from "./+types/home";
 import {
   createTrade,
@@ -27,6 +27,7 @@ import {
 import type { PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
+import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 
 export function meta({}: Route.MetaArgs) {
@@ -39,12 +40,24 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
-  const [loadingData, setLoadingData] = useState(false);
+  const [loadingTrades, setLoadingTrades] = useState(false);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const loadingData = loadingTrades || loadingSummary;
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [pageMeta, setPageMeta] = useState<{ totalPages: number; hasNext: boolean; hasPrevious: boolean; totalElements: number }>({
+    totalPages: 0,
+    hasNext: false,
+    hasPrevious: false,
+    totalElements: 0,
+  });
+  const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
+  const wasAuthenticated = useRef<boolean>(!!user && !!token);
 
   const computePnl = (payload: TradePayload) => {
     const quantity = Number(payload.quantity || 0);
@@ -57,12 +70,15 @@ export default function Home() {
     return Number((movement * quantity * multiplier - fees).toFixed(2));
   };
 
-  const computeSummary = useCallback((list: Trade[]): PnlSummary => {
-    const totalPnl = list.reduce((acc, trade) => acc + (trade.realizedPnl || 0), 0);
+  const computeSummary = useCallback((list: Trade[], month?: string): PnlSummary => {
+    const filtered = month
+      ? list.filter((trade) => trade.closedAt.startsWith(month))
+      : list;
+    const totalPnl = filtered.reduce((acc, trade) => acc + (trade.realizedPnl || 0), 0);
     const dailyMap = new Map<string, { pnl: number; trades: number }>();
     const monthlyMap = new Map<string, { pnl: number; trades: number }>();
 
-    list.forEach((trade) => {
+    filtered.forEach((trade) => {
       const day = trade.closedAt.slice(0, 10);
       const month = trade.closedAt.slice(0, 7);
       dailyMap.set(day, {
@@ -84,47 +100,83 @@ export default function Home() {
 
     return {
       totalPnl: Number(totalPnl.toFixed(2)),
-      tradeCount: list.length,
+      tradeCount: filtered.length,
       daily,
       monthly,
     };
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadTrades = useCallback(async (targetPage: number, targetSize: number) => {
     if (!user || !token) {
-      setLoadingData(false);
       return;
     }
     try {
-      setLoadingData(true);
-      const [tradeData, summaryData] = await Promise.all([fetchTrades(), fetchSummary()]);
-      setTrades(tradeData);
+      setLoadingTrades(true);
+      const tradeData = await fetchTrades(targetPage, targetSize);
+      setTrades(tradeData.items);
+      setPage(tradeData.page);
+      setPageSize(tradeData.size);
+      setPageMeta({
+        totalPages: tradeData.totalPages,
+        hasNext: tradeData.hasNext,
+        hasPrevious: tradeData.hasPrevious,
+        totalElements: tradeData.totalElements,
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoadingTrades(false);
+    }
+  }, [token, user]);
+
+  const loadSummary = useCallback(async (month: string) => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      setLoadingSummary(true);
+      const summaryData = await fetchSummary(month);
       setSummary(summaryData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setLoadingData(false);
+      setLoadingSummary(false);
     }
   }, [token, user]);
 
   useEffect(() => {
     if (!user || !token) {
-      setLoadingData(false);
-      setTrades([]);
-      setSummary(null);
       return;
     }
-    loadData();
-  }, [loadData, token, user]);
+    loadTrades(page, pageSize);
+  }, [loadTrades, page, pageSize, token, user]);
 
   useEffect(() => {
-    if (!user && trades.length > 0) {
-      setSummary(computeSummary(trades));
+    if (!user || !token) {
+      return;
     }
-    if (!user && trades.length === 0) {
-      setSummary(computeSummary([]));
+    loadSummary(calendarMonth);
+  }, [calendarMonth, loadSummary, token, user]);
+
+  useEffect(() => {
+    if (user && token) {
+      return;
     }
-  }, [computeSummary, trades, user]);
+    setSummary(computeSummary(trades, calendarMonth));
+  }, [calendarMonth, computeSummary, trades, token, user]);
+
+  useEffect(() => {
+    const isAuthed = !!user && !!token;
+    if (wasAuthenticated.current && !isAuthed) {
+      setTrades([]);
+      setPage(0);
+      setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
+      setSummary(computeSummary([], calendarMonth));
+      setLoadingTrades(false);
+      setLoadingSummary(false);
+    }
+    wasAuthenticated.current = isAuthed;
+  }, [calendarMonth, computeSummary, token, user]);
 
   const handleOpenNewTrade = () => {
     setEditingTrade(null);
@@ -164,7 +216,8 @@ export default function Home() {
         } else {
           await createTrade(payload);
         }
-        await loadData();
+        await loadTrades(page, pageSize);
+        await loadSummary(calendarMonth);
       } else {
         const realizedPnl = computePnl(payload);
         const now = new Date().toISOString();
@@ -183,7 +236,7 @@ export default function Home() {
           const next = editingTrade
             ? prev.map((t) => (t.id === editingTrade.id ? localTrade : t))
             : [localTrade, ...prev];
-          setSummary(computeSummary(next));
+          setSummary(computeSummary(next, calendarMonth));
           return next;
         });
       }
@@ -202,16 +255,35 @@ export default function Home() {
     try {
       if (user && token) {
         await deleteTrade(trade.id);
-        await loadData();
+        await loadTrades(page, pageSize);
+        await loadSummary(calendarMonth);
       } else {
         setTrades((prev) => {
           const next = prev.filter((t) => t.id !== trade.id);
-          setSummary(computeSummary(next));
+          setSummary(computeSummary(next, calendarMonth));
           return next;
         });
       }
     } catch (err) {
       setError((err as Error).message);
+    }
+  };
+
+  const handlePageChange = async (delta: number) => {
+    const nextPage = Math.max(0, page + delta);
+    setPage(nextPage);
+  };
+
+  const handlePageSizeChange = async (size: number) => {
+    setPageSize(size);
+    setPage(0);
+  };
+
+  const handleMonthChange = async (month: string) => {
+    setCalendarMonth(month);
+    setPage(0);
+    if (!user || !token) {
+      setSummary(computeSummary(trades, month));
     }
   };
 
@@ -339,6 +411,20 @@ export default function Home() {
             </CardContent>
           </Card>
 
+          <Card variant="outlined">
+            <CardContent>
+              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+                Monthly P/L Calendar
+              </Typography>
+              <MonthlyCalendar
+                daily={summary?.daily || []}
+                initialMonth={summary?.daily?.[0]?.period}
+                month={calendarMonth}
+                onMonthChange={handleMonthChange}
+              />
+            </CardContent>
+          </Card>
+
           <Box>
             <Stack
               direction="row"
@@ -353,6 +439,52 @@ export default function Home() {
                 <AddIcon />
               </IconButton>
             </Stack>
+            {user && (
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={1}
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                justifyContent="space-between"
+                sx={{ mb: 1 }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(-1)}
+                    disabled={page === 0 || !pageMeta.hasPrevious}
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => handlePageChange(1)}
+                    disabled={!pageMeta.hasNext && pageMeta.totalPages <= page + 1}
+                  >
+                    Next
+                  </Button>
+                  <Typography variant="caption" color="text.secondary">
+                    Page {page + 1} / {Math.max(pageMeta.totalPages || 1, page + 1)}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" color="text.secondary">
+                    Rows:
+                  </Typography>
+                  {[20, 50, 100].map((size) => (
+                    <Button
+                      key={size}
+                      size="small"
+                      variant={size === pageSize ? "contained" : "outlined"}
+                      onClick={() => handlePageSizeChange(size)}
+                    >
+                      {size}
+                    </Button>
+                  ))}
+                </Stack>
+              </Stack>
+            )}
             <TradesTable
               trades={trades}
               loading={loadingData}
