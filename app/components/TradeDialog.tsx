@@ -16,10 +16,11 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
-import type { AssetType, OptionType, TradeDirection } from "../api/types";
+import type { AssetType, Currency, OptionType, TradeDirection } from "../api/types";
 
 export interface TradeFormValues {
   symbol: string;
+  currency: Currency;
   assetType: AssetType;
   direction: TradeDirection;
   quantity: number | "";
@@ -47,20 +48,22 @@ function today() {
 }
 
 function computePnl(values: TradeFormValues) {
+  const quantity = Number(values.quantity);
+  const entry = Number(values.entryPrice);
+  const exit = Number(values.exitPrice);
+  const fees = values.fees === "" || values.fees === undefined ? 0 : Number(values.fees);
+
   if (
     values.quantity === "" ||
     values.entryPrice === "" ||
     values.exitPrice === "" ||
-    !values.quantity ||
-    !values.entryPrice ||
-    !values.exitPrice
+    Number.isNaN(quantity) ||
+    Number.isNaN(entry) ||
+    Number.isNaN(exit)
   ) {
     return null;
   }
-  const quantity = Number(values.quantity);
-  const entry = Number(values.entryPrice);
-  const exit = Number(values.exitPrice);
-  const fees = values.fees ? Number(values.fees) : 0;
+
   const directionMultiplier = values.direction === "SHORT" ? -1 : 1;
   const movement = (exit - entry) * directionMultiplier;
   const multiplier = values.assetType === "OPTION" ? 100 : 1;
@@ -76,6 +79,7 @@ export function TradeDialog({
 }: TradeDialogProps) {
   const defaults: TradeFormValues = {
     symbol: "",
+    currency: "USD",
     assetType: "STOCK",
     direction: "LONG",
     quantity: "",
@@ -84,7 +88,7 @@ export function TradeDialog({
     fees: "",
     optionType: "CALL",
     strikePrice: "",
-    expiryDate: "",
+    expiryDate: today(),
     openedAt: today(),
     closedAt: today(),
     notes: "",
@@ -167,6 +171,23 @@ export function TradeDialog({
               fullWidth
               inputProps={{ maxLength: 12, style: { textTransform: "uppercase" } }}
             />
+            <FormControl fullWidth>
+              <InputLabel id="currency-label">Currency</InputLabel>
+              <Select
+                labelId="currency-label"
+                label="Currency"
+                value={values.currency}
+                onChange={(event) =>
+                  setValues((prev) => ({
+                    ...prev,
+                    currency: event.target.value as Currency,
+                  }))
+                }
+              >
+                <MenuItem value="USD">USD</MenuItem>
+                <MenuItem value="CAD">CAD</MenuItem>
+              </Select>
+            </FormControl>
             <FormControl fullWidth>
               <InputLabel id="asset-type-label">Asset</InputLabel>
               <Select

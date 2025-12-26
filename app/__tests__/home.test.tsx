@@ -99,6 +99,7 @@ describe("Home (authenticated)", () => {
         {
           id: "1",
           symbol: "TSLA",
+          currency: "USD",
           assetType: "STOCK",
           direction: "LONG",
           quantity: 1,

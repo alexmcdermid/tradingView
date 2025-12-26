@@ -1,4 +1,5 @@
 export type AssetType = "STOCK" | "OPTION";
+export type Currency = "USD" | "CAD";
 
 export type TradeDirection = "LONG" | "SHORT";
 
@@ -7,6 +8,7 @@ export type OptionType = "CALL" | "PUT";
 export interface Trade {
   id: string;
   symbol: string;
+  currency: Currency;
   assetType: AssetType;
   direction: TradeDirection;
   quantity: number;
@@ -26,6 +28,7 @@ export interface Trade {
 
 export interface TradePayload {
   symbol: string;
+  currency: Currency;
   assetType: AssetType;
   direction: TradeDirection;
   quantity: number;

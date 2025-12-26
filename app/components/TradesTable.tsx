@@ -159,7 +159,7 @@ export function TradesTable({
           ) : (
             trades.map((trade) => (
               <TableRow key={trade.id} hover>
-                <TableCell sx={{ minWidth: 130, maxWidth: 200, whiteSpace: "normal" }}>
+                <TableCell sx={{ minWidth: 140, maxWidth: 220, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>
                     {trade.symbol}
                   </Typography>
@@ -187,13 +187,13 @@ export function TradesTable({
                 <TableCell align="right">{formatNumber(trade.entryPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.exitPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
-                <TableCell align="right" sx={{ minWidth: 110 }}>
+                <TableCell align="right" sx={{ minWidth: 140 }}>
                   <Typography
                     component="span"
                     color={trade.realizedPnl >= 0 ? "success.main" : "error.main"}
                     fontWeight={700}
                   >
-                    {formatNumber(trade.realizedPnl, 2)}
+                    {formatNumber(trade.realizedPnl, 2)} {trade.currency}
                   </Typography>
                 </TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>

@@ -73,10 +73,13 @@ export default function Home() {
   };
 
   const computeSummary = useCallback((list: Trade[], month?: string): PnlSummary => {
+    const cadToUsd = 0.732;
+    const toUsd = (trade: Trade) =>
+      trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
     const filtered = month
       ? list.filter((trade) => trade.closedAt.startsWith(month))
       : list;
-    const totalPnl = filtered.reduce((acc, trade) => acc + (trade.realizedPnl || 0), 0);
+    const totalPnl = filtered.reduce((acc, trade) => acc + toUsd(trade), 0);
     const dailyMap = new Map<string, { pnl: number; trades: number }>();
     const monthlyMap = new Map<string, { pnl: number; trades: number }>();
 
@@ -84,11 +87,11 @@ export default function Home() {
       const day = trade.closedAt.slice(0, 10);
       const month = trade.closedAt.slice(0, 7);
       dailyMap.set(day, {
-        pnl: (dailyMap.get(day)?.pnl || 0) + trade.realizedPnl,
+        pnl: (dailyMap.get(day)?.pnl || 0) + toUsd(trade),
         trades: (dailyMap.get(day)?.trades || 0) + 1,
       });
       monthlyMap.set(month, {
-        pnl: (monthlyMap.get(month)?.pnl || 0) + trade.realizedPnl,
+        pnl: (monthlyMap.get(month)?.pnl || 0) + toUsd(trade),
         trades: (monthlyMap.get(month)?.trades || 0) + 1,
       });
     });
@@ -214,6 +217,7 @@ export default function Home() {
   const handleSaveTrade = async (values: TradeFormValues) => {
     const payload: TradePayload = {
       symbol: values.symbol.trim().toUpperCase(),
+      currency: values.currency,
       assetType: values.assetType,
       direction: values.direction,
       quantity: Number(values.quantity),
@@ -371,7 +375,7 @@ export default function Home() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title="Best Day"
+                title="Best Day (month)"
                 bucket={bestBucket}
                 loading={loadingData}
                 icon={<CandlestickChartOutlinedIcon color="success" />}
@@ -379,7 +383,7 @@ export default function Home() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title="Best Month"
+                title="Best Month (year)"
                 bucket={bestMonth}
                 loading={loadingData}
                 icon={<CandlestickChartOutlinedIcon color="primary" />}
@@ -419,6 +423,9 @@ export default function Home() {
                 month={calendarMonth}
                 onMonthChange={handleMonthChange}
               />
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                P/L shown in USD. CAD trades converted at static 0.732 CAD/USD.
+              </Typography>
             </CardContent>
           </Card>
 
@@ -457,6 +464,7 @@ export default function Home() {
           editingTrade
             ? {
                 symbol: editingTrade.symbol,
+                currency: editingTrade.currency,
                 assetType: editingTrade.assetType,
                 direction: editingTrade.direction,
                 quantity: editingTrade.quantity,
