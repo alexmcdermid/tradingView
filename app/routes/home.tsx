@@ -40,8 +40,10 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
+  const [yearSummary, setYearSummary] = useState<PnlSummary | null>(null);
   const [loadingTrades, setLoadingTrades] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [loadingYearSummary, setLoadingYearSummary] = useState(false);
   const loadingData = loadingTrades || loadingSummary;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -144,6 +146,24 @@ export default function Home() {
     }
   }, [token, user]);
 
+  const loadYearSummary = useCallback(async (year: number) => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      setLoadingYearSummary(true);
+      const summaryData = await fetchSummary();
+      setYearSummary({
+        ...summaryData,
+        monthly: summaryData.monthly.filter((bucket) => bucket.period.startsWith(String(year))),
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoadingYearSummary(false);
+    }
+  }, [token, user]);
+
   useEffect(() => {
     if (!user || !token) {
       return;
@@ -156,13 +176,16 @@ export default function Home() {
       return;
     }
     loadSummary(calendarMonth);
-  }, [calendarMonth, loadSummary, token, user]);
+    loadYearSummary(Number(calendarMonth.slice(0, 4)));
+  }, [calendarMonth, loadSummary, loadYearSummary, token, user]);
 
   useEffect(() => {
     if (user && token) {
       return;
     }
     setSummary(computeSummary(trades, calendarMonth));
+    const year = Number(calendarMonth.slice(0, 4));
+    setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year)))));
   }, [calendarMonth, computeSummary, trades, token, user]);
 
   useEffect(() => {
@@ -285,10 +308,17 @@ export default function Home() {
   }, [summary]);
 
   const bestMonth = useMemo(() => {
-    if (!summary || summary.monthly.length === 0) return null;
-    return summary.monthly.reduce((best, bucket) =>
+    if (!yearSummary || yearSummary.monthly.length === 0) return null;
+    return yearSummary.monthly.reduce((best, bucket) =>
       bucket.pnl > best.pnl ? bucket : best
     );
+  }, [yearSummary]);
+
+  const monthlyColor = useMemo(() => {
+    if (!summary) return undefined;
+    if (summary.totalPnl > 0) return "success.main";
+    if (summary.totalPnl < 0) return "error.main";
+    return "text.primary";
   }, [summary]);
 
   if (initializing) {
@@ -360,52 +390,29 @@ export default function Home() {
           <Card variant="outlined">
             <CardContent>
               <Stack
-                direction={{ xs: "column", md: "row" }}
-                spacing={2}
+                direction={{ xs: "column", sm: "row" }}
                 justifyContent="space-between"
-                alignItems={{ xs: "flex-start", md: "center" }}
+                alignItems={{ xs: "flex-start", sm: "center" }}
+                spacing={1}
+                sx={{ mb: 2 }}
               >
-                <Stack spacing={1}>
-                  <Typography variant="h6" fontWeight={700}>
-                    P/L Breakdown
+                <Typography variant="h6" fontWeight={700}>
+                  Monthly P/L Calendar
+                </Typography>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="body2" color={monthlyColor} fontWeight={700}>
+                    {summary ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)}` : ""}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Grouped by close date and month.
-                  </Typography>
+                  <Button
+                    variant="outlined"
+                    startIcon={<AddIcon />}
+                    onClick={handleOpenNewTrade}
+                    size="small"
+                  >
+                    Log Trade
+                  </Button>
                 </Stack>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleOpenNewTrade}
-                >
-                  Log Trade
-                </Button>
               </Stack>
-
-              <Grid container spacing={2} sx={{ mt: 2 }}>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <BucketList
-                    title="Daily"
-                    buckets={summary?.daily || []}
-                    loading={loadingData}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <BucketList
-                    title="Monthly"
-                    buckets={summary?.monthly || []}
-                    loading={loadingData}
-                  />
-                </Grid>
-              </Grid>
-            </CardContent>
-          </Card>
-
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-                Monthly P/L Calendar
-              </Typography>
               <MonthlyCalendar
                 daily={summary?.daily || []}
                 initialMonth={summary?.daily?.[0]?.period}
@@ -416,9 +423,6 @@ export default function Home() {
           </Card>
 
           <Box>
-            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
-              Trades
-            </Typography>
             <TradesTable
               trades={trades}
               loading={loadingData}
