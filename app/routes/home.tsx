@@ -269,16 +269,6 @@ export default function Home() {
     }
   };
 
-  const handlePageChange = async (delta: number) => {
-    const nextPage = Math.max(0, page + delta);
-    setPage(nextPage);
-  };
-
-  const handlePageSizeChange = async (size: number) => {
-    setPageSize(size);
-    setPage(0);
-  };
-
   const handleMonthChange = async (month: string) => {
     setCalendarMonth(month);
     setPage(0);
@@ -426,70 +416,32 @@ export default function Home() {
           </Card>
 
           <Box>
-            <Stack
-              direction="row"
-              alignItems="center"
-              justifyContent="space-between"
-              sx={{ mb: 1 }}
-            >
-              <Typography variant="h6" fontWeight={700}>
-                Trades
-              </Typography>
-              <IconButton onClick={handleOpenNewTrade} color="primary">
-                <AddIcon />
-              </IconButton>
-            </Stack>
-            {user && (
-              <Stack
-                direction={{ xs: "column", sm: "row" }}
-                spacing={1}
-                alignItems={{ xs: "flex-start", sm: "center" }}
-                justifyContent="space-between"
-                sx={{ mb: 1 }}
-              >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => handlePageChange(-1)}
-                    disabled={page === 0 || !pageMeta.hasPrevious}
-                  >
-                    Prev
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => handlePageChange(1)}
-                    disabled={!pageMeta.hasNext && pageMeta.totalPages <= page + 1}
-                  >
-                    Next
-                  </Button>
-                  <Typography variant="caption" color="text.secondary">
-                    Page {page + 1} / {Math.max(pageMeta.totalPages || 1, page + 1)}
-                  </Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="caption" color="text.secondary">
-                    Rows:
-                  </Typography>
-                  {[20, 50, 100].map((size) => (
-                    <Button
-                      key={size}
-                      size="small"
-                      variant={size === pageSize ? "contained" : "outlined"}
-                      onClick={() => handlePageSizeChange(size)}
-                    >
-                      {size}
-                    </Button>
-                  ))}
-                </Stack>
-              </Stack>
-            )}
+            <Typography variant="h6" fontWeight={700} sx={{ mb: 1 }}>
+              Trades
+            </Typography>
             <TradesTable
               trades={trades}
               loading={loadingData}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
+              page={user ? page : undefined}
+              pageSize={user ? pageSize : undefined}
+              totalElements={user ? pageMeta.totalElements : undefined}
+              onPageChange={
+                user
+                  ? (newPage) => {
+                      setPage(Math.max(0, newPage));
+                    }
+                  : undefined
+              }
+              onPageSizeChange={
+                user
+                  ? (size) => {
+                      setPageSize(size);
+                      setPage(0);
+                    }
+                  : undefined
+              }
             />
           </Box>
         </Stack>
