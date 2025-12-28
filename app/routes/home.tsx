@@ -60,6 +60,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
+  const guestSeeded = useRef<boolean>(false);
 
   const computePnl = (payload: TradePayload) => {
     const quantity = Number(payload.quantity || 0);
@@ -186,10 +187,62 @@ export default function Home() {
     if (user && token) {
       return;
     }
-    setSummary(computeSummary(trades, calendarMonth));
-    const year = Number(calendarMonth.slice(0, 4));
-    setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year)))));
-  }, [calendarMonth, computeSummary, trades, token, user]);
+    if (!initializing && !user && !token && trades.length === 0 && !guestSeeded.current) {
+      const seed: Trade[] = [
+        {
+          id: "seed-1",
+          symbol: "AAPL",
+          currency: "USD",
+          assetType: "STOCK",
+          direction: "LONG",
+          quantity: 10,
+          entryPrice: 180,
+          exitPrice: 190,
+          fees: 0,
+          optionType: null,
+          strikePrice: null,
+          expiryDate: null,
+          openedAt: "2025-12-20",
+          closedAt: "2025-12-21",
+          realizedPnl: 100,
+          notes: "Sample seed trade",
+          createdAt: "2025-12-21T00:00:00Z",
+          updatedAt: "2025-12-21T00:00:00Z",
+        },
+        {
+          id: "seed-2",
+          symbol: "TSLA",
+          currency: "CAD",
+          assetType: "STOCK",
+          direction: "SHORT",
+          quantity: 5,
+          entryPrice: 250,
+          exitPrice: 245,
+          fees: 2,
+          optionType: null,
+          strikePrice: null,
+          expiryDate: null,
+          openedAt: "2025-12-22",
+          closedAt: "2025-12-23",
+          realizedPnl: 23,
+          notes: "Sample CAD trade",
+          createdAt: "2025-12-23T00:00:00Z",
+          updatedAt: "2025-12-23T00:00:00Z",
+        },
+      ];
+      setTrades(seed);
+      setSummary(computeSummary(seed, calendarMonth));
+      const year = Number(calendarMonth.slice(0, 4));
+      setYearSummary(computeSummary(seed.filter((t) => t.closedAt.startsWith(String(year)))));
+      guestSeeded.current = true;
+      return;
+    }
+    if (!initializing && !user && !token) {
+      setSummary(computeSummary(trades, calendarMonth));
+      const year = Number(calendarMonth.slice(0, 4));
+      setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year)))));
+    }
+  }, [calendarMonth, computeSummary, trades, token, user, initializing]);
 
   useEffect(() => {
     const isAuthed = !!user && !!token;
@@ -200,6 +253,7 @@ export default function Home() {
       setSummary(computeSummary([], calendarMonth));
       setLoadingTrades(false);
       setLoadingSummary(false);
+      guestSeeded.current = false;
     }
     wasAuthenticated.current = isAuthed;
   }, [calendarMonth, computeSummary, token, user]);
