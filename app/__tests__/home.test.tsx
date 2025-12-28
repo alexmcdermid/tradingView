@@ -74,7 +74,7 @@ describe("Home (guest mode)", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /log trade/i }));
 
-    await userEvent.type(screen.getByLabelText(/symbol/i), "AAPL");
+    await userEvent.type(screen.getByLabelText(/symbol/i), "MSFT");
     await userEvent.type(screen.getByLabelText(/quantity/i), "10");
     await userEvent.type(screen.getByLabelText(/entry price/i), "100");
     await userEvent.type(screen.getByLabelText(/exit price/i), "110");
@@ -82,7 +82,7 @@ describe("Home (guest mode)", () => {
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("AAPL")).toBeInTheDocument();
+      expect(screen.getByText("MSFT")).toBeInTheDocument();
     });
 
     expect(mockCreateTrade).not.toHaveBeenCalled();
