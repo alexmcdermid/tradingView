@@ -59,6 +59,8 @@ describe("Home (guest mode)", () => {
       tradeCount: 0,
       daily: [],
       monthly: [],
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
     });
   });
 
@@ -129,6 +131,8 @@ describe("Home (authenticated)", () => {
       tradeCount: 1,
       daily: [{ period: "2024-01-02", pnl: 2, trades: 1 }],
       monthly: [{ period: "2024-01", pnl: 2, trades: 1 }],
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
     });
   });
 

@@ -77,8 +77,9 @@ export default function Home() {
     return Number((movement * quantity * multiplier - fees).toFixed(2));
   };
 
-  const computeSummary = useCallback((list: Trade[], month?: string): PnlSummary => {
-    const cadToUsd = 0.732;
+  const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
+    const cadToUsd = rate ?? 1;
+    const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
     const toUsd = (trade: Trade) =>
       trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
     const filtered = month
@@ -113,6 +114,8 @@ export default function Home() {
       tradeCount: filtered.length,
       daily,
       monthly,
+      cadToUsdRate: cadToUsd,
+      fxDate: rateDate,
     };
   }, []);
 
@@ -235,18 +238,22 @@ export default function Home() {
         },
       ];
       setTrades(seed);
-      setSummary(computeSummary(seed, calendarMonth));
+      const rate = summary?.cadToUsdRate;
+      const fxDate = summary?.fxDate;
+      setSummary(computeSummary(seed, calendarMonth, rate, fxDate));
       const year = Number(calendarMonth.slice(0, 4));
-      setYearSummary(computeSummary(seed.filter((t) => t.closedAt.startsWith(String(year)))));
+      setYearSummary(computeSummary(seed.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
       guestSeeded.current = true;
       return;
     }
     if (!initializing && !user && !token) {
-      setSummary(computeSummary(trades, calendarMonth));
+      const rate = summary?.cadToUsdRate;
+      const fxDate = summary?.fxDate;
+      setSummary(computeSummary(trades, calendarMonth, rate, fxDate));
       const year = Number(calendarMonth.slice(0, 4));
-      setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year)))));
+      setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
     }
-  }, [calendarMonth, computeSummary, trades, token, user, initializing]);
+  }, [calendarMonth, computeSummary, trades, token, user, initializing, summary]);
 
   useEffect(() => {
     const isAuthed = !!user && !!token;
@@ -254,7 +261,9 @@ export default function Home() {
       setTrades([]);
       setPage(0);
       setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
-      setSummary(computeSummary([], calendarMonth));
+      const rate = summary?.cadToUsdRate;
+      const fxDate = summary?.fxDate;
+      setSummary(computeSummary([], calendarMonth, rate, fxDate));
       setLoadingTrades(false);
       setLoadingSummary(false);
       guestSeeded.current = false;
@@ -306,6 +315,8 @@ export default function Home() {
       } else {
         const realizedPnl = computePnl(payload);
         const now = new Date().toISOString();
+        const rate = summary?.cadToUsdRate;
+        const fxDate = summary?.fxDate;
         const localTrade: Trade = {
           id: editingTrade?.id || `guest-${Date.now()}`,
           ...payload,
@@ -321,7 +332,7 @@ export default function Home() {
           const next = editingTrade
             ? prev.map((t) => (t.id === editingTrade.id ? localTrade : t))
             : [localTrade, ...prev];
-          setSummary(computeSummary(next, calendarMonth));
+          setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           return next;
         });
       }
@@ -343,9 +354,11 @@ export default function Home() {
         await loadTrades(page, pageSize);
         await loadSummary(calendarMonth);
       } else {
+        const rate = summary?.cadToUsdRate;
+        const fxDate = summary?.fxDate;
         setTrades((prev) => {
           const next = prev.filter((t) => t.id !== trade.id);
-          setSummary(computeSummary(next, calendarMonth));
+          setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           return next;
         });
       }
@@ -358,7 +371,9 @@ export default function Home() {
     setCalendarMonth(month);
     setPage(0);
     if (!user || !token) {
-      setSummary(computeSummary(trades, month));
+      const rate = summary?.cadToUsdRate;
+      const fxDate = summary?.fxDate;
+      setSummary(computeSummary(trades, month, rate, fxDate));
     }
   };
 
@@ -382,6 +397,8 @@ export default function Home() {
     if (summary.totalPnl < 0) return "error.main";
     return "text.primary";
   }, [summary]);
+  const fxRate = summary?.cadToUsdRate;
+  const fxDate = summary?.fxDate;
 
   const userInitials = useMemo(() => {
     if (!user) return "ANON";
@@ -499,7 +516,7 @@ export default function Home() {
                 </Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Typography variant="body2" color={monthlyColor} fontWeight={700}>
-                    {summary ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)}` : ""}
+                    {summary ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)} USD` : ""}
                   </Typography>
                   <Button
                     variant="outlined"
@@ -518,7 +535,9 @@ export default function Home() {
                 onMonthChange={handleMonthChange}
               />
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-                P/L shown in USD. CAD trades converted at static 0.732 CAD/USD.
+                {fxRate
+                  ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(3)} CAD/USD${fxDate ? ` (as of ${fxDate})` : ""}.`
+                  : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
               </Typography>
             </CardContent>
           </Card>

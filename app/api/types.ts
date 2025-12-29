@@ -54,6 +54,8 @@ export interface PnlSummary {
   tradeCount: number;
   daily: PnlBucket[];
   monthly: PnlBucket[];
+  cadToUsdRate?: number;
+  fxDate?: string;
 }
 
 export interface PagedResult<T> {
