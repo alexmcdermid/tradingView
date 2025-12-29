@@ -18,6 +18,8 @@ interface MonthlyCalendarProps {
   initialMonth?: string; // YYYY-MM or YYYY-MM-DD
   month?: string; // controlled month (YYYY-MM or YYYY-MM-DD)
   onMonthChange?: (month: string) => void;
+  selectedDate?: string | null;
+  onDateSelect?: (date: string) => void;
 }
 
 function toDate(value?: string) {
@@ -48,7 +50,14 @@ function toDay(value: string) {
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function MonthlyCalendar({ daily, initialMonth, month, onMonthChange }: MonthlyCalendarProps) {
+export function MonthlyCalendar({
+  daily,
+  initialMonth,
+  month,
+  onMonthChange,
+  selectedDate,
+  onDateSelect,
+}: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
 
   useEffect(() => {
@@ -150,6 +159,7 @@ export function MonthlyCalendar({ daily, initialMonth, month, onMonthChange }: M
           const today = new Date();
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
           const isPastNoTrade = pnl == null && cellDate < todayStart;
+          const isSelected = selectedDate === date;
           const color =
             pnl == null
               ? isPastNoTrade
@@ -172,13 +182,25 @@ export function MonthlyCalendar({ daily, initialMonth, month, onMonthChange }: M
 
           const content = (
             <Box
+              component={onDateSelect ? "button" : "div"}
+              type={onDateSelect ? "button" : undefined}
+              onClick={onDateSelect ? () => onDateSelect(date) : undefined}
+              aria-label={onDateSelect ? `Select ${date}` : undefined}
+              aria-pressed={onDateSelect ? isSelected : undefined}
               sx={{
                 borderRadius: 1,
                 p: 0.75,
                 border: "1px solid",
-                borderColor: "divider",
+                borderColor: isSelected ? "primary.main" : "divider",
                 textAlign: "center",
                 backgroundColor,
+                width: "100%",
+                cursor: onDateSelect ? "pointer" : "default",
+                transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+                boxShadow: isSelected ? (theme) => `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}` : "none",
+                backgroundClip: "padding-box",
+                appearance: "none",
+                outline: "none",
               }}
             >
               <Typography variant="body2" fontWeight={600}>

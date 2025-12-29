@@ -4,6 +4,7 @@ import {
   Alert,
   AppBar,
   Avatar,
+  Chip,
   Box,
   Button,
   Card,
@@ -57,6 +58,7 @@ export default function Home() {
     totalElements: 0,
   });
   const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -369,6 +371,7 @@ export default function Home() {
 
   const handleMonthChange = async (month: string) => {
     setCalendarMonth(month);
+    setSelectedDate(null);
     setPage(0);
     if (!user || !token) {
       const rate = summary?.cadToUsdRate;
@@ -376,6 +379,16 @@ export default function Home() {
       setSummary(computeSummary(trades, month, rate, fxDate));
     }
   };
+
+  const handleDateSelect = (date: string) => {
+    setSelectedDate((prev) => (prev === date ? null : date));
+    setPage(0);
+  };
+
+  const filteredTrades = useMemo(() => {
+    if (!selectedDate) return trades;
+    return trades.filter((trade) => trade.closedAt.startsWith(selectedDate));
+  }, [selectedDate, trades]);
 
   const bestBucket = useMemo(() => {
     if (!summary || summary.daily.length === 0) return null;
@@ -533,6 +546,8 @@ export default function Home() {
                 initialMonth={summary?.daily?.[0]?.period}
                 month={calendarMonth}
                 onMonthChange={handleMonthChange}
+                selectedDate={selectedDate}
+                onDateSelect={handleDateSelect}
               />
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
                 {fxRate
@@ -544,22 +559,22 @@ export default function Home() {
 
           <Box>
             <TradesTable
-              trades={trades}
+              trades={filteredTrades}
               loading={loadingData}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
-              page={user ? page : undefined}
-              pageSize={user ? pageSize : undefined}
-              totalElements={user ? pageMeta.totalElements : undefined}
+              page={user && !selectedDate ? page : undefined}
+              pageSize={user && !selectedDate ? pageSize : undefined}
+              totalElements={user && !selectedDate ? pageMeta.totalElements : undefined}
               onPageChange={
-                user
+                user && !selectedDate
                   ? (newPage) => {
                       setPage(Math.max(0, newPage));
                     }
                   : undefined
               }
               onPageSizeChange={
-                user
+                user && !selectedDate
                   ? (size) => {
                       setPageSize(size);
                       setPage(0);
@@ -567,6 +582,18 @@ export default function Home() {
                   : undefined
               }
             />
+            {selectedDate && (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Filtered by date:
+                </Typography>
+                <Chip
+                  label={selectedDate.replace(/-/g, "/")}
+                  onDelete={() => setSelectedDate(null)}
+                  size="small"
+                />
+              </Stack>
+            )}
           </Box>
         </Stack>
       </Container>
