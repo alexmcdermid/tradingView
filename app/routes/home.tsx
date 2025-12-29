@@ -3,12 +3,15 @@ import CandlestickChartOutlinedIcon from "@mui/icons-material/CandlestickChartOu
 import {
   Alert,
   AppBar,
+  Avatar,
   Box,
   Button,
   Card,
   CardContent,
   Container,
   IconButton,
+  Menu,
+  MenuItem,
   Snackbar,
   Stack,
   Toolbar,
@@ -60,6 +63,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const guestSeeded = useRef<boolean>(false);
 
   const computePnl = (payload: TradePayload) => {
@@ -205,7 +209,7 @@ export default function Home() {
           openedAt: "2025-12-20",
           closedAt: "2025-12-21",
           realizedPnl: 100,
-          notes: "Sample seed trade",
+          notes: "Sample USD trade",
           createdAt: "2025-12-21T00:00:00Z",
           updatedAt: "2025-12-21T00:00:00Z",
         },
@@ -218,7 +222,7 @@ export default function Home() {
           quantity: 5,
           entryPrice: 250,
           exitPrice: 245,
-          fees: 2,
+          fees: 2.99,
           optionType: null,
           strikePrice: null,
           expiryDate: null,
@@ -379,6 +383,16 @@ export default function Home() {
     return "text.primary";
   }, [summary]);
 
+  const userInitials = useMemo(() => {
+    if (!user) return "ANON";
+    const source = user.name || user.email || user.sub || "";
+    const parts = source.split(" ").filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+    return source.slice(0, 2).toUpperCase() || "?";
+  }, [user]);
+
   if (initializing) {
     return (
       <Container maxWidth="sm" sx={{ py: 6 }}>
@@ -399,11 +413,39 @@ export default function Home() {
               Simple P/L tracker
             </Typography>
           </Stack>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} alignItems="center">
             {user ? (
-              <Button variant="text" onClick={logout}>
-                Sign out
-              </Button>
+              <>
+                <IconButton
+                  onClick={(event) => setMenuAnchor(event.currentTarget)}
+                  size="small"
+                  aria-label="User menu"
+                >
+                  <Avatar sx={{ width: 40, height: 40 }}>{userInitials}</Avatar>
+                </IconButton>
+                <Menu
+                  anchorEl={menuAnchor}
+                  open={Boolean(menuAnchor)}
+                  onClose={() => setMenuAnchor(null)}
+                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                  transformOrigin={{ vertical: "top", horizontal: "right" }}
+                >
+                  <MenuItem disabled>
+                    <Typography variant="body2">
+                      {user.name || user.email || "Account"}
+                    </Typography>
+                  </MenuItem>
+                  <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      setMenuAnchor(null);
+                      logout();
+                    }}
+                  >
+                    Sign out
+                  </MenuItem>
+                </Menu>
+              </>
             ) : (
               <>{loginButton}</>
             )}
@@ -411,7 +453,7 @@ export default function Home() {
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: 2 }}>
         <Stack spacing={3}>
           {!user && (
             <Alert severity="info">
@@ -432,7 +474,6 @@ export default function Home() {
                 title="Best Day (month)"
                 bucket={bestBucket}
                 loading={loadingData}
-                icon={<CandlestickChartOutlinedIcon color="success" />}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
@@ -440,7 +481,6 @@ export default function Home() {
                 title="Best Month (year)"
                 bucket={bestMonth}
                 loading={loadingData}
-                icon={<CandlestickChartOutlinedIcon color="primary" />}
               />
             </Grid>
           </Grid>
@@ -578,7 +618,7 @@ function StatCard({
           {title}
         </Typography>
         <Typography
-          variant="h4"
+          variant="h5"
           fontWeight={800}
           color={!value ? "text.primary" : value >= 0 ? "success.main" : "error.main"}
         >
