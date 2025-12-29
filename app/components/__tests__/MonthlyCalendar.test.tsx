@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen } from "@testing-library/react";
+import { render, screen, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MonthlyCalendar } from "../MonthlyCalendar";
@@ -9,6 +9,10 @@ describe("MonthlyCalendar", () => {
     { period: "2024-05-02", pnl: 10, trades: 1 },
     { period: "2024-05-03", pnl: -5, trades: 2 },
   ];
+
+  afterEach(() => {
+    cleanup();
+  });
 
   it("renders daily P/L values for the month", () => {
     render(<MonthlyCalendar daily={daily} initialMonth="2024-05-01" />);

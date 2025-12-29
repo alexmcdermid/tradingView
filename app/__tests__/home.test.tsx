@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import React from "react";
@@ -66,6 +66,7 @@ describe("Home (guest mode)", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    cleanup();
   });
 
   it("lets a guest log a trade locally", async () => {
@@ -80,6 +81,8 @@ describe("Home (guest mode)", () => {
     await userEvent.type(screen.getByLabelText(/quantity/i), "10");
     await userEvent.type(screen.getByLabelText(/entry price/i), "100");
     await userEvent.type(screen.getByLabelText(/exit price/i), "110");
+    await userEvent.type(screen.getByLabelText(/opened/i), "2024-01-01");
+    await userEvent.type(screen.getByLabelText(/closed/i), "2024-01-02");
 
     await userEvent.click(screen.getByRole("button", { name: /save/i }));
 
@@ -138,6 +141,7 @@ describe("Home (authenticated)", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    cleanup();
   });
 
   it("loads trades when authenticated", async () => {

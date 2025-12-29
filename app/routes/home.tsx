@@ -253,7 +253,7 @@ export default function Home() {
       const year = Number(calendarMonth.slice(0, 4));
       setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
     }
-  }, [calendarMonth, computeSummary, trades, token, user, initializing, summary]);
+  }, [calendarMonth, computeSummary, trades, token, user, initializing]);
 
   useEffect(() => {
     const isAuthed = !!user && !!token;
