@@ -43,6 +43,17 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+const computePnl = (payload: TradePayload) => {
+  const quantity = Number(payload.quantity || 0);
+  const entry = Number(payload.entryPrice || 0);
+  const exit = Number(payload.exitPrice || 0);
+  const fees = Number(payload.fees || 0);
+  const directionMultiplier = payload.direction === "SHORT" ? -1 : 1;
+  const movement = (exit - entry) * directionMultiplier;
+  const multiplier = payload.assetType === "OPTION" ? 100 : 1;
+  return Number((movement * quantity * multiplier - fees).toFixed(2));
+};
+
 const parseEmailList = (value?: string) => {
   if (!value) {
     return new Set<string>();
@@ -53,6 +64,271 @@ const parseEmailList = (value?: string) => {
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
   );
+};
+
+const pad2 = (value: number) => String(value).padStart(2, "0");
+
+const buildDate = (year: number, monthIndex: number, day: number) =>
+  `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
+
+const addDays = (isoDate: string, days: number) => {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return buildDate(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+};
+
+const getWeekdayDates = (year: number, monthIndex: number, count: number) => {
+  const dates: number[] = [];
+  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  for (let day = 1; day <= lastDay; day += 1) {
+    const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
+    if (weekday >= 1 && weekday <= 5) {
+      dates.push(day);
+      if (dates.length >= count) {
+        break;
+      }
+    }
+  }
+  return dates;
+};
+
+type SeedTemplate = {
+  symbol: string;
+  currency: Trade["currency"];
+  assetType: Trade["assetType"];
+  direction: Trade["direction"];
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  fees: number;
+  optionType?: Trade["optionType"];
+  strikePrice?: number;
+  expiryOffsetDays?: number;
+  notes?: string;
+};
+
+const buildGuestSeedTrades = (month: string): Trade[] => {
+  const [yearText, monthText] = month.split("-");
+  const year = Number(yearText) || new Date().getUTCFullYear();
+  const monthIndex = Math.max(0, Math.min(11, Number(monthText) - 1 || new Date().getUTCMonth()));
+  const templates: SeedTemplate[] = [
+    {
+      symbol: "AAPL",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 12,
+      entryPrice: 182,
+      exitPrice: 187,
+      fees: 1.5,
+      notes: "Earnings pop",
+    },
+    {
+      symbol: "NVDA",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "SHORT",
+      quantity: 5,
+      entryPrice: 610,
+      exitPrice: 620,
+      fees: 2,
+      notes: "Momentum fade",
+    },
+    {
+      symbol: "AMD",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 20,
+      entryPrice: 110,
+      exitPrice: 106,
+      fees: 1,
+      notes: "Stopped out",
+    },
+    {
+      symbol: "META",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "SHORT",
+      quantity: 4,
+      entryPrice: 330,
+      exitPrice: 315,
+      fees: 1,
+    },
+    {
+      symbol: "TSLA",
+      currency: "USD",
+      assetType: "OPTION",
+      direction: "LONG",
+      quantity: 1,
+      entryPrice: 6.2,
+      exitPrice: 8.4,
+      fees: 1.2,
+      optionType: "CALL",
+      strikePrice: 260,
+      expiryOffsetDays: 18,
+    },
+    {
+      symbol: "ADBE",
+      currency: "USD",
+      assetType: "OPTION",
+      direction: "LONG",
+      quantity: 1,
+      entryPrice: 5.1,
+      exitPrice: 3.0,
+      fees: 1.0,
+      optionType: "PUT",
+      strikePrice: 500,
+      expiryOffsetDays: 21,
+    },
+    {
+      symbol: "RY",
+      currency: "CAD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 30,
+      entryPrice: 120,
+      exitPrice: 124,
+      fees: 4.95,
+    },
+    {
+      symbol: "TD",
+      currency: "CAD",
+      assetType: "STOCK",
+      direction: "SHORT",
+      quantity: 25,
+      entryPrice: 84,
+      exitPrice: 86,
+      fees: 4.95,
+    },
+    {
+      symbol: "SHOP",
+      currency: "CAD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 15,
+      entryPrice: 92,
+      exitPrice: 96,
+      fees: 3.5,
+    },
+    {
+      symbol: "ENB",
+      currency: "CAD",
+      assetType: "STOCK",
+      direction: "SHORT",
+      quantity: 40,
+      entryPrice: 52,
+      exitPrice: 49,
+      fees: 4,
+    },
+    {
+      symbol: "BNS",
+      currency: "CAD",
+      assetType: "OPTION",
+      direction: "SHORT",
+      quantity: 1,
+      entryPrice: 2.4,
+      exitPrice: 1.1,
+      fees: 1.5,
+      optionType: "CALL",
+      strikePrice: 70,
+      expiryOffsetDays: 14,
+    },
+    {
+      symbol: "CNQ",
+      currency: "CAD",
+      assetType: "OPTION",
+      direction: "LONG",
+      quantity: 2,
+      entryPrice: 3.2,
+      exitPrice: 4.0,
+      fees: 2,
+      optionType: "PUT",
+      strikePrice: 90,
+      expiryOffsetDays: 16,
+    },
+    {
+      symbol: "INTC",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 30,
+      entryPrice: 42,
+      exitPrice: 45,
+      fees: 2,
+    },
+    {
+      symbol: "NFLX",
+      currency: "USD",
+      assetType: "STOCK",
+      direction: "SHORT",
+      quantity: 3,
+      entryPrice: 490,
+      exitPrice: 500,
+      fees: 2,
+    },
+    {
+      symbol: "QQQ",
+      currency: "USD",
+      assetType: "OPTION",
+      direction: "SHORT",
+      quantity: 1,
+      entryPrice: 4.8,
+      exitPrice: 6.1,
+      fees: 1.5,
+      optionType: "PUT",
+      strikePrice: 410,
+      expiryOffsetDays: 20,
+    },
+    {
+      symbol: "BCE",
+      currency: "CAD",
+      assetType: "STOCK",
+      direction: "LONG",
+      quantity: 50,
+      entryPrice: 52.5,
+      exitPrice: 53.4,
+      fees: 5,
+    },
+  ];
+  const weekdays = getWeekdayDates(year, monthIndex, templates.length);
+  return templates.map((template, index) => {
+    const day = weekdays[index % weekdays.length];
+    const closedAt = buildDate(year, monthIndex, day);
+    const openedAt = closedAt;
+    const expiryDate =
+      template.assetType === "OPTION"
+        ? addDays(closedAt, template.expiryOffsetDays ?? 14)
+        : null;
+    const payload: TradePayload = {
+      symbol: template.symbol,
+      currency: template.currency,
+      assetType: template.assetType,
+      direction: template.direction,
+      quantity: template.quantity,
+      entryPrice: template.entryPrice,
+      exitPrice: template.exitPrice,
+      fees: template.fees,
+      optionType: template.optionType,
+      strikePrice: template.strikePrice,
+      expiryDate: expiryDate ?? undefined,
+      openedAt,
+      closedAt,
+      notes: template.notes,
+    };
+    const realizedPnl = computePnl(payload);
+    const timestamp = `${closedAt}T17:00:00Z`;
+    return {
+      id: `seed-${index + 1}`,
+      ...payload,
+      optionType: template.optionType ?? null,
+      strikePrice: template.strikePrice ?? null,
+      expiryDate,
+      realizedPnl,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  });
 };
 
 export default function Home() {
@@ -83,8 +359,7 @@ export default function Home() {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const guestSeeded = useRef<boolean>(false);
   const adminEmailSet = useMemo(() => {
-    const adminList =
-      import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ALLOWED_EMAILS;
+    const adminList = import.meta.env.VITE_ADMIN_EMAILS;
     return parseEmailList(adminList);
   }, []);
   const isAdmin = useMemo(() => {
@@ -110,17 +385,6 @@ export default function Home() {
       return;
     }
     setError(message);
-  };
-
-  const computePnl = (payload: TradePayload) => {
-    const quantity = Number(payload.quantity || 0);
-    const entry = Number(payload.entryPrice || 0);
-    const exit = Number(payload.exitPrice || 0);
-    const fees = Number(payload.fees || 0);
-    const directionMultiplier = payload.direction === "SHORT" ? -1 : 1;
-    const movement = (exit - entry) * directionMultiplier;
-    const multiplier = payload.assetType === "OPTION" ? 100 : 1;
-    return Number((movement * quantity * multiplier - fees).toFixed(2));
   };
 
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
@@ -241,48 +505,7 @@ export default function Home() {
       return;
     }
     if (!initializing && !user && !token && trades.length === 0 && !guestSeeded.current) {
-      const seed: Trade[] = [
-        {
-          id: "seed-1",
-          symbol: "AAPL",
-          currency: "USD",
-          assetType: "STOCK",
-          direction: "LONG",
-          quantity: 10,
-          entryPrice: 180,
-          exitPrice: 190,
-          fees: 0,
-          optionType: null,
-          strikePrice: null,
-          expiryDate: null,
-          openedAt: "2025-12-20",
-          closedAt: "2025-12-21",
-          realizedPnl: 100,
-          notes: "Sample USD trade",
-          createdAt: "2025-12-21T00:00:00Z",
-          updatedAt: "2025-12-21T00:00:00Z",
-        },
-        {
-          id: "seed-2",
-          symbol: "TSLA",
-          currency: "CAD",
-          assetType: "STOCK",
-          direction: "SHORT",
-          quantity: 5,
-          entryPrice: 250,
-          exitPrice: 245,
-          fees: 2.99,
-          optionType: null,
-          strikePrice: null,
-          expiryDate: null,
-          openedAt: "2025-12-22",
-          closedAt: "2025-12-23",
-          realizedPnl: 23,
-          notes: "Sample CAD trade",
-          createdAt: "2025-12-23T00:00:00Z",
-          updatedAt: "2025-12-23T00:00:00Z",
-        },
-      ];
+      const seed = buildGuestSeedTrades(calendarMonth);
       setTrades(seed);
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
