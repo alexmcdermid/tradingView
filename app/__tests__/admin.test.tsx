@@ -76,6 +76,6 @@ describe("Admin", () => {
     await waitFor(() => {
       expect(mockFetchUsers).toHaveBeenCalledTimes(1);
     });
-    expect(screen.getByText("admin@example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("admin@example.com")).toHaveLength(2);
   });
 });

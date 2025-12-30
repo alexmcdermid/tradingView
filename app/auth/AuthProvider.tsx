@@ -71,7 +71,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <GoogleLogin
       onSuccess={(response) => handleSuccess(response.credential)}
       onError={() => logout()}
-      containerProps={{ style: { padding: 0, margin: 0, lineHeight: 0 } }}
+      containerProps={{ style: { padding: 0, margin: 0 } }}
+      text="signin_with"
+      shape="rectangular"
       useOneTap
     />
   );
