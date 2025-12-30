@@ -101,8 +101,8 @@ type SeedTemplate = {
   entryPrice: number;
   exitPrice: number;
   fees: number;
-  optionType?: Trade["optionType"];
-  strikePrice?: number;
+  optionType?: TradePayload["optionType"];
+  strikePrice?: TradePayload["strikePrice"];
   expiryOffsetDays?: number;
   notes?: string;
 };
@@ -308,9 +308,9 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       quantity: template.quantity,
       entryPrice: template.entryPrice,
       exitPrice: template.exitPrice,
-      fees: template.fees,
-      optionType: template.optionType,
-      strikePrice: template.strikePrice,
+      fees: template.fees ?? 0,
+      optionType: template.optionType ?? undefined,
+      strikePrice: template.strikePrice ?? undefined,
       expiryDate: expiryDate ?? undefined,
       openedAt,
       closedAt,
@@ -321,6 +321,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
     return {
       id: `seed-${index + 1}`,
       ...payload,
+      fees: payload.fees ?? 0,
       optionType: template.optionType ?? null,
       strikePrice: template.strikePrice ?? null,
       expiryDate,
