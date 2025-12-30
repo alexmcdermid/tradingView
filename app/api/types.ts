@@ -67,3 +67,11 @@ export interface PagedResult<T> {
   hasNext: boolean;
   hasPrevious: boolean;
 }
+
+export interface AdminUser {
+  id: string;
+  authId: string;
+  premium: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

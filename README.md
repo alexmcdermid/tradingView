@@ -38,12 +38,14 @@ Required GitHub secrets (dev):
 - `DEV_FRONTEND_SERVICE_ARN`
 - `DEV_API_BASE_URL`
 - `DEV_GOOGLE_CLIENT_ID`
+- `DEV_ADMIN_EMAILS` (comma-separated)
 
 Required GitHub secrets (prod):
 - `PROD_ECR_TRADINGVIEW_REPO`
 - `PROD_FRONTEND_SERVICE_ARN`
 - `PROD_API_BASE_URL`
 - `PROD_GOOGLE_CLIENT_ID`
+- `PROD_ADMIN_EMAILS` (comma-separated)
 
 Required GitHub secrets (prod):
 - `PROD_FRONTEND_SERVICE_ARN`

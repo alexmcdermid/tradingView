@@ -21,6 +21,7 @@ import {
 import Grid from "@mui/material/Grid";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Route } from "./+types/home";
+import { Link as RouterLink } from "react-router";
 import {
   createTrade,
   deleteTrade,
@@ -41,6 +42,18 @@ export function meta({}: Route.MetaArgs) {
     { name: "description", content: "Track trades and realized P/L by day and month" },
   ];
 }
+
+const parseEmailList = (value?: string) => {
+  if (!value) {
+    return new Set<string>();
+  }
+  return new Set(
+    value
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  );
+};
 
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -69,6 +82,20 @@ export default function Home() {
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const guestSeeded = useRef<boolean>(false);
+  const adminEmailSet = useMemo(() => {
+    const adminList =
+      import.meta.env.VITE_ADMIN_EMAILS || import.meta.env.VITE_ALLOWED_EMAILS;
+    return parseEmailList(adminList);
+  }, []);
+  const isAdmin = useMemo(() => {
+    if (!user?.email) {
+      return false;
+    }
+    if (adminEmailSet.size === 0) {
+      return false;
+    }
+    return adminEmailSet.has(user.email.toLowerCase());
+  }, [adminEmailSet, user?.email]);
 
   const handleRequestError = (err: unknown) => {
     const message = err instanceof Error ? err.message : "Request failed";
@@ -488,6 +515,15 @@ export default function Home() {
                       {user.name || user.email || "Account"}
                     </Typography>
                   </MenuItem>
+                  {isAdmin && (
+                    <MenuItem
+                      component={RouterLink}
+                      to="/admin"
+                      onClick={() => setMenuAnchor(null)}
+                    >
+                      Admin
+                    </MenuItem>
+                  )}
                   <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem>
                   <MenuItem
                     onClick={() => {

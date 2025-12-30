@@ -25,6 +25,7 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           VITE_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.PROD_GOOGLE_CLIENT_ID }}
+          VITE_ADMIN_EMAILS: ${{ secrets.PROD_ADMIN_EMAILS }}
           VITE_USE_HEADER_AUTH: "false"
           VITE_USER_ID: ""
         run: |
@@ -32,6 +33,7 @@ jobs:
           docker build \
             --build-arg VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
             --build-arg VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID}" \
+            --build-arg VITE_ADMIN_EMAILS="${VITE_ADMIN_EMAILS}" \
             --build-arg VITE_USE_HEADER_AUTH="${VITE_USE_HEADER_AUTH}" \
             --build-arg VITE_USER_ID="${VITE_USER_ID}" \
             -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
