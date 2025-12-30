@@ -1,57 +1,30 @@
-# noinspection YAMLSchemaValidation,GithubUnresolvedReference
-name: Frontend CI
+name: Deploy Frontend (Prod)
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  deploy-prod:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - name: Install
-        run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Tests
-        run: npm test -- --watch=false
-        env:
-          CI: true
-          VITEST_WATCH: false
-
-  deploy-dev:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    environment: dev
-    permissions:
-      id-token: write
-      contents: read
+    environment: prod
     steps:
       - uses: actions/checkout@v4
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
       - name: Build and push frontend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ secrets.DEV_ECR_TRADINGVIEW_REPO }}
+          ECR_REPOSITORY: ${{ secrets.PROD_ECR_TRADINGVIEW_REPO }}
           IMAGE_TAG: ${{ github.sha }}
-          VITE_API_BASE_URL: ${{ secrets.DEV_API_BASE_URL }}
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.DEV_GOOGLE_CLIENT_ID }}
+          VITE_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.PROD_GOOGLE_CLIENT_ID }}
           VITE_USE_HEADER_AUTH: "false"
           VITE_USER_ID: ""
         run: |
@@ -67,8 +40,8 @@ jobs:
           docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
       - name: Deploy frontend to App Runner
         env:
-          SERVICE_ARN: ${{ secrets.DEV_FRONTEND_SERVICE_ARN }}
-          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.DEV_ECR_TRADINGVIEW_REPO }}:${{ github.sha }}
+          SERVICE_ARN: ${{ secrets.PROD_FRONTEND_SERVICE_ARN }}
+          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.PROD_ECR_TRADINGVIEW_REPO }}:${{ github.sha }}
         run: |
           set -euo pipefail
           cat > /tmp/apprunner-frontend.json <<EOF
