@@ -14,10 +14,3 @@ body {
     color-scheme: dark;
   }
 }
-
-/* Normalize Google Sign-In embedded button padding across auth states. */
-.g_id_signin,
-.g_id_signin iframe {
-  display: block;
-  margin: 0;
-}
