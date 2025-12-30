@@ -7,7 +7,8 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  background-color: #f4f7fb;
+  min-height: 100%;
 
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
