@@ -708,8 +708,15 @@ export default function Home() {
   return (
     <>
       <AppBar position="static" color="transparent" elevation={0}>
-        <Toolbar sx={{ justifyContent: "space-between" }}>
-          <Stack direction="row" spacing={1} alignItems="center">
+        <Toolbar   
+          disableGutters
+          sx={{ justifyContent: "space-between", px: { xs: 1, sm: 2 } }}  
+        >
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={{ xs: 0.5, sm: 1 }}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+          >
             <Typography variant="h6" fontWeight={700}>
               Day Trade Journal
             </Typography>
