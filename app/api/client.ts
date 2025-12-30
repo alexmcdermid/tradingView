@@ -8,6 +8,16 @@ const USE_HEADER_AUTH = import.meta.env.VITE_USE_HEADER_AUTH === "true";
 
 type RequestOptions = RequestInit & { skipAuthHeader?: boolean };
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 export async function request<T>(path: string, options: RequestOptions = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
@@ -29,7 +39,10 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
 
   if (!response.ok) {
     const message = await safeParseError(response);
-    throw new Error(message || `Request failed with status ${response.status}`);
+    throw new ApiError(
+      message || `Request failed with status ${response.status}`,
+      response.status
+    );
   }
 
   if (response.status === 204) {

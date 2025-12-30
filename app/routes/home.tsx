@@ -33,6 +33,7 @@ import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
+import { ApiError } from "../api/client";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -63,10 +64,26 @@ export default function Home() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const guestSeeded = useRef<boolean>(false);
+
+  const handleRequestError = (err: unknown) => {
+    const message = err instanceof Error ? err.message : "Request failed";
+    if (
+      err instanceof ApiError &&
+      (err.status === 401 || err.status === 403) &&
+      message.toLowerCase().includes("email not allowed")
+    ) {
+      setAuthBlockedMessage(
+        "Signed-in accounts must be explicitly enabled for dev. You can browse, but API actions will fail until you're added."
+      );
+      return;
+    }
+    setError(message);
+  };
 
   const computePnl = (payload: TradePayload) => {
     const quantity = Number(payload.quantity || 0);
@@ -138,7 +155,7 @@ export default function Home() {
         totalElements: tradeData.totalElements,
       });
     } catch (err) {
-      setError((err as Error).message);
+      handleRequestError(err);
     } finally {
       setLoadingTrades(false);
     }
@@ -153,7 +170,7 @@ export default function Home() {
       const summaryData = await fetchSummary(month);
       setSummary(summaryData);
     } catch (err) {
-      setError((err as Error).message);
+      handleRequestError(err);
     } finally {
       setLoadingSummary(false);
     }
@@ -171,7 +188,7 @@ export default function Home() {
         monthly: summaryData.monthly.filter((bucket) => bucket.period.startsWith(String(year))),
       });
     } catch (err) {
-      setError((err as Error).message);
+      handleRequestError(err);
     } finally {
       setLoadingYearSummary(false);
     }
@@ -273,6 +290,12 @@ export default function Home() {
     wasAuthenticated.current = isAuthed;
   }, [calendarMonth, computeSummary, token, user]);
 
+  useEffect(() => {
+    if (!user) {
+      setAuthBlockedMessage(null);
+    }
+  }, [user]);
+
   const handleOpenNewTrade = () => {
     setEditingTrade(null);
     setTradeDialogOpen(true);
@@ -341,7 +364,7 @@ export default function Home() {
       setTradeDialogOpen(false);
       setEditingTrade(null);
     } catch (err) {
-      setError((err as Error).message);
+      handleRequestError(err);
     } finally {
       setSavingTrade(false);
     }
@@ -365,7 +388,7 @@ export default function Home() {
         });
       }
     } catch (err) {
-      setError((err as Error).message);
+      handleRequestError(err);
     }
   };
 
@@ -488,6 +511,11 @@ export default function Home() {
           {!user && (
             <Alert severity="info">
               You&apos;re in guest mode. Log trades to explore the desk; sign in to persist them.
+            </Alert>
+          )}
+          {authBlockedMessage && (
+            <Alert severity="warning" onClose={() => setAuthBlockedMessage(null)}>
+              {authBlockedMessage}
             </Alert>
           )}
           <Grid container spacing={2}>
