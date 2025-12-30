@@ -61,6 +61,7 @@ describe("Admin", () => {
       {
         id: "user-1",
         authId: "admin@example.com",
+        email: "admin@example.com",
         premium: false,
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-02T00:00:00Z",

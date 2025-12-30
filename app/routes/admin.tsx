@@ -125,6 +125,7 @@ export default function Admin() {
               <TableHead>
                 <TableRow>
                   <TableCell>Email</TableCell>
+                  <TableCell>Auth ID</TableCell>
                   <TableCell>Premium</TableCell>
                   <TableCell>Created</TableCell>
                   <TableCell>Updated</TableCell>
@@ -134,6 +135,7 @@ export default function Admin() {
                 {hasUsers ? (
                   users.map((user) => (
                     <TableRow key={user.id} hover>
+                      <TableCell>{user.email || "—"}</TableCell>
                       <TableCell>{user.authId}</TableCell>
                       <TableCell>{user.premium ? "Yes" : "No"}</TableCell>
                       <TableCell>{formatDate(user.createdAt)}</TableCell>
@@ -142,7 +144,7 @@ export default function Admin() {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4}>
+                    <TableCell colSpan={5}>
                       <Typography color="text.secondary">{emptyLabel}</Typography>
                     </TableCell>
                   </TableRow>

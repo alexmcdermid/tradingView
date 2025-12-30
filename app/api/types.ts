@@ -71,6 +71,7 @@ export interface PagedResult<T> {
 export interface AdminUser {
   id: string;
   authId: string;
+  email?: string | null;
   premium: boolean;
   createdAt: string;
   updatedAt: string;
