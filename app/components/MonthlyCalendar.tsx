@@ -111,7 +111,6 @@ export function MonthlyCalendar({
             size="small"
             onClick={() => changeMonth(-1)}
             aria-label="Previous month"
-            disabled={!onMonthChange}
           >
             <ArrowBackIosNewIcon fontSize="small" />
           </IconButton>
@@ -122,7 +121,6 @@ export function MonthlyCalendar({
             size="small"
             onClick={() => changeMonth(1)}
             aria-label="Next month"
-            disabled={!onMonthChange}
           >
             <ArrowForwardIosIcon fontSize="small" />
           </IconButton>
