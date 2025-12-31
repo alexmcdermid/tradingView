@@ -107,13 +107,23 @@ export function MonthlyCalendar({
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton size="small" onClick={() => changeMonth(-1)} aria-label="Previous month">
+          <IconButton
+            size="small"
+            onClick={() => changeMonth(-1)}
+            aria-label="Previous month"
+            disabled={!onMonthChange}
+          >
             <ArrowBackIosNewIcon fontSize="small" />
           </IconButton>
           <Typography variant="subtitle1" fontWeight={700}>
             {monthLabel}
           </Typography>
-          <IconButton size="small" onClick={() => changeMonth(1)} aria-label="Next month">
+          <IconButton
+            size="small"
+            onClick={() => changeMonth(1)}
+            aria-label="Next month"
+            disabled={!onMonthChange}
+          >
             <ArrowForwardIosIcon fontSize="small" />
           </IconButton>
         </Stack>

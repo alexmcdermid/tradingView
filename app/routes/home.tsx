@@ -1,5 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
 import CandlestickChartOutlinedIcon from "@mui/icons-material/CandlestickChartOutlined";
+import ShareIcon from "@mui/icons-material/Share";
 import {
   Alert,
   AppBar,
@@ -35,6 +36,11 @@ import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
+import {
+  buildSharePayload,
+  encodeShareToken,
+  SHARE_QUERY_PARAM,
+} from "../utils/shareLink";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -64,6 +70,46 @@ const parseEmailList = (value?: string) => {
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
   );
+};
+
+const detectEnvironment = () => {
+  if (import.meta.env.VITE_APP_ENV) {
+    return String(import.meta.env.VITE_APP_ENV);
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname.toLowerCase();
+    if (
+      host.includes("localhost") ||
+      host.includes("127.0.0.1") ||
+      host.includes("dev") ||
+      host.includes("staging")
+    ) {
+      return "dev";
+    }
+  }
+  return import.meta.env.PROD ? "prod" : "dev";
+};
+
+const copyTextToClipboard = async (value: string) => {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return true;
+  }
+  if (typeof document !== "undefined") {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      const result = document.execCommand("copy");
+      return result;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  }
+  return false;
 };
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
@@ -354,6 +400,8 @@ export default function Home() {
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
@@ -643,6 +691,35 @@ export default function Home() {
     }
   };
 
+  const handleShareMonth = async () => {
+    if (!summary) {
+      setError("Load a month before sharing.");
+      return;
+    }
+    if (typeof window === "undefined") return;
+    try {
+      setSharing(true);
+      const payload = buildSharePayload(calendarMonth, summary, {
+        env: detectEnvironment(),
+        origin: window.location.origin,
+      });
+      const token = encodeShareToken(payload);
+      const shareUrl = new URL("/share", window.location.origin);
+      shareUrl.searchParams.set(SHARE_QUERY_PARAM, token);
+      const copied = await copyTextToClipboard(shareUrl.toString());
+      if (!copied) {
+        setError("Could not copy the share link. Copy it manually if needed.");
+        return;
+      }
+      setShareMessage("Share link copied. Send it to share this month's P/L.");
+    } catch (err) {
+      console.error(err);
+      setError("Could not build the share link. Try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const handleMonthChange = async (month: string) => {
     setCalendarMonth(month);
     setSelectedDate(null);
@@ -819,13 +896,24 @@ export default function Home() {
                 spacing={1}
                 sx={{ mb: 2 }}
               >
-                <Typography variant="h6" fontWeight={700}>
-                  Monthly P/L Calendar
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+                  <Typography variant="h6" fontWeight={700}>
+                    Monthly P/L Calendar
+                  </Typography>
                   <Typography variant="body2" color={monthlyColor} fontWeight={700}>
                     {summary ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)} USD` : ""}
                   </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ShareIcon />}
+                    onClick={handleShareMonth}
+                    size="small"
+                    disabled={!summary || sharing || loadingSummary}
+                  >
+                    Share Month
+                  </Button>
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
@@ -931,6 +1019,16 @@ export default function Home() {
       >
         <Alert onClose={() => setError(null)} severity="error" sx={{ width: "100%" }}>
           {error}
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={!!shareMessage}
+        autoHideDuration={3500}
+        onClose={() => setShareMessage(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={() => setShareMessage(null)} severity="success" sx={{ width: "100%" }}>
+          {shareMessage}
         </Alert>
       </Snackbar>
     </>
