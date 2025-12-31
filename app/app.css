@@ -15,12 +15,26 @@ body {
   }
 }
 
-/* Crop Google One Tap button padding */
+/* Crop One Tap popup button padding */
+div[id^="credential_picker"],
 #credential_picker_container,
-#credential_picker_container > div {
+#credential_picker_container > div,
+[role="dialog"][aria-modal="false"] {
   overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 
-#credential_picker_container iframe {
+#credential_picker_container iframe,
+div[id^="credential_picker"] iframe {
   margin: -2px -10px !important;
+  padding: 0 !important;
+  box-sizing: content-box !important;
+  display: block !important;
 }
+
+/* Alternative: clip the iframe content */
+#credential_picker_container {
+  clip-path: inset(2px 10px) !important;
+}
+

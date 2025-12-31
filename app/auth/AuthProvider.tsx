@@ -100,9 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       text="signin_with"
       shape="pill"
       width={loginWidth}
-      useOneTap
-      auto_select
-      cancel_on_tap_outside={false}
     />
   ) : null;
 
