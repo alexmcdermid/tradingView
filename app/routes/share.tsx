@@ -146,7 +146,7 @@ export default function Share() {
             <Typography variant="subtitle1" fontWeight={700}>
               Daily P/L
             </Typography>
-            <MonthlyCalendar daily={dailyBuckets} month={shared.month} />
+            <MonthlyCalendar daily={dailyBuckets} month={shared.month} readOnly />
             <Divider />
             <Box>
               {dailyBuckets.length === 0 ? (

@@ -85,8 +85,10 @@ export function decodeShareToken(token: string): SharedSummaryPayload | null {
     if (!payload.month || typeof payload.month !== "string") return null;
     if (!payload.summary) return null;
     if (!Array.isArray(payload.summary.daily) || !Array.isArray(payload.summary.monthly)) return null;
+    if (!payload.summary.daily.every((bucket) => bucket && typeof bucket === "object")) return null;
+    if (!payload.summary.monthly.every((bucket) => bucket && typeof bucket === "object")) return null;
     return {
-      version: payload.version === 1 ? 1 : 1,
+      version: 1,
       month: payload.month,
       summary: {
         ...payload.summary,
