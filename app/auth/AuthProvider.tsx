@@ -84,31 +84,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginButton = mounted ? (
-    <div style={{ 
-      padding: 0, 
-      margin: 0,
-      width: '100%',
-      maxWidth: 240,
-      display: 'flex',
-      justifyContent: 'flex-end'
-    }}>
-      <GoogleLogin
-        onSuccess={(response) => handleSuccess(response.credential)}
-        onError={() => logout()}
-        containerProps={{
-          style: {
-            padding: 0,
-            margin: 0,
-            display: "inline-block",
-            width: "100%",
-          },
-        }}
-        text="signin_with"
-        shape="pill"
-        width={loginWidth}
-        useOneTap
-      />
-    </div>
+    <GoogleLogin
+      onSuccess={(response) => handleSuccess(response.credential)}
+      onError={() => logout()}
+      containerProps={{
+        style: {
+          padding: 0,
+          margin: 0,
+          display: "flex",
+          justifyContent: "flex-end",
+          width: "100%",
+          maxWidth: 240,
+        },
+      }}
+      text="signin_with"
+      shape="pill"
+      width={loginWidth}
+      useOneTap
+      auto_select
+      cancel_on_tap_outside={false}
+    />
   ) : null;
 
   const value = useMemo(
