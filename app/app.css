@@ -16,6 +16,11 @@ body {
 }
 
 /* Crop Google One Tap button padding */
+#credential_picker_container,
+#credential_picker_container > div {
+  overflow: hidden !important;
+}
+
 #credential_picker_container iframe {
   margin: -2px -10px !important;
 }
