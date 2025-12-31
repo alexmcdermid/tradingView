@@ -20,6 +20,7 @@ interface MonthlyCalendarProps {
   onMonthChange?: (month: string) => void;
   selectedDate?: string | null;
   onDateSelect?: (date: string) => void;
+  readOnly?: boolean;
 }
 
 function toDate(value?: string) {
@@ -57,6 +58,7 @@ export function MonthlyCalendar({
   onMonthChange,
   selectedDate,
   onDateSelect,
+  readOnly = false,
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
 
@@ -93,6 +95,7 @@ export function MonthlyCalendar({
   });
 
   const changeMonth = (delta: number) => {
+    if (readOnly) return;
     setActiveMonth((prev) => {
       const next = new Date(prev.getFullYear(), prev.getMonth() + delta, 1);
       if (onMonthChange) {
@@ -107,15 +110,27 @@ export function MonthlyCalendar({
     <Paper variant="outlined" sx={{ p: 2 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton size="small" onClick={() => changeMonth(-1)} aria-label="Previous month">
-            <ArrowBackIosNewIcon fontSize="small" />
-          </IconButton>
+          {!readOnly && (
+            <IconButton
+              size="small"
+              onClick={() => changeMonth(-1)}
+              aria-label="Previous month"
+            >
+              <ArrowBackIosNewIcon fontSize="small" />
+            </IconButton>
+          )}
           <Typography variant="subtitle1" fontWeight={700}>
             {monthLabel}
           </Typography>
-          <IconButton size="small" onClick={() => changeMonth(1)} aria-label="Next month">
-            <ArrowForwardIosIcon fontSize="small" />
-          </IconButton>
+          {!readOnly && (
+            <IconButton
+              size="small"
+              onClick={() => changeMonth(1)}
+              aria-label="Next month"
+            >
+              <ArrowForwardIosIcon fontSize="small" />
+            </IconButton>
+          )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
           P/L per day
