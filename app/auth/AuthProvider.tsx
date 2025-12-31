@@ -36,6 +36,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [initializing, setInitializing] = useState(true);
+  const [mounted, setMounted] = useState(false);
+  const [loginWidth, setLoginWidth] = useState("220");
 
   useEffect(() => {
     const stored = getAuthToken();
@@ -49,6 +51,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
     setInitializing(false);
+    setMounted(true);
+
+    if (typeof window !== "undefined") {
+      const computeWidth = () => {
+        const w = window.innerWidth;
+        if (w < 400) return "180";
+        if (w < 640) return "200";
+        return "220";
+      };
+      setLoginWidth(computeWidth());
+      const handler = () => setLoginWidth(computeWidth());
+      window.addEventListener("resize", handler);
+      return () => window.removeEventListener("resize", handler);
+    }
   }, []);
 
   const handleSuccess = (credential?: string | undefined) => {
@@ -67,16 +83,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  const loginButton = (
+  const loginButton = mounted ? (
     <GoogleLogin
       onSuccess={(response) => handleSuccess(response.credential)}
       onError={() => logout()}
-      containerProps={{ style: { padding: 0, margin: 0 } }}
+      containerProps={{
+        style: {
+          padding: 0,
+          margin: 0,
+          display: "flex",
+          justifyContent: "flex-end",
+          width: "100%",
+          maxWidth: 240,
+        },
+      }}
       text="signin_with"
-      shape="rectangular"
+      shape="pill"
+      width={loginWidth}
       useOneTap
     />
-  );
+  ) : null;
 
   const value = useMemo(
     () => ({

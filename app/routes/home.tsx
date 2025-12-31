@@ -433,6 +433,11 @@ export default function Home() {
       );
       return;
     }
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      logout();
+      setError("Session expired. Please sign in again.");
+      return;
+    }
     setError(message);
   };
 
@@ -575,7 +580,15 @@ export default function Home() {
 
   useEffect(() => {
     const isAuthed = !!user && !!token;
-    if (wasAuthenticated.current && !isAuthed) {
+    if (!wasAuthenticated.current && isAuthed) {
+      setTrades([]);
+      setSummary(null);
+      setYearSummary(null);
+      setSelectedDate(null);
+      setPage(0);
+      setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
+      guestSeeded.current = false;
+    } else if (wasAuthenticated.current && !isAuthed) {
       setTrades([]);
       setPage(0);
       setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
@@ -801,7 +814,12 @@ export default function Home() {
               Simple P/L tracker
             </Typography>
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            sx={{ flexWrap: "wrap", rowGap: 1, justifyContent: { xs: "flex-start", sm: "flex-end" } }}
+          >
             {user ? (
               <>
                 <IconButton
