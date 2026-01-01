@@ -1,56 +1,36 @@
-# TradingView Frontend
+# TradingView - Day Trading Journal
 
-React Router + MUI frontend for a lightweight day-trade journal. It talks to the Spring Boot backend at `/api/v1/trades` (repo: https://github.com/alexmcdermid/transaction-api), letting you log stock/option trades and see realized P/L rollups by day and month.
+A web application for tracking day trading performance. Log your stock and option trades, visualize your P&L over time, and analyze your best performing days and months.
 
-Runtime config (Vite env vars/build args):
-- `VITE_API_BASE_URL` (e.g. `https://dev-api.tradelog.ca/api/v1`)
-- `VITE_GOOGLE_CLIENT_ID`
-- `VITE_ADMIN_EMAILS` (comma-separated, optional)
-- `VITE_USE_HEADER_AUTH` (dev-only; set `false` for prod)
-- `VITE_USER_ID` (dev-only, optional)
-- `VITE_APP_ENV` (optional label for share links)
+## What it does
 
-## Scripts
+This trading journal helps you:
+- **Log trades quickly** - Record stocks and options (calls/puts) with a simple form
+- **Track performance** - View your total realized P&L, trade count, and best day/month statistics
+- **Browse by month** - Monthly calendar view with daily P&L summaries
+- **Multi-currency** - Supports both USD and CAD trades with automatic conversion to USD
+- **Share trades** - Generate shareable links for individual trades (with optional expiration)
+- **Guest mode** - Try it out without signing in (trades stored locally)
 
-Install dependencies:
+## Features
 
-```bash
-npm install
-```
+- **Real-time Statistics** - See total P&L, best day, and best month across all your trades
+- **Interactive Calendar** - Click on any day to view trades for that date
+- **Trade Table** - Sortable, paginated table with all trade details
+- **Performance Formatting** - Color-coded P&L (green for profits, red for losses)
+- **Responsive Design** - Works on desktop and mobile
+- **Google Sign-In** - Secure authentication with your Google account
+- **Admin Panel** - View all users and their activity (admin-only)
 
-Run the dev server:
+## Tech Stack
 
-```bash
-npm run dev
-```
+- React 18 with TypeScript
+- Material-UI (MUI) components
+- React Router for navigation
+- Vite for fast builds
+- Vitest for testing
+- Deployed on AWS App Runner
 
-Type-check:
+## Development
 
-```bash
-npm run typecheck
-```
-
-Build for production:
-
-```bash
-npm run build
-```
-
-## Deployment (AWS App Runner)
-This repo auto-deploys to the **dev** environment on pushes to `main` (after CI tests pass). Production deploys are manual via `workflow_dispatch`. The frontend is served via App Runner with a custom domain (e.g. `https://dev.tradelog.ca`).
-
-Required GitHub secrets (dev):
-- `AWS_REGION`
-- `AWS_ROLE_ARN`
-- `DEV_ECR_TRADINGVIEW_REPO`
-- `DEV_FRONTEND_SERVICE_ARN`
-- `DEV_API_BASE_URL`
-- `DEV_GOOGLE_CLIENT_ID`
-- `DEV_ADMIN_EMAILS` (comma-separated, optional)
-
-Required GitHub secrets (prod):
-- `PROD_ECR_TRADINGVIEW_REPO`
-- `PROD_FRONTEND_SERVICE_ARN`
-- `PROD_API_BASE_URL`
-- `PROD_GOOGLE_CLIENT_ID`
-- `PROD_ADMIN_EMAILS` (comma-separated, optional)
+See [DEV.md](DEV.md) for setup instructions, build commands, and deployment details.

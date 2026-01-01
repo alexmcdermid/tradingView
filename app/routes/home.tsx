@@ -883,7 +883,7 @@ export default function Home() {
                       Admin
                     </MenuItem>
                   )}
-                  <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem>
+                  {/* <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem> */}
                   <MenuItem
                     onClick={() => {
                       setMenuAnchor(null);
