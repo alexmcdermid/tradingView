@@ -34,3 +34,10 @@ declare module "@mui/icons-material/NavigateNext" {
   const Icon: React.FC<SvgIconProps>;
   export default Icon;
 }
+
+declare module "@mui/icons-material/Share" {
+  import * as React from "react";
+  import { SvgIconProps } from "@mui/material/SvgIcon";
+  const Icon: React.FC<SvgIconProps>;
+  export default Icon;
+}

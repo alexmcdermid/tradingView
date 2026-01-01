@@ -26,11 +26,12 @@ import { Link as RouterLink } from "react-router";
 import {
   createTrade,
   deleteTrade,
+  fetchAggregateStats,
   fetchSummary,
   fetchTrades,
   updateTrade,
 } from "../api/trades";
-import type { PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
+import type { AggregateStats, PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
@@ -381,12 +382,10 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
-  const [allSummary, setAllSummary] = useState<PnlSummary | null>(null);
-  const [yearSummary, setYearSummary] = useState<PnlSummary | null>(null);
+  const [aggregateStats, setAggregateStats] = useState<AggregateStats | null>(null);
   const [loadingTrades, setLoadingTrades] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [loadingYearSummary, setLoadingYearSummary] = useState(false);
-  const loadingData = loadingTrades || loadingSummary;
+  const [loadingStats, setLoadingStats] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [pageMeta, setPageMeta] = useState<{ totalPages: number; hasNext: boolean; hasPrevious: boolean; totalElements: number }>({
@@ -522,22 +521,18 @@ export default function Home() {
     }
   }, [token, user]);
 
-  const loadYearSummary = useCallback(async (year: number) => {
+  const loadAggregateStats = useCallback(async () => {
     if (!user || !token) {
       return;
     }
     try {
-      setLoadingYearSummary(true);
-      const summaryData = await fetchSummary();
-      setAllSummary(summaryData);
-      setYearSummary({
-        ...summaryData,
-        monthly: summaryData.monthly.filter((bucket) => bucket.period.startsWith(String(year))),
-      });
+      setLoadingStats(true);
+      const stats = await fetchAggregateStats();
+      setAggregateStats(stats);
     } catch (err) {
       handleRequestError(err);
     } finally {
-      setLoadingYearSummary(false);
+      setLoadingStats(false);
     }
   }, [token, user]);
 
@@ -553,8 +548,14 @@ export default function Home() {
       return;
     }
     loadSummary(calendarMonth);
-    loadYearSummary(Number(calendarMonth.slice(0, 4)));
-  }, [calendarMonth, loadSummary, loadYearSummary, token, user]);
+  }, [calendarMonth, loadSummary, token, user]);
+
+  useEffect(() => {
+    if (!user || !token) {
+      return;
+    }
+    loadAggregateStats();
+  }, [loadAggregateStats, token, user]);
 
   useEffect(() => {
     if (user && token) {
@@ -566,9 +567,15 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(seed, calendarMonth, rate, fxDate));
-      setAllSummary(computeSummary(seed, undefined, rate, fxDate));
-      const year = Number(calendarMonth.slice(0, 4));
-      setYearSummary(computeSummary(seed.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
+      const allSummary = computeSummary(seed, undefined, rate, fxDate);
+      setAggregateStats({
+        totalPnl: allSummary.totalPnl,
+        tradeCount: allSummary.tradeCount,
+        bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        cadToUsdRate: rate,
+        fxDate,
+      });
       guestSeeded.current = true;
       return;
     }
@@ -576,9 +583,15 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, calendarMonth, rate, fxDate));
-      setAllSummary(computeSummary(trades, undefined, rate, fxDate));
-      const year = Number(calendarMonth.slice(0, 4));
-      setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
+      const allSummary = computeSummary(trades, undefined, rate, fxDate);
+      setAggregateStats({
+        totalPnl: allSummary.totalPnl,
+        tradeCount: allSummary.tradeCount,
+        bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        cadToUsdRate: rate,
+        fxDate,
+      });
     }
   }, [calendarMonth, computeSummary, trades, token, user, initializing]);
 
@@ -587,8 +600,7 @@ export default function Home() {
     if (!wasAuthenticated.current && isAuthed) {
       setTrades([]);
       setSummary(null);
-      setAllSummary(null);
-      setYearSummary(null);
+      setAggregateStats(null);
       setSelectedDate(null);
       setPage(0);
       setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
@@ -600,7 +612,7 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary([], calendarMonth, rate, fxDate));
-      setAllSummary(null);
+      setAggregateStats(null);
       setLoadingTrades(false);
       setLoadingSummary(false);
       guestSeeded.current = false;
@@ -655,6 +667,7 @@ export default function Home() {
         }
         await loadTrades(page, pageSize);
         await loadSummary(calendarMonth);
+        await loadAggregateStats();
       } else {
         const realizedPnl = computePnl(payload);
         const now = new Date().toISOString();
@@ -676,6 +689,15 @@ export default function Home() {
             ? prev.map((t) => (t.id === editingTrade.id ? localTrade : t))
             : [localTrade, ...prev];
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
+          const allSummary = computeSummary(next, undefined, rate, fxDate);
+          setAggregateStats({
+            totalPnl: allSummary.totalPnl,
+            tradeCount: allSummary.tradeCount,
+            bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+            bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+            cadToUsdRate: rate,
+            fxDate,
+          });
           return next;
         });
       }
@@ -696,12 +718,22 @@ export default function Home() {
         await deleteTrade(trade.id);
         await loadTrades(page, pageSize);
         await loadSummary(calendarMonth);
+        await loadAggregateStats();
       } else {
         const rate = summary?.cadToUsdRate;
         const fxDate = summary?.fxDate;
         setTrades((prev) => {
           const next = prev.filter((t) => t.id !== trade.id);
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
+          const allSummary = computeSummary(next, undefined, rate, fxDate);
+          setAggregateStats({
+            totalPnl: allSummary.totalPnl,
+            tradeCount: allSummary.tradeCount,
+            bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+            bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+            cadToUsdRate: rate,
+            fxDate,
+          });
           return next;
         });
       }
@@ -742,7 +774,6 @@ export default function Home() {
   const handleMonthChange = async (month: string) => {
     setCalendarMonth(month);
     setSelectedDate(null);
-    setPage(0);
     if (!user || !token) {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
@@ -752,7 +783,6 @@ export default function Home() {
 
   const handleDateSelect = (date: string) => {
     setSelectedDate((prev) => (prev === date ? null : date));
-    setPage(0);
   };
 
   const filteredTrades = useMemo(() => {
@@ -768,11 +798,8 @@ export default function Home() {
   }, [summary]);
 
   const bestMonth = useMemo(() => {
-    if (!yearSummary || yearSummary.monthly.length === 0) return null;
-    return yearSummary.monthly.reduce((best, bucket) =>
-      bucket.pnl > best.pnl ? bucket : best
-    );
-  }, [yearSummary]);
+    return aggregateStats?.bestMonth || null;
+  }, [aggregateStats]);
 
   const monthlyColor = useMemo(() => {
     if (!summary) return undefined;
@@ -890,9 +917,9 @@ export default function Home() {
             <Grid size={{ xs: 12, md: 4 }}>
               <StatCard
                 title="Total Realized P/L"
-                value={allSummary?.totalPnl}
-                trades={allSummary?.tradeCount}
-                loading={loadingYearSummary}
+                value={aggregateStats?.totalPnl}
+                trades={aggregateStats?.tradeCount}
+                loading={loadingStats}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
@@ -904,9 +931,9 @@ export default function Home() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title="Best Month (year)"
+                title="Best Month (all time)"
                 bucket={bestMonth}
-                loading={loadingYearSummary}
+                loading={loadingStats}
               />
             </Grid>
           </Grid>
@@ -967,7 +994,7 @@ export default function Home() {
           <Box>
             <TradesTable
               trades={filteredTrades}
-              loading={loadingData}
+              loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
               page={user && !selectedDate ? page : undefined}
@@ -1070,10 +1097,12 @@ function StatCard({
   trades?: number;
   loading?: boolean;
 }) {
-  const display = value?.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const display = value != null
+    ? value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + " USD"
+    : "—";
   return (
     <Card variant="outlined">
       <CardContent>
@@ -1085,7 +1114,7 @@ function StatCard({
           fontWeight={800}
           color={!value ? "text.primary" : value >= 0 ? "success.main" : "error.main"}
         >
-          {loading ? "…" : display ?? "—"}
+          {loading ? "…" : display}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {loading
@@ -1111,6 +1140,12 @@ function BucketCard({
   icon?: ReactNode;
 }) {
   const value = bucket?.pnl;
+  const formattedValue = value != null 
+    ? value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + " USD"
+    : "—";
   return (
     <Card variant="outlined">
       <CardContent>
@@ -1125,7 +1160,7 @@ function BucketCard({
           fontWeight={800}
           color={!value ? "text.primary" : value >= 0 ? "success.main" : "error.main"}
         >
-          {loading ? "…" : value?.toFixed(2) ?? "—"}
+          {loading ? "…" : formattedValue}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {loading

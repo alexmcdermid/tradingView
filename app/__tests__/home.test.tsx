@@ -29,6 +29,7 @@ vi.mock("../auth/AuthProvider", () => ({
 
 const mockFetchTrades = vi.fn<() => Promise<{ items: Trade[]; page: number; size: number; totalPages: number; totalElements: number; hasNext: boolean; hasPrevious: boolean }>>();
 const mockFetchSummary = vi.fn();
+const mockFetchAggregateStats = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
@@ -36,6 +37,7 @@ const mockDeleteTrade = vi.fn();
 vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
   fetchSummary: (...args: Parameters<typeof mockFetchSummary>) => mockFetchSummary(...args),
+  fetchAggregateStats: (...args: Parameters<typeof mockFetchAggregateStats>) => mockFetchAggregateStats(...args),
   createTrade: (...args: Parameters<typeof mockCreateTrade>) => mockCreateTrade(...args),
   updateTrade: (...args: Parameters<typeof mockUpdateTrade>) => mockUpdateTrade(...args),
   deleteTrade: (...args: Parameters<typeof mockDeleteTrade>) => mockDeleteTrade(...args),
@@ -59,6 +61,14 @@ describe("Home (guest mode)", () => {
       tradeCount: 0,
       daily: [],
       monthly: [],
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+    });
+    mockFetchAggregateStats.mockResolvedValue({
+      totalPnl: 0,
+      tradeCount: 0,
+      bestDay: null,
+      bestMonth: null,
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
     });
@@ -137,6 +147,14 @@ describe("Home (authenticated)", () => {
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
     });
+    mockFetchAggregateStats.mockResolvedValue({
+      totalPnl: 1234.56,
+      tradeCount: 1,
+      bestDay: { period: "2024-01-02", pnl: 100.5, trades: 1 },
+      bestMonth: { period: "2024-01", pnl: 1234.56, trades: 1 },
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+    });
   });
 
   afterEach(() => {
@@ -154,5 +172,36 @@ describe("Home (authenticated)", () => {
       expect(mockFetchTrades).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("TSLA")).toBeInTheDocument();
+  });
+
+  it("loads aggregate stats when authenticated", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not reload aggregate stats when changing calendar month", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
+    });
+
+    const prevButton = screen.getAllByRole("button", { name: /previous month/i })[0];
+    await userEvent.click(prevButton);
+
+    await waitFor(() => {
+      expect(mockFetchSummary).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
   });
 });

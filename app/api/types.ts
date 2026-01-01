@@ -58,6 +58,15 @@ export interface PnlSummary {
   fxDate?: string;
 }
 
+export interface AggregateStats {
+  totalPnl: number;
+  tradeCount: number;
+  bestDay: PnlBucket | null;
+  bestMonth: PnlBucket | null;
+  cadToUsdRate?: number;
+  fxDate?: string;
+}
+
 export interface PagedResult<T> {
   items: T[];
   page: number;

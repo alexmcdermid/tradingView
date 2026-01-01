@@ -1,5 +1,5 @@
 import { request } from "./client";
-import type { PagedResult, PnlSummary, Trade, TradePayload } from "./types";
+import type { PagedResult, PnlSummary, AggregateStats, Trade, TradePayload } from "./types";
 
 export async function fetchTrades(page = 0, size = 50, month?: string) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
@@ -32,4 +32,8 @@ export async function deleteTrade(tradeId: string) {
 export async function fetchSummary(month?: string) {
   const search = month ? `?month=${encodeURIComponent(month)}` : "";
   return request<PnlSummary>(`/trades/summary${search}`);
+}
+
+export async function fetchAggregateStats() {
+  return request<AggregateStats>("/trades/stats");
 }
