@@ -381,6 +381,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
 export default function Home() {
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
+  const [allSummary, setAllSummary] = useState<PnlSummary | null>(null);
   const [yearSummary, setYearSummary] = useState<PnlSummary | null>(null);
   const [loadingTrades, setLoadingTrades] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -528,6 +529,7 @@ export default function Home() {
     try {
       setLoadingYearSummary(true);
       const summaryData = await fetchSummary();
+      setAllSummary(summaryData);
       setYearSummary({
         ...summaryData,
         monthly: summaryData.monthly.filter((bucket) => bucket.period.startsWith(String(year))),
@@ -564,6 +566,7 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(seed, calendarMonth, rate, fxDate));
+      setAllSummary(computeSummary(seed, undefined, rate, fxDate));
       const year = Number(calendarMonth.slice(0, 4));
       setYearSummary(computeSummary(seed.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
       guestSeeded.current = true;
@@ -573,6 +576,7 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, calendarMonth, rate, fxDate));
+      setAllSummary(computeSummary(trades, undefined, rate, fxDate));
       const year = Number(calendarMonth.slice(0, 4));
       setYearSummary(computeSummary(trades.filter((t) => t.closedAt.startsWith(String(year))), undefined, rate, fxDate));
     }
@@ -583,6 +587,7 @@ export default function Home() {
     if (!wasAuthenticated.current && isAuthed) {
       setTrades([]);
       setSummary(null);
+      setAllSummary(null);
       setYearSummary(null);
       setSelectedDate(null);
       setPage(0);
@@ -595,6 +600,7 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary([], calendarMonth, rate, fxDate));
+      setAllSummary(null);
       setLoadingTrades(false);
       setLoadingSummary(false);
       guestSeeded.current = false;
@@ -884,23 +890,23 @@ export default function Home() {
             <Grid size={{ xs: 12, md: 4 }}>
               <StatCard
                 title="Total Realized P/L"
-                value={summary?.totalPnl}
-                trades={summary?.tradeCount}
-                loading={loadingData}
+                value={allSummary?.totalPnl}
+                trades={allSummary?.tradeCount}
+                loading={loadingYearSummary}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
                 title="Best Day (month)"
                 bucket={bestBucket}
-                loading={loadingData}
+                loading={loadingSummary}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
                 title="Best Month (year)"
                 bucket={bestMonth}
-                loading={loadingData}
+                loading={loadingYearSummary}
               />
             </Grid>
           </Grid>
