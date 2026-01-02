@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { PnlSummary } from "../api/types";
-import { buildSharePayload, decodeShareToken, encodeShareToken } from "../utils/shareLink";
+import {
+  buildSharePayload,
+  decodeShareToken,
+  encodeShareToken,
+  SHARE_QUERY_PARAM,
+} from "../utils/shareLink";
+
+const pad2 = (value: number) => String(value).padStart(2, "0");
 
 describe("share link helpers", () => {
   const summary: PnlSummary = {
@@ -38,5 +45,37 @@ describe("share link helpers", () => {
   it("returns null for invalid tokens", () => {
     expect(decodeShareToken("not-base64")).toBeNull();
     expect(decodeShareToken("")).toBeNull();
+  });
+
+  it("keeps large share links under iMessage limits", () => {
+    const MAX_IMESSAGE_URL_LENGTH = 2000;
+    const daily = Array.from({ length: 31 }, (_, index) => {
+      const day = index + 1;
+      const trades = 12 + (day % 7);
+      const pnl = Number(((day % 2 === 0 ? 18.42 : -9.17) + day * 0.3).toFixed(2));
+      return { period: `2024-03-${pad2(day)}`, pnl, trades };
+    });
+    const tradeCount = daily.reduce((sum, bucket) => sum + bucket.trades, 0);
+    const totalPnl = Number(daily.reduce((sum, bucket) => sum + bucket.pnl, 0).toFixed(2));
+    const largeSummary: PnlSummary = {
+      totalPnl,
+      tradeCount,
+      daily,
+      monthly: [{ period: "2024-03", pnl: totalPnl, trades: tradeCount }],
+      cadToUsdRate: 0.73,
+      fxDate: "2024-03-31",
+    };
+
+    const payload = buildSharePayload("2024-03", largeSummary, {
+      env: "dev",
+      origin: "https://example.com",
+      generatedAt: "2024-03-31T23:59:59Z",
+    });
+    const token = encodeShareToken(payload);
+    const shareUrl = new URL("https://example.com/share");
+    shareUrl.searchParams.set(SHARE_QUERY_PARAM, token);
+
+    expect(tradeCount).toBeGreaterThanOrEqual(300);
+    expect(shareUrl.toString().length).toBeLessThanOrEqual(MAX_IMESSAGE_URL_LENGTH);
   });
 });

@@ -401,6 +401,7 @@ export default function Home() {
   const [savingTrade, setSavingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
+  const [shareWarning, setShareWarning] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const { user, token, loginButton, initializing, logout } = useAuth();
@@ -743,6 +744,10 @@ export default function Home() {
   };
 
   const handleShareMonth = async () => {
+    if (!user || !token) {
+      setShareWarning("Sign in to share a month.");
+      return;
+    }
     if (!summary) {
       setError("Load a month before sharing.");
       return;
@@ -1080,6 +1085,16 @@ export default function Home() {
       >
         <Alert onClose={() => setShareMessage(null)} severity="success" sx={{ width: "100%" }}>
           {shareMessage}
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={!!shareWarning}
+        autoHideDuration={3500}
+        onClose={() => setShareWarning(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert onClose={() => setShareWarning(null)} severity="warning" sx={{ width: "100%" }}>
+          {shareWarning}
         </Alert>
       </Snackbar>
     </>
