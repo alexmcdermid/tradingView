@@ -39,6 +39,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
 import {
   buildSharePayload,
+  buildTradesSharePayload,
   encodeShareToken,
   SHARE_QUERY_PARAM,
 } from "../utils/shareLink";
@@ -776,6 +777,47 @@ export default function Home() {
     }
   };
 
+  const handleShareDay = async () => {
+    if (!user || !token) {
+      setShareWarning("Sign in to share trades.");
+      return;
+    }
+    if (!selectedDate) {
+      setShareWarning("Select a day to share trades.");
+      return;
+    }
+    if (filteredTrades.length === 0) {
+      setShareWarning("No trades found for that day.");
+      return;
+    }
+    if (typeof window === "undefined") return;
+    try {
+      setSharing(true);
+      const payload = buildTradesSharePayload(selectedDate, filteredTrades, {
+        env: detectEnvironment(),
+        origin: window.location.origin,
+        cadToUsdRate: summary?.cadToUsdRate,
+        fxDate: summary?.fxDate,
+      });
+      const token = encodeShareToken(payload);
+      const shareUrl = new URL("/share", window.location.origin);
+      shareUrl.searchParams.set(SHARE_QUERY_PARAM, token);
+      const copied = await copyTextToClipboard(shareUrl.toString());
+      if (!copied) {
+        setError("Could not copy the share link. Copy it manually if needed.");
+        return;
+      }
+      setShareMessage(
+        `Share link copied. Send it to share trades for ${selectedDate.replace(/-/g, "/")}.`
+      );
+    } catch (err) {
+      console.error(err);
+      setError("Could not build the share link. Try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
   const handleMonthChange = async (month: string) => {
     setCalendarMonth(month);
     setSelectedDate(null);
@@ -961,6 +1003,17 @@ export default function Home() {
                   </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
+                  {selectedDate && (
+                    <Button
+                      variant="outlined"
+                      startIcon={<ShareIcon />}
+                      onClick={handleShareDay}
+                      size="small"
+                      disabled={sharing || loadingTrades || filteredTrades.length === 0}
+                    >
+                      Share Day
+                    </Button>
+                  )}
                   <Button
                     variant="outlined"
                     startIcon={<ShareIcon />}

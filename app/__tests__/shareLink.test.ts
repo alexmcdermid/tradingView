@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { PnlSummary } from "../api/types";
+import type { PnlSummary, Trade } from "../api/types";
 import {
   buildSharePayload,
+  buildTradesSharePayload,
   decodeShareToken,
   encodeShareToken,
   SHARE_QUERY_PARAM,
@@ -34,6 +35,9 @@ describe("share link helpers", () => {
     const token = encodeShareToken(payload);
     const decoded = decodeShareToken(token);
 
+    if (!decoded || !("summary" in decoded)) {
+      throw new Error("Expected a summary payload.");
+    }
     expect(decoded?.month).toBe("2024-02");
     expect(decoded?.env).toBe("dev");
     expect(decoded?.origin).toBe("http://localhost:5173");
@@ -77,5 +81,91 @@ describe("share link helpers", () => {
 
     expect(tradeCount).toBeGreaterThanOrEqual(300);
     expect(shareUrl.toString().length).toBeLessThanOrEqual(MAX_IMESSAGE_URL_LENGTH);
+  });
+
+  it("encodes and decodes shared trades", () => {
+    const trades: Trade[] = [
+      {
+        id: "trade-1",
+        symbol: "AAPL",
+        currency: "USD",
+        assetType: "STOCK",
+        direction: "LONG",
+        quantity: 10,
+        entryPrice: 120,
+        exitPrice: 130,
+        fees: 1,
+        optionType: null,
+        strikePrice: null,
+        expiryDate: null,
+        openedAt: "2024-02-10",
+        closedAt: "2024-02-10",
+        realizedPnl: 90,
+        notes: "Morning breakout",
+        createdAt: "2024-02-10T00:00:00Z",
+        updatedAt: "2024-02-10T00:00:00Z",
+      },
+      {
+        id: "trade-2",
+        symbol: "SHOP",
+        currency: "CAD",
+        assetType: "STOCK",
+        direction: "SHORT",
+        quantity: 5,
+        entryPrice: 75,
+        exitPrice: 70,
+        fees: 2,
+        optionType: null,
+        strikePrice: null,
+        expiryDate: null,
+        openedAt: "2024-02-10",
+        closedAt: "2024-02-10",
+        realizedPnl: 23.5,
+        notes: null,
+        createdAt: "2024-02-10T00:00:00Z",
+        updatedAt: "2024-02-10T00:00:00Z",
+      },
+      {
+        id: "trade-3",
+        symbol: "MSFT",
+        currency: "USD",
+        assetType: "STOCK",
+        direction: "LONG",
+        quantity: 2,
+        entryPrice: 300,
+        exitPrice: 310,
+        fees: 1,
+        optionType: null,
+        strikePrice: null,
+        expiryDate: null,
+        openedAt: "2024-02-11",
+        closedAt: "2024-02-11",
+        realizedPnl: 19,
+        notes: null,
+        createdAt: "2024-02-11T00:00:00Z",
+        updatedAt: "2024-02-11T00:00:00Z",
+      },
+    ];
+
+    const payload = buildTradesSharePayload("2024-02-10", trades, {
+      env: "dev",
+      origin: "http://localhost:5173",
+      generatedAt: "2024-02-10T12:00:00Z",
+      cadToUsdRate: 0.75,
+      fxDate: "2024-02-10",
+    });
+    const token = encodeShareToken(payload);
+    const decoded = decodeShareToken(token);
+
+    if (!decoded || !("trades" in decoded)) {
+      throw new Error("Expected a trades payload.");
+    }
+
+    expect(decoded.date).toBe("2024-02-10");
+    expect(decoded.trades).toHaveLength(2);
+    expect(decoded.trades[0].symbol).toBe("AAPL");
+    expect(decoded.cadToUsdRate).toBe(0.75);
+    expect(decoded.fxDate).toBe("2024-02-10");
+    expect(decoded.totalPnl).toBeCloseTo(107.63, 2);
   });
 });

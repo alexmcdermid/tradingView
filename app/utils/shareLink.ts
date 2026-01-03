@@ -1,4 +1,12 @@
-import type { PnlBucket, PnlSummary } from "../api/types";
+import type {
+  AssetType,
+  Currency,
+  OptionType,
+  PnlBucket,
+  PnlSummary,
+  Trade,
+  TradeDirection,
+} from "../api/types";
 
 export type SharedSummaryPayload = {
   month: string;
@@ -8,16 +16,77 @@ export type SharedSummaryPayload = {
   origin?: string;
 };
 
+export type SharedTrade = Pick<
+  Trade,
+  | "symbol"
+  | "currency"
+  | "assetType"
+  | "direction"
+  | "quantity"
+  | "entryPrice"
+  | "exitPrice"
+  | "fees"
+  | "realizedPnl"
+  | "openedAt"
+  | "closedAt"
+  | "notes"
+  | "optionType"
+  | "strikePrice"
+  | "expiryDate"
+>;
+
+export type SharedTradesPayload = {
+  date: string;
+  trades: SharedTrade[];
+  totalPnl: number;
+  generatedAt: string;
+  env?: string;
+  origin?: string;
+  cadToUsdRate?: number;
+  fxDate?: string;
+};
+
+export type SharedPayload = SharedSummaryPayload | SharedTradesPayload;
+
 export const SHARE_QUERY_PARAM = "data";
 
 type CompactDailyBucket = [number, number, number];
 type CompactSummaryTuple = [number, number, CompactDailyBucket[], number?, string?];
-type CompactShareToken = {
+type CompactSummaryToken = {
   m: string;
   g: string;
   e?: string;
   o?: string;
   s: CompactSummaryTuple;
+};
+
+type CompactTradeTuple = [
+  string,
+  AssetType,
+  TradeDirection,
+  number,
+  number,
+  number,
+  number,
+  number,
+  Currency,
+  string,
+  string,
+  string?,
+  OptionType?,
+  number?,
+  string?,
+];
+
+type CompactTradesToken = {
+  d: string;
+  g: string;
+  e?: string;
+  o?: string;
+  t: CompactTradeTuple[];
+  p: number;
+  r?: number;
+  f?: string;
 };
 
 const toBase64 = (value: string) => {
@@ -51,12 +120,26 @@ const pad2 = (value: number) => String(value).padStart(2, "0");
 const filterBucketsForMonth = (buckets: PnlBucket[], month: string) =>
   buckets.filter((bucket) => bucket.period.startsWith(month));
 
+const ASSET_TYPES = new Set<AssetType>(["STOCK", "OPTION"]);
+const DIRECTIONS = new Set<TradeDirection>(["LONG", "SHORT"]);
+const CURRENCIES = new Set<Currency>(["USD", "CAD"]);
+const OPTION_TYPES = new Set<OptionType>(["CALL", "PUT"]);
+
+const isAssetType = (value: unknown): value is AssetType =>
+  typeof value === "string" && ASSET_TYPES.has(value as AssetType);
+const isDirection = (value: unknown): value is TradeDirection =>
+  typeof value === "string" && DIRECTIONS.has(value as TradeDirection);
+const isCurrency = (value: unknown): value is Currency =>
+  typeof value === "string" && CURRENCIES.has(value as Currency);
+const isOptionType = (value: unknown): value is OptionType =>
+  typeof value === "string" && OPTION_TYPES.has(value as OptionType);
+
 const toNumber = (value: unknown, fallback = 0) => {
   const numeric = typeof value === "number" ? value : Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 };
 
-const buildCompactToken = (payload: SharedSummaryPayload): CompactShareToken => {
+const buildCompactSummaryToken = (payload: SharedSummaryPayload): CompactSummaryToken => {
   const monthKey = payload.month.slice(0, 7);
   const daily: CompactDailyBucket[] = payload.summary.daily
     .filter((bucket) => bucket.period.startsWith(monthKey))
@@ -84,7 +167,7 @@ const buildCompactToken = (payload: SharedSummaryPayload): CompactShareToken => 
   };
 };
 
-const decodeCompactToken = (payload: CompactShareToken): SharedSummaryPayload | null => {
+const decodeCompactSummaryToken = (payload: CompactSummaryToken): SharedSummaryPayload | null => {
   if (!payload.m || typeof payload.m !== "string") return null;
   if (!Array.isArray(payload.s) || payload.s.length < 3) return null;
   const [totalPnlRaw, tradeCountRaw, dailyRaw, cadToUsdRateRaw, fxDateRaw] = payload.s;
@@ -129,6 +212,149 @@ const decodeCompactToken = (payload: CompactShareToken): SharedSummaryPayload | 
   };
 };
 
+const toDateOnly = (value: string) => value.slice(0, 10);
+
+const normalizeNotes = (value?: string | null) => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizeTradeForShare = (trade: Trade): SharedTrade => ({
+  symbol: trade.symbol,
+  currency: trade.currency,
+  assetType: trade.assetType,
+  direction: trade.direction,
+  quantity: toNumber(trade.quantity),
+  entryPrice: toNumber(trade.entryPrice),
+  exitPrice: toNumber(trade.exitPrice),
+  fees: toNumber(trade.fees),
+  realizedPnl: toNumber(trade.realizedPnl),
+  openedAt: toDateOnly(trade.openedAt),
+  closedAt: toDateOnly(trade.closedAt),
+  notes: normalizeNotes(trade.notes ?? undefined),
+  optionType: trade.assetType === "OPTION" ? trade.optionType ?? undefined : undefined,
+  strikePrice: trade.assetType === "OPTION" ? trade.strikePrice ?? undefined : undefined,
+  expiryDate: trade.assetType === "OPTION" ? trade.expiryDate ?? undefined : undefined,
+});
+
+const buildTradeTuple = (trade: SharedTrade): CompactTradeTuple => [
+  trade.symbol,
+  trade.assetType,
+  trade.direction,
+  toNumber(trade.quantity),
+  toNumber(trade.entryPrice),
+  toNumber(trade.exitPrice),
+  toNumber(trade.fees),
+  toNumber(trade.realizedPnl),
+  trade.currency,
+  toDateOnly(trade.openedAt),
+  toDateOnly(trade.closedAt),
+  normalizeNotes(trade.notes ?? undefined),
+  trade.assetType === "OPTION" && trade.optionType ? trade.optionType : undefined,
+  trade.assetType === "OPTION" && trade.strikePrice !== undefined && trade.strikePrice !== null
+    ? toNumber(trade.strikePrice)
+    : undefined,
+  trade.assetType === "OPTION" && trade.expiryDate ? trade.expiryDate : undefined,
+];
+
+const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
+  if (!Array.isArray(tuple) || tuple.length < 11) return null;
+  const [
+    symbol,
+    assetTypeRaw,
+    directionRaw,
+    quantityRaw,
+    entryPriceRaw,
+    exitPriceRaw,
+    feesRaw,
+    realizedPnlRaw,
+    currencyRaw,
+    openedAtRaw,
+    closedAtRaw,
+    notesRaw,
+    optionTypeRaw,
+    strikePriceRaw,
+    expiryDateRaw,
+  ] = tuple;
+
+  if (typeof symbol !== "string" || !isAssetType(assetTypeRaw) || !isDirection(directionRaw)) {
+    return null;
+  }
+  if (!isCurrency(currencyRaw) || typeof openedAtRaw !== "string" || typeof closedAtRaw !== "string") {
+    return null;
+  }
+
+  const optionType = isOptionType(optionTypeRaw) ? optionTypeRaw : undefined;
+  const strikePrice =
+    strikePriceRaw === undefined || strikePriceRaw === null ? undefined : toNumber(strikePriceRaw);
+  const expiryDate = expiryDateRaw ? String(expiryDateRaw) : undefined;
+  const notes = typeof notesRaw === "string" ? normalizeNotes(notesRaw) : undefined;
+
+  return {
+    symbol,
+    currency: currencyRaw,
+    assetType: assetTypeRaw,
+    direction: directionRaw,
+    quantity: toNumber(quantityRaw),
+    entryPrice: toNumber(entryPriceRaw),
+    exitPrice: toNumber(exitPriceRaw),
+    fees: toNumber(feesRaw),
+    realizedPnl: toNumber(realizedPnlRaw),
+    openedAt: openedAtRaw,
+    closedAt: closedAtRaw,
+    notes,
+    optionType: assetTypeRaw === "OPTION" ? optionType : undefined,
+    strikePrice: assetTypeRaw === "OPTION" ? strikePrice : undefined,
+    expiryDate: assetTypeRaw === "OPTION" ? expiryDate : undefined,
+  };
+};
+
+const computeTradesTotal = (trades: SharedTrade[], cadToUsdRate?: number) => {
+  const rate = cadToUsdRate ?? 1;
+  const total = trades.reduce(
+    (sum, trade) => sum + (trade.currency === "CAD" ? trade.realizedPnl * rate : trade.realizedPnl),
+    0
+  );
+  return Number(total.toFixed(2));
+};
+
+const buildCompactTradesToken = (payload: SharedTradesPayload): CompactTradesToken => ({
+  d: payload.date.slice(0, 10),
+  g: payload.generatedAt,
+  e: payload.env,
+  o: payload.origin,
+  t: payload.trades.map(buildTradeTuple),
+  p: Number(payload.totalPnl.toFixed(2)),
+  r: payload.cadToUsdRate === undefined ? undefined : Number(payload.cadToUsdRate),
+  f: payload.fxDate,
+});
+
+const decodeCompactTradesToken = (payload: CompactTradesToken): SharedTradesPayload | null => {
+  if (!payload.d || typeof payload.d !== "string") return null;
+  if (!Array.isArray(payload.t)) return null;
+
+  const decodedTrades = payload.t.map((trade) => decodeTradeTuple(trade));
+  if (decodedTrades.some((trade) => trade === null)) return null;
+
+  const trades = decodedTrades as SharedTrade[];
+  const cadToUsdRate =
+    payload.r === undefined || payload.r === null ? undefined : toNumber(payload.r);
+  const computedTotal = computeTradesTotal(trades, cadToUsdRate);
+  const totalPnl = toNumber(payload.p, computedTotal);
+
+  return {
+    date: payload.d.slice(0, 10),
+    trades,
+    totalPnl,
+    generatedAt: payload.g || new Date().toISOString(),
+    env: payload.e,
+    origin: payload.o,
+    cadToUsdRate,
+    fxDate: payload.f ? String(payload.f) : undefined,
+  };
+};
+
 export function buildSharePayload(
   month: string,
   summary: PnlSummary,
@@ -160,16 +386,53 @@ export function buildSharePayload(
   };
 }
 
-export function encodeShareToken(payload: SharedSummaryPayload) {
-  return toBase64Url(JSON.stringify(buildCompactToken(payload)));
+export function buildTradesSharePayload(
+  date: string,
+  trades: Trade[],
+  options: {
+    env?: string;
+    origin?: string;
+    generatedAt?: string;
+    cadToUsdRate?: number;
+    fxDate?: string;
+  } = {}
+): SharedTradesPayload {
+  const dateKey = date.slice(0, 10);
+  const filteredTrades = trades.filter((trade) => trade.closedAt.startsWith(dateKey));
+  const sharedTrades = filteredTrades.map(normalizeTradeForShare);
+  const totalPnl = computeTradesTotal(sharedTrades, options.cadToUsdRate);
+
+  return {
+    date: dateKey,
+    trades: sharedTrades,
+    totalPnl,
+    generatedAt: options.generatedAt || new Date().toISOString(),
+    env: options.env,
+    origin: options.origin,
+    cadToUsdRate: options.cadToUsdRate,
+    fxDate: options.fxDate,
+  };
 }
 
-export function decodeShareToken(token: string): SharedSummaryPayload | null {
+export function encodeShareToken(payload: SharedPayload) {
+  if ("summary" in payload) {
+    return toBase64Url(JSON.stringify(buildCompactSummaryToken(payload)));
+  }
+  return toBase64Url(JSON.stringify(buildCompactTradesToken(payload)));
+}
+
+export function decodeShareToken(token: string): SharedPayload | null {
   try {
     const json = fromBase64Url(token);
     const parsed = JSON.parse(json);
     if (!parsed || typeof parsed !== "object") return null;
-    return decodeCompactToken(parsed as CompactShareToken);
+    if ("t" in parsed) {
+      return decodeCompactTradesToken(parsed as CompactTradesToken);
+    }
+    if ("s" in parsed) {
+      return decodeCompactSummaryToken(parsed as CompactSummaryToken);
+    }
+    return null;
   } catch {
     return null;
   }
