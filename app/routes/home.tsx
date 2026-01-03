@@ -11,6 +11,11 @@ import {
   Card,
   CardContent,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   Menu,
   MenuItem,
@@ -400,6 +405,9 @@ export default function Home() {
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tradeToDelete, setTradeToDelete] = useState<Trade | null>(null);
+  const [deletingTrade, setDeletingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [shareWarning, setShareWarning] = useState<string | null>(null);
@@ -712,12 +720,23 @@ export default function Home() {
     }
   };
 
-  const handleDeleteTrade = async (trade: Trade) => {
-    const confirmed = window.confirm(`Delete trade for ${trade.symbol}?`);
-    if (!confirmed) return;
+  const handleDeleteTrade = (trade: Trade) => {
+    setTradeToDelete(trade);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    if (deletingTrade) return;
+    setDeleteDialogOpen(false);
+    setTradeToDelete(null);
+  };
+
+  const handleConfirmDeleteTrade = async () => {
+    if (!tradeToDelete) return;
     try {
+      setDeletingTrade(true);
       if (user && token) {
-        await deleteTrade(trade.id);
+        await deleteTrade(tradeToDelete.id);
         await loadTrades(page, pageSize);
         await loadSummary(calendarMonth);
         await loadAggregateStats();
@@ -725,7 +744,7 @@ export default function Home() {
         const rate = summary?.cadToUsdRate;
         const fxDate = summary?.fxDate;
         setTrades((prev) => {
-          const next = prev.filter((t) => t.id !== trade.id);
+          const next = prev.filter((t) => t.id !== tradeToDelete.id);
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           const allSummary = computeSummary(next, undefined, rate, fxDate);
           setAggregateStats({
@@ -739,8 +758,11 @@ export default function Home() {
           return next;
         });
       }
+      handleCloseDeleteDialog();
     } catch (err) {
       handleRequestError(err);
+    } finally {
+      setDeletingTrade(false);
     }
   };
 
@@ -1119,6 +1141,35 @@ export default function Home() {
         }}
         onSubmit={handleSaveTrade}
       />
+
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleCloseDeleteDialog}
+        aria-labelledby="delete-trade-dialog-title"
+        aria-describedby="delete-trade-dialog-description"
+      >
+        <DialogTitle id="delete-trade-dialog-title">Delete trade?</DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-trade-dialog-description">
+            {tradeToDelete
+              ? `Delete the trade for ${tradeToDelete.symbol}? This cannot be undone.`
+              : "Delete this trade? This cannot be undone."}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} disabled={deletingTrade}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmDeleteTrade}
+            color="error"
+            variant="contained"
+            disabled={deletingTrade}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={!!error}
