@@ -88,10 +88,6 @@ const buildShareImage = (options: {
   <text x="120" y="395" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
     Total P/L - ${escapeXml(tradesLabel)}
   </text>
-
-  <text x="120" y="480" font-family="${FONT_FAMILY}" font-size="20" fill="#94a3b8">
-    Day Trade Journal
-  </text>
 </svg>`;
 };
 
