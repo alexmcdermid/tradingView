@@ -1,17 +1,14 @@
 import { Resvg } from "@resvg/resvg-js";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { LoaderFunctionArgs } from "react-router";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
 const FONT_FAMILY = "Inter, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
-const FONT_PATHS = [
-  path.resolve(process.cwd(), "public", "fonts", "Inter-Regular.ttf"),
-  path.resolve(process.cwd(), "public", "fonts", "Inter-Bold.ttf"),
-  path.resolve(process.cwd(), "public", "fonts", "Inter-ExtraBold.ttf"),
-];
+const FONT_FILE_NAMES = ["Inter-Regular.ttf", "Inter-Bold.ttf", "Inter-ExtraBold.ttf"];
 let cachedFontFiles: string[] | null = null;
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -98,9 +95,38 @@ const buildShareImage = (options: {
 </svg>`;
 };
 
+const findFontFiles = (rootDir: string) => {
+  const publicDir = path.resolve(rootDir, "public", "fonts");
+  const publicFiles = FONT_FILE_NAMES.map((name) => path.join(publicDir, name)).filter((file) =>
+    existsSync(file)
+  );
+  if (publicFiles.length > 0) return publicFiles;
+
+  const buildDir = path.resolve(rootDir, "build", "client", "fonts");
+  const buildFiles = FONT_FILE_NAMES.map((name) => path.join(buildDir, name)).filter((file) =>
+    existsSync(file)
+  );
+  return buildFiles;
+};
+
 const getFontFiles = () => {
   if (cachedFontFiles) return cachedFontFiles;
-  cachedFontFiles = FONT_PATHS.filter((fontPath) => existsSync(fontPath));
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const roots = [process.cwd(), moduleDir];
+
+  for (const root of roots) {
+    let current = root;
+    for (let depth = 0; depth < 5; depth += 1) {
+      const files = findFontFiles(current);
+      if (files.length > 0) {
+        cachedFontFiles = files;
+        return files;
+      }
+      current = path.resolve(current, "..");
+    }
+  }
+
+  cachedFontFiles = [];
   return cachedFontFiles;
 };
 
@@ -132,10 +158,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const svg = buildShareImage(payload);
   const fontFiles = getFontFiles();
-  const fontConfig =
-    fontFiles.length > 0
-      ? { fontFiles, loadSystemFonts: false, defaultFontFamily: "Inter" }
-      : { loadSystemFonts: true, defaultFontFamily: "Inter" };
+  const fontConfig = {
+    fontFiles,
+    loadSystemFonts: true,
+    defaultFontFamily: "Inter",
+  };
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: WIDTH },
     font: fontConfig,
