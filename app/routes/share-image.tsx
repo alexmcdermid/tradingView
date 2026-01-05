@@ -73,19 +73,19 @@ const buildShareImage = (options: {
     </linearGradient>
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
-  <rect x="60" y="60" width="1080" height="510" rx="32" fill="url(#card)" />
+  <rect x="60" y="100" width="1080" height="430" rx="32" fill="url(#card)" />
 
-  <text x="120" y="155" font-family="${FONT_FAMILY}" font-size="34" font-weight="700" fill="#0f172a">
+  <text x="120" y="175" font-family="${FONT_FAMILY}" font-size="34" font-weight="700" fill="#0f172a">
     ${safeTitle}
   </text>
-  <text x="120" y="210" font-family="${FONT_FAMILY}" font-size="28" fill="#475569">
+  <text x="120" y="220" font-family="${FONT_FAMILY}" font-size="28" fill="#475569">
     ${safeSubtitle}
   </text>
 
   <text x="120" y="340" font-family="${FONT_FAMILY}" font-size="72" font-weight="800" fill="${accent}">
     ${pnlText}
   </text>
-  <text x="120" y="395" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
+  <text x="120" y="390" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
     Total P/L - ${escapeXml(tradesLabel)}
   </text>
 </svg>`;
