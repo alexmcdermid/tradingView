@@ -15,8 +15,17 @@ const buildLoaderArgs = (request: Request): LoaderFunctionArgs => ({
   unstable_pattern: "",
 });
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+const expectPngResponse = async (response: Response) => {
+  expect(response.headers.get("Content-Type")).toBe("image/png");
+  const buffer = new Uint8Array(await response.arrayBuffer());
+  expect(buffer.length).toBeGreaterThan(PNG_SIGNATURE.length);
+  expect(Array.from(buffer.slice(0, PNG_SIGNATURE.length))).toEqual(PNG_SIGNATURE);
+};
+
 describe("share image loader", () => {
-  it("returns an svg for monthly shares", async () => {
+  it("returns a png for monthly shares", async () => {
     const summary: PnlSummary = {
       totalPnl: 321.5,
       tradeCount: 2,
@@ -34,14 +43,10 @@ describe("share image loader", () => {
     const response = (await shareImageLoader(buildLoaderArgs(request))) as Response;
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("Content-Type")).toBe("image/svg+xml");
-    const svg = await response.text();
-    expect(svg).toContain("Monthly P/L");
-    expect(svg).toContain("February 2024");
-    expect(svg).toContain("+321.50 USD");
+    await expectPngResponse(response);
   });
 
-  it("returns an svg for daily shares", async () => {
+  it("returns a png for daily shares", async () => {
     const trades: Trade[] = [
       {
         id: "trade-1",
@@ -75,11 +80,7 @@ describe("share image loader", () => {
     const response = (await shareImageLoader(buildLoaderArgs(request))) as Response;
 
     expect(response.status).toBe(200);
-    const svg = await response.text();
-    expect(svg).toContain("Daily P/L");
-    expect(svg).toContain("March 5, 2024");
-    expect(svg).toContain("+50.00 USD");
-    expect(svg).toContain("1 trade");
+    await expectPngResponse(response);
   });
 
   it("returns 400 for missing or invalid data", async () => {

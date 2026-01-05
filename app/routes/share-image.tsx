@@ -1,3 +1,4 @@
+import { Resvg } from "@resvg/resvg-js";
 import type { LoaderFunctionArgs } from "react-router";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 
@@ -115,10 +116,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       };
 
   const svg = buildShareImage(payload);
+  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: WIDTH } });
+  const pngData = resvg.render().asPng();
+  const body = new Uint8Array(pngData);
 
-  return new Response(svg, {
+  return new Response(body, {
     headers: {
-      "Content-Type": "image/svg+xml",
+      "Content-Type": "image/png",
       "Cache-Control": "public, max-age=3600",
     },
   });
