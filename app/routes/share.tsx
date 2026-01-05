@@ -25,13 +25,6 @@ import type { PnlBucket } from "../api/types";
 import type { SharedTrade } from "../utils/shareLink";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 
-export function meta({}: Route.MetaArgs) {
-  return [
-    { title: "Shared P/L" },
-    { name: "description", content: "View a shared P/L snapshot or daily trades" },
-  ];
-}
-
 const formatMonthLabel = (value?: string) => {
   if (!value) return "Unknown month";
   const [year, month] = value.split("-");
@@ -74,6 +67,61 @@ const formatDateTime = (value?: string) => {
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
 };
+
+const buildMetaDescriptors = (
+  title: string,
+  description: string,
+  imageUrl?: string
+): Route.MetaDescriptors => {
+  const base: Route.MetaDescriptors = [
+    { title },
+    { name: "description", content: description },
+    { property: "og:title", content: title },
+    { property: "og:description", content: description },
+  ];
+  if (!imageUrl) return base;
+  return [
+    ...base,
+    { property: "og:image", content: imageUrl },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:image", content: imageUrl },
+  ];
+};
+
+export function meta({ location }: Route.MetaArgs) {
+  const defaultTitle = "Shared P/L";
+  const defaultDescription = "View a shared P/L snapshot or daily trades";
+  const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
+  if (!encoded) {
+    return buildMetaDescriptors(defaultTitle, defaultDescription);
+  }
+
+  const shared = decodeShareToken(encoded);
+  if (!shared) {
+    return buildMetaDescriptors(defaultTitle, defaultDescription);
+  }
+
+  const imagePath = `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
+  const imageUrl = shared.origin ? `${shared.origin}${imagePath}` : imagePath;
+
+  if ("summary" in shared) {
+    const monthLabel = formatMonthLabel(shared.month);
+    return buildMetaDescriptors(
+      `Shared Monthly P/L — ${monthLabel}`,
+      `Shared P/L snapshot for ${monthLabel}.`,
+      imageUrl
+    );
+  }
+
+  const dayLabel = formatDayLabel(shared.date);
+  return buildMetaDescriptors(
+    `Shared Daily P/L — ${dayLabel}`,
+    `Shared trades for ${dayLabel}.`,
+    imageUrl
+  );
+}
 
 export default function Share() {
   const [searchParams] = useSearchParams();

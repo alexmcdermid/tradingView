@@ -4,4 +4,5 @@ export default [
   index("routes/home.tsx"),
   route("admin", "routes/admin.tsx"),
   route("share", "routes/share.tsx"),
+  route("share-image", "routes/share-image.tsx"),
 ] satisfies RouteConfig;
