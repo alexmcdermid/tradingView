@@ -123,7 +123,3 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 }
-
-export default function ShareImage() {
-  return null;
-}
