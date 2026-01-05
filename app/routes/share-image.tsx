@@ -1,9 +1,18 @@
 import { Resvg } from "@resvg/resvg-js";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import type { LoaderFunctionArgs } from "react-router";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
+const FONT_FAMILY = "Inter, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif";
+const FONT_PATHS = [
+  path.resolve(process.cwd(), "public", "fonts", "Inter-Regular.ttf"),
+  path.resolve(process.cwd(), "public", "fonts", "Inter-Bold.ttf"),
+  path.resolve(process.cwd(), "public", "fonts", "Inter-ExtraBold.ttf"),
+];
+let cachedFontFiles: string[] | null = null;
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
   minimumFractionDigits: 2,
@@ -69,24 +78,30 @@ const buildShareImage = (options: {
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
   <rect x="60" y="60" width="1080" height="510" rx="32" fill="url(#card)" />
 
-  <text x="120" y="155" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#0f172a">
+  <text x="120" y="155" font-family="${FONT_FAMILY}" font-size="34" font-weight="700" fill="#0f172a">
     ${safeTitle}
   </text>
-  <text x="120" y="210" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="28" fill="#475569">
+  <text x="120" y="210" font-family="${FONT_FAMILY}" font-size="28" fill="#475569">
     ${safeSubtitle}
   </text>
 
-  <text x="120" y="340" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="72" font-weight="800" fill="${accent}">
+  <text x="120" y="340" font-family="${FONT_FAMILY}" font-size="72" font-weight="800" fill="${accent}">
     ${pnlText}
   </text>
-  <text x="120" y="395" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="24" fill="#64748b">
+  <text x="120" y="395" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
     Total P/L - ${escapeXml(tradesLabel)}
   </text>
 
-  <text x="120" y="480" font-family="Segoe UI, -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif" font-size="20" fill="#94a3b8">
+  <text x="120" y="480" font-family="${FONT_FAMILY}" font-size="20" fill="#94a3b8">
     Day Trade Journal
   </text>
 </svg>`;
+};
+
+const getFontFiles = () => {
+  if (cachedFontFiles) return cachedFontFiles;
+  cachedFontFiles = FONT_PATHS.filter((fontPath) => existsSync(fontPath));
+  return cachedFontFiles;
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -116,7 +131,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       };
 
   const svg = buildShareImage(payload);
-  const resvg = new Resvg(svg, { fitTo: { mode: "width", value: WIDTH } });
+  const fontFiles = getFontFiles();
+  const fontConfig =
+    fontFiles.length > 0
+      ? { fontFiles, loadSystemFonts: false, defaultFontFamily: "Inter" }
+      : { loadSystemFonts: true, defaultFontFamily: "Inter" };
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: WIDTH },
+    font: fontConfig,
+  });
   const pngData = resvg.render().asPng();
   const body = new Uint8Array(pngData);
 
