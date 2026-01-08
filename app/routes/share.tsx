@@ -23,7 +23,7 @@ import type { Route } from "./+types/share";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import type { PnlBucket } from "../api/types";
 import type { SharedTrade } from "../utils/shareLink";
-import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
+import { decodeShareToken, encodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 import { getShareLink } from "../api/shares";
 
 const formatMonthLabel = (value?: string) => {
@@ -120,19 +120,42 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   return { shareData: null, error: null };
 }
 
-export function meta({ location }: Route.MetaArgs) {
+export function meta({ location, data }: Route.MetaArgs) {
   const defaultTitle = "Shared P/L";
   const defaultDescription = "View a shared P/L snapshot or daily trades";
-  const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
-  if (!encoded) {
-    return buildMetaDescriptors(defaultTitle, defaultDescription);
-  }
-
-  const shared = decodeShareToken(encoded);
+  
+  const loaderData = data as Awaited<ReturnType<typeof loader>>;
+  const shared = loaderData?.shareData;
+  
   if (!shared) {
+    const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
+    if (encoded) {
+      const decoded = decodeShareToken(encoded);
+      if (decoded) {
+        const imagePath = `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
+        const imageUrl = decoded.origin ? `${decoded.origin}${imagePath}` : imagePath;
+
+        if ("summary" in decoded) {
+          const monthLabel = formatMonthLabel(decoded.month);
+          return buildMetaDescriptors(
+            `Shared Monthly P/L — ${monthLabel}`,
+            `Shared P/L snapshot for ${monthLabel}.`,
+            imageUrl
+          );
+        }
+
+        const dayLabel = formatDayLabel(decoded.date);
+        return buildMetaDescriptors(
+          `Shared Daily P/L — ${dayLabel}`,
+          `Shared trades for ${dayLabel}.`,
+          imageUrl
+        );
+      }
+    }
     return buildMetaDescriptors(defaultTitle, defaultDescription);
   }
 
+  const encoded = encodeShareToken(shared);
   const imagePath = `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
   const imageUrl = shared.origin ? `${shared.origin}${imagePath}` : imagePath;
 
