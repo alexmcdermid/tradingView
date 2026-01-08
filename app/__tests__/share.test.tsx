@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { loader } from "../routes/share";
 import * as sharesApi from "../api/shares";
 import type { ShareLinkResponse } from "../api/types";
-import type { SharedSummaryPayload } from "../utils/shareLink";
 
 vi.mock("../api/shares");
 
@@ -63,21 +62,7 @@ describe("share route loader", () => {
   });
 
   it("falls back to legacy base64 query param when no code param", async () => {
-    const legacyData: SharedSummaryPayload = {
-      month: "2024-01",
-      summary: {
-        totalPnl: 5000,
-        tradeCount: 10,
-        daily: [
-          { period: "2024-01-15", pnl: 500, trades: 2 },
-        ],
-        monthly: [
-          { period: "2024-01", pnl: 5000, trades: 10 },
-        ],
-      },
-      generatedAt: "2024-01-15T00:00:00Z",
-    };
-
+    // Use the actual compact format that encodeShareToken produces
     const compactToken = {
       m: "2024-01",
       g: "2024-01-15T00:00:00Z",

@@ -1,4 +1,4 @@
-import { request } from "./client";
+import { request, ApiError } from "./client";
 import type { CreateShareLinkRequest, ShareLinkResponse } from "./types";
 
 export async function createShareLink(
@@ -16,7 +16,7 @@ export async function getShareLink(code: string): Promise<ShareLinkResponse | nu
       skipAuthHeader: true,
     });
   } catch (error) {
-    if (error instanceof Error && "status" in error && error.status === 404) {
+    if (error instanceof ApiError && error.status === 404) {
       return null;
     }
     throw error;

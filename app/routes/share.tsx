@@ -17,12 +17,12 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { Link as RouterLink, useSearchParams, useParams, useLoaderData } from "react-router";
+import { Link as RouterLink, useSearchParams, useLoaderData } from "react-router";
 import { useMemo } from "react";
 import type { Route } from "./+types/share";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import type { PnlBucket } from "../api/types";
-import type { SharedTrade, SharedPayload } from "../utils/shareLink";
+import type { SharedTrade } from "../utils/shareLink";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 import { getShareLink } from "../api/shares";
 
