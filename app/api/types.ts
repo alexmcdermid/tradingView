@@ -85,3 +85,22 @@ export interface AdminUser {
   createdAt: string;
   updatedAt: string;
 }
+
+export type ShareType = "SUMMARY" | "TRADES";
+
+export interface CreateShareLinkRequest {
+  shareType: ShareType;
+  data: string;
+  requiresAuth: boolean;
+  expiryDays: number;
+}
+
+export interface ShareLinkResponse {
+  code: string;
+  shareType: ShareType;
+  data: string;
+  requiresAuth: boolean;
+  expiresAt: string;
+  accessCount: number;
+  createdAt: string;
+}
