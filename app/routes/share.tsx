@@ -17,13 +17,14 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { Link as RouterLink, useSearchParams } from "react-router";
+import { Link as RouterLink, useSearchParams, useParams, useLoaderData } from "react-router";
 import { useMemo } from "react";
 import type { Route } from "./+types/share";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import type { PnlBucket } from "../api/types";
-import type { SharedTrade } from "../utils/shareLink";
+import type { SharedTrade, SharedPayload } from "../utils/shareLink";
 import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
+import { getShareLink } from "../api/shares";
 
 const formatMonthLabel = (value?: string) => {
   if (!value) return "Unknown month";
@@ -91,6 +92,34 @@ const buildMetaDescriptors = (
   ];
 };
 
+export async function loader({ params, request }: Route.LoaderArgs) {
+  const code = (params as { code?: string }).code;
+  
+  if (code) {
+    try {
+      const shareLink = await getShareLink(code);
+      if (!shareLink) {
+        return { shareData: null, error: "Share link not found or expired" };
+      }
+      const decoded = JSON.parse(shareLink.data);
+      return { shareData: decoded, error: null };
+    } catch (error) {
+      console.error("Failed to fetch share link:", error);
+      return { shareData: null, error: "Failed to load share link" };
+    }
+  }
+
+  // Legacy URL-encoded share (query param)
+  const url = new URL(request.url);
+  const encoded = url.searchParams.get(SHARE_QUERY_PARAM);
+  if (encoded) {
+    const decoded = decodeShareToken(encoded);
+    return { shareData: decoded, error: decoded ? null : "Invalid share data" };
+  }
+
+  return { shareData: null, error: null };
+}
+
 export function meta({ location }: Route.MetaArgs) {
   const defaultTitle = "Shared P/L";
   const defaultDescription = "View a shared P/L snapshot or daily trades";
@@ -126,9 +155,15 @@ export function meta({ location }: Route.MetaArgs) {
 
 export default function Share() {
   const [searchParams] = useSearchParams();
+  const loaderData = useLoaderData<typeof loader>();
+  
   const encoded = searchParams.get(SHARE_QUERY_PARAM);
-
-  const shared = useMemo(() => (encoded ? decodeShareToken(encoded) : null), [encoded]);
+  const shared = useMemo(() => {
+    if (loaderData.shareData) {
+      return loaderData.shareData;
+    }
+    return encoded ? decodeShareToken(encoded) : null;
+  }, [loaderData.shareData, encoded]);
   const summaryPayload = shared && "summary" in shared ? shared : null;
   const tradesPayload = shared && "trades" in shared ? shared : null;
   const summary = summaryPayload?.summary;
@@ -136,7 +171,7 @@ export default function Share() {
   const dayLabel = tradesPayload ? formatDayLabel(tradesPayload.date) : "Unknown day";
   const bestDay = useMemo(() => (summary ? bestBucket(summary.daily) : null), [summary]);
 
-  const dailyBuckets = summary?.daily ?? [];
+  const dailyBuckets: PnlBucket[] = summary?.daily ?? [];
   const fxRate = summary?.cadToUsdRate ?? tradesPayload?.cadToUsdRate;
   const fxDate = summary?.fxDate ?? tradesPayload?.fxDate;
 
@@ -182,7 +217,18 @@ export default function Share() {
     </Stack>
   );
 
-  if (!encoded) {
+  if (loaderData.error && !encoded) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        {renderHeader()}
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {loaderData.error}
+        </Alert>
+      </Container>
+    );
+  }
+
+  if (!shared && !encoded) {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         {renderHeader()}

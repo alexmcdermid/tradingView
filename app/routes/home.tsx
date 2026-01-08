@@ -46,8 +46,8 @@ import {
   buildSharePayload,
   buildTradesSharePayload,
   encodeShareToken,
-  SHARE_QUERY_PARAM,
 } from "../utils/shareLink";
+import { createShareLink } from "../api/shares";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -782,9 +782,15 @@ export default function Home() {
         env: detectEnvironment(),
         origin: window.location.origin,
       });
-      const token = encodeShareToken(payload);
-      const shareUrl = new URL("/share", window.location.origin);
-      shareUrl.searchParams.set(SHARE_QUERY_PARAM, token);
+      
+      const shareLink = await createShareLink({
+        shareType: "SUMMARY",
+        data: JSON.stringify(payload),
+        requiresAuth: false,
+        expiryDays: 30,
+      });
+      
+      const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const copied = await copyTextToClipboard(shareUrl.toString());
       if (!copied) {
         setError("Could not copy the share link. Copy it manually if needed.");
@@ -821,9 +827,15 @@ export default function Home() {
         cadToUsdRate: summary?.cadToUsdRate,
         fxDate: summary?.fxDate,
       });
-      const token = encodeShareToken(payload);
-      const shareUrl = new URL("/share", window.location.origin);
-      shareUrl.searchParams.set(SHARE_QUERY_PARAM, token);
+      
+      const shareLink = await createShareLink({
+        shareType: "TRADES",
+        data: JSON.stringify(payload),
+        requiresAuth: false,
+        expiryDays: 7,
+      });
+      
+      const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const copied = await copyTextToClipboard(shareUrl.toString());
       if (!copied) {
         setError("Could not copy the share link. Copy it manually if needed.");
