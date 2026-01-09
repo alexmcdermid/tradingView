@@ -822,11 +822,10 @@ export default function Home() {
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const urlString = shareUrl.toString();
       
-      if (navigator.share) {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && navigator.share) {
         try {
           await navigator.share({
-            title: "Monthly P/L",
-            text: "Check out this month's trading P/L",
             url: urlString,
           });
           setShareMessage("Share link sent.");
@@ -888,11 +887,10 @@ export default function Home() {
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const urlString = shareUrl.toString();
       
-      if (navigator.share) {
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && navigator.share) {
         try {
           await navigator.share({
-            title: "Daily Trades",
-            text: `Check out trades for ${selectedDate.replace(/-/g, "/")}`,
             url: urlString,
           });
           setShareMessage("Share link sent.");
