@@ -820,9 +820,30 @@ export default function Home() {
       });
       
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
-      const copied = await copyTextToClipboard(shareUrl.toString());
+      const urlString = shareUrl.toString();
+      
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "Monthly P/L",
+            text: "Check out this month's trading P/L",
+            url: urlString,
+          });
+          setShareMessage("Share link sent.");
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name !== "AbortError") {
+            console.warn("Share API failed, trying clipboard:", shareErr);
+          } else {
+            return;
+          }
+        }
+      }
+      
+      const copied = await copyTextToClipboard(urlString);
       if (!copied) {
-        setError("Could not copy the share link. Try again.");
+        prompt("Copy this share link:", urlString);
+        setShareMessage("Share link created (copied to dialog).");
         return;
       }
       setShareMessage("Share link copied. Send it to share this month's P/L.");
@@ -865,9 +886,30 @@ export default function Home() {
       });
       
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
-      const copied = await copyTextToClipboard(shareUrl.toString());
+      const urlString = shareUrl.toString();
+      
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "Daily Trades",
+            text: `Check out trades for ${selectedDate.replace(/-/g, "/")}`,
+            url: urlString,
+          });
+          setShareMessage("Share link sent.");
+          return;
+        } catch (shareErr: any) {
+          if (shareErr.name !== "AbortError") {
+            console.warn("Share API failed, trying clipboard:", shareErr);
+          } else {
+            return;
+          }
+        }
+      }
+      
+      const copied = await copyTextToClipboard(urlString);
       if (!copied) {
-        setError("Could not copy the share link. Try again.");
+        prompt("Copy this share link:", urlString);
+        setShareMessage("Share link created (copied to dialog).");
         return;
       }
       setShareMessage(
