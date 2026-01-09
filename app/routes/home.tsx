@@ -99,16 +99,36 @@ const detectEnvironment = () => {
 
 const copyTextToClipboard = async (value: string) => {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return true;
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (err) {
+      console.warn("Clipboard API failed, trying fallback:", err);
+    }
   }
   if (typeof document !== "undefined") {
     const textarea = document.createElement("textarea");
     textarea.value = value;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
+    textarea.style.position = "absolute";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    textarea.setAttribute("readonly", "");
     document.body.appendChild(textarea);
-    textarea.select();
+    
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      const range = document.createRange();
+      range.selectNodeContents(textarea);
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      textarea.setSelectionRange(0, textarea.value.length);
+    } else {
+      textarea.select();
+    }
+    
     try {
       const result = document.execCommand("copy");
       return result;
@@ -793,7 +813,7 @@ export default function Home() {
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const copied = await copyTextToClipboard(shareUrl.toString());
       if (!copied) {
-        setError("Could not copy the share link. Copy it manually if needed.");
+        setError("Could not copy the share link. Try again.");
         return;
       }
       setShareMessage("Share link copied. Send it to share this month's P/L.");
@@ -838,7 +858,7 @@ export default function Home() {
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const copied = await copyTextToClipboard(shareUrl.toString());
       if (!copied) {
-        setError("Could not copy the share link. Copy it manually if needed.");
+        setError("Could not copy the share link. Try again.");
         return;
       }
       setShareMessage(
