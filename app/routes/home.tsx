@@ -98,45 +98,54 @@ const detectEnvironment = () => {
 };
 
 const copyTextToClipboard = async (value: string) => {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    try {
+  if (typeof document === "undefined") return false;
+  
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.style.position = "absolute";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.fontSize = "12pt";
+  textarea.setAttribute("readonly", "");
+  document.body.appendChild(textarea);
+  
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    const range = document.createRange();
+    range.selectNodeContents(textarea);
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    textarea.setSelectionRange(0, textarea.value.length);
+  } else {
+    textarea.focus();
+    textarea.select();
+  }
+  
+  let success = false;
+  try {
+    success = document.execCommand("copy");
+    if (!success && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(value);
-      return true;
-    } catch (err) {
-      console.warn("Clipboard API failed, trying fallback:", err);
+      success = true;
     }
-  }
-  if (typeof document !== "undefined") {
-    const textarea = document.createElement("textarea");
-    textarea.value = value;
-    textarea.style.position = "absolute";
-    textarea.style.left = "-9999px";
-    textarea.style.top = "0";
-    textarea.setAttribute("readonly", "");
-    document.body.appendChild(textarea);
-    
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    if (isIOS) {
-      const range = document.createRange();
-      range.selectNodeContents(textarea);
-      const selection = window.getSelection();
-      if (selection) {
-        selection.removeAllRanges();
-        selection.addRange(range);
+  } catch (err) {
+    console.warn("Copy failed:", err);
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        success = true;
+      } catch (clipErr) {
+        console.warn("Clipboard API also failed:", clipErr);
       }
-      textarea.setSelectionRange(0, textarea.value.length);
-    } else {
-      textarea.select();
     }
-    
-    try {
-      const result = document.execCommand("copy");
-      return result;
-    } finally {
-      document.body.removeChild(textarea);
-    }
+  } finally {
+    document.body.removeChild(textarea);
   }
-  return false;
+  
+  return success;
 };
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
