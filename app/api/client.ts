@@ -55,8 +55,19 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
 async function safeParseError(response: Response) {
   try {
     const data = await response.json();
-    if (data && typeof data === "object" && "message" in data) {
-      return (data as { message?: string }).message;
+    if (data && typeof data === "object") {
+      if ("message" in data && typeof data.message === "string") {
+        return data.message;
+      }
+      if ("detail" in data && typeof data.detail === "string") {
+        return data.detail;
+      }
+      if ("error" in data && typeof data.error === "string") {
+        return data.error;
+      }
+      if ("title" in data && typeof data.title === "string") {
+        return data.title;
+      }
     }
   } catch {
     // ignore parse errors
