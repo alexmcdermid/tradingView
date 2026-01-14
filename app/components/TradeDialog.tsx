@@ -161,7 +161,7 @@ export function TradeDialog({
     >
       <DialogTitle>{initialValues ? "Edit Trade" : "New Trade"}</DialogTitle>
       <DialogContent dividers>
-        <Stack spacing={2}>
+          <Stack spacing={2}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <TextField
               label="Symbol"
@@ -171,43 +171,31 @@ export function TradeDialog({
               fullWidth
               inputProps={{ maxLength: 12, style: { textTransform: "uppercase" } }}
             />
-            <FormControl fullWidth>
-              <InputLabel id="currency-label">Currency</InputLabel>
-              <Select
-                labelId="currency-label"
-                label="Currency"
-                value={values.currency}
-                onChange={(event) =>
-                  setValues((prev) => ({
-                    ...prev,
-                    currency: event.target.value as Currency,
-                  }))
-                }
-              >
-                <MenuItem value="USD">USD</MenuItem>
-                <MenuItem value="CAD">CAD</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel id="asset-type-label">Asset</InputLabel>
-              <Select
-                labelId="asset-type-label"
-                label="Asset"
-                value={values.assetType}
-                onChange={(event) =>
-                  setValues((prev) => ({
-                    ...prev,
-                    assetType: event.target.value as AssetType,
-                    optionType: event.target.value === "OPTION" ? prev.optionType || "CALL" : undefined,
-                    strikePrice: event.target.value === "OPTION" ? prev.strikePrice : "",
-                    expiryDate: event.target.value === "OPTION" ? prev.expiryDate : "",
-                  }))
-                }
-              >
-                <MenuItem value="STOCK">Stock</MenuItem>
-                <MenuItem value="OPTION">Option</MenuItem>
-              </Select>
-            </FormControl>
+            <ToggleButtonGroup
+              exclusive
+              value={values.currency}
+              onChange={(_, value) => value && setValues((prev) => ({ ...prev, currency: value }))}
+            >
+              <ToggleButton value="USD">USD</ToggleButton>
+              <ToggleButton value="CAD">CAD</ToggleButton>
+            </ToggleButtonGroup>
+            <ToggleButtonGroup
+              exclusive
+              value={values.assetType}
+              onChange={(_, value) =>
+                value &&
+                setValues((prev) => ({
+                  ...prev,
+                  assetType: value as AssetType,
+                  optionType: value === "OPTION" ? prev.optionType || "CALL" : undefined,
+                  strikePrice: value === "OPTION" ? prev.strikePrice : "",
+                  expiryDate: value === "OPTION" ? today() : "",
+                }))
+              }
+            >
+              <ToggleButton value="STOCK">Stock</ToggleButton>
+              <ToggleButton value="OPTION">Option</ToggleButton>
+            </ToggleButtonGroup>
             <ToggleButtonGroup
               exclusive
               value={values.direction}
