@@ -442,6 +442,7 @@ export default function Home() {
   const [shareWarning, setShareWarning] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
+  const authBlockedRef = useRef(false);
   const { user, token, loginButton, initializing, logout } = useAuth();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -465,11 +466,19 @@ export default function Home() {
     if (
       err instanceof ApiError &&
       (err.status === 401 || err.status === 403) &&
-      message.toLowerCase().includes("email not allowed")
+      authBlockedRef.current
+    ) {
+      return;
+    }
+    if (
+      err instanceof ApiError &&
+      (err.status === 401 || err.status === 403) &&
+      message.toLowerCase().includes("not allowed")
     ) {
       setAuthBlockedMessage(
-        "Signed-in accounts must be explicitly enabled for dev. You can browse, but API actions will fail until you're added."
+        "This dev environment is for repo contributors only. Your account is not on the dev allowlist. Contact the repo owner to request access."
       );
+      authBlockedRef.current = true;
       return;
     }
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
@@ -662,6 +671,7 @@ export default function Home() {
   useEffect(() => {
     if (!user) {
       setAuthBlockedMessage(null);
+      authBlockedRef.current = false;
     }
   }, [user]);
 

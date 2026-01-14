@@ -40,9 +40,13 @@ export default function Admin() {
 
   const handleRequestError = (err: unknown) => {
     const message = err instanceof Error ? err.message : "Request failed";
-    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+    if (
+      err instanceof ApiError &&
+      (err.status === 401 || err.status === 403) &&
+      message.toLowerCase().includes("not allowed")
+    ) {
       setAuthBlockedMessage(
-        "This admin view is limited to approved emails in dev. Ask to be added to the allowlist."
+        "This dev environment is for repo contributors only. Your account is not on the dev allowlist. Contact the repo owner to request access."
       );
       return;
     }
