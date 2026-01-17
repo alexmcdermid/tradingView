@@ -1,8 +1,12 @@
 import { request } from "./client";
-import type { AdminUser, UserPreferences } from "./types";
+import type { AdminUser, UserPreferences, UserProfile } from "./types";
 
 export async function fetchUsers() {
   return request<AdminUser[]>("/admin/users");
+}
+
+export async function fetchUserProfile() {
+  return request<UserProfile>("/users/me");
 }
 
 export async function fetchUserPreferences() {

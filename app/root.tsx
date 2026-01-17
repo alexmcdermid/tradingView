@@ -13,12 +13,11 @@ import {
   createTheme,
   type PaletteMode,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
 import { ColorModeContext } from "./theme/colorMode";
-import { fetchUserPreferences } from "./api/users";
 import type { ThemeMode } from "./api/types";
 
 export const links: Route.LinksFunction = () => [
@@ -61,11 +60,10 @@ export default function App() {
 }
 
 function AppProviders() {
-  const { user, token } = useAuth();
+  const { user, token, preferences } = useAuth();
   const [mode, setMode] = useState<PaletteMode>(() => {
     return "light";
   });
-  const preferenceRequestId = useRef(0);
 
   const mapThemeMode = useCallback((themeMode?: ThemeMode | null): PaletteMode => {
     return themeMode === "DARK" ? "dark" : "light";
@@ -76,17 +74,8 @@ function AppProviders() {
       setMode("light");
       return;
     }
-    const requestId = ++preferenceRequestId.current;
-    fetchUserPreferences()
-      .then((preferences) => {
-        if (preferenceRequestId.current !== requestId) return;
-        setMode(mapThemeMode(preferences?.themeMode));
-      })
-      .catch(() => {
-        if (preferenceRequestId.current !== requestId) return;
-        setMode("light");
-      });
-  }, [mapThemeMode, token, user]);
+    setMode(mapThemeMode(preferences?.themeMode));
+  }, [mapThemeMode, preferences?.themeMode, token, user]);
 
   const theme = useMemo(
     () =>
@@ -110,12 +99,10 @@ function AppProviders() {
     () => ({
       mode,
       setMode: (next: PaletteMode) => {
-        preferenceRequestId.current += 1;
         setMode(next);
       },
       toggleMode: () => {
         const next = mode === "light" ? "dark" : "light";
-        preferenceRequestId.current += 1;
         setMode(next);
       },
     }),

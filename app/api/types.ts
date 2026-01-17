@@ -97,6 +97,17 @@ export interface UserPreferences {
   pnlDisplayMode?: PnlDisplayMode | null;
 }
 
+export interface UserProfile {
+  id: string;
+  authId: string;
+  email?: string | null;
+  premium: boolean;
+  createdAt: string;
+  updatedAt: string;
+  themeMode?: ThemeMode | null;
+  pnlDisplayMode?: PnlDisplayMode | null;
+}
+
 export type ShareType = "SUMMARY" | "TRADES";
 
 export interface CreateShareLinkRequest {

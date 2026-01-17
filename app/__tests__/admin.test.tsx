@@ -9,6 +9,9 @@ import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
   user: { sub: string; email?: string } | null;
+  profile: { id: string } | null;
+  preferences: { themeMode?: string | null; pnlDisplayMode?: string | null } | null;
+  setPreferences: (preferences: { themeMode?: string | null; pnlDisplayMode?: string | null }) => void;
   token: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
@@ -17,6 +20,9 @@ type AuthState = {
 
 const authState: AuthState = {
   user: null,
+  profile: null,
+  preferences: null,
+  setPreferences: vi.fn(),
   token: null,
   initializing: false,
   loginButton: <button>Sign in</button>,
@@ -36,6 +42,7 @@ vi.mock("../api/users", () => ({
 describe("Admin", () => {
   beforeEach(() => {
     authState.user = null;
+    authState.preferences = null;
     authState.token = null;
   });
 

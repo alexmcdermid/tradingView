@@ -42,7 +42,7 @@ import {
   updateTrade,
 } from "../api/trades";
 import type { AggregateStats, PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
-import { fetchUserPreferences, updateUserPreferences } from "../api/users";
+import { updateUserPreferences } from "../api/users";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
@@ -451,7 +451,7 @@ export default function Home() {
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
   const authBlockedRef = useRef(false);
-  const { user, token, loginButton, initializing, logout } = useAuth();
+  const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
   const { mode, setMode } = useColorMode();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -509,26 +509,8 @@ export default function Home() {
       setCalendarValueMode("pnl");
       return;
     }
-    let active = true;
-    const loadPreferences = async () => {
-      try {
-        const preferences = await fetchUserPreferences();
-        if (!active) {
-          return;
-        }
-        setCalendarValueMode(preferences.pnlDisplayMode === "PERCENT" ? "percent" : "pnl");
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        handleRequestError(err);
-      }
-    };
-    loadPreferences();
-    return () => {
-      active = false;
-    };
-  }, [user, token]);
+    setCalendarValueMode(preferences?.pnlDisplayMode === "PERCENT" ? "percent" : "pnl");
+  }, [preferences?.pnlDisplayMode, token, user]);
 
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
     const cadToUsd = rate ?? 1;
@@ -788,6 +770,10 @@ export default function Home() {
     setSavingPreferences(true);
     try {
       await updateUserPreferences({
+        themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
+        pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
+      });
+      setPreferences({
         themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
         pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
       });

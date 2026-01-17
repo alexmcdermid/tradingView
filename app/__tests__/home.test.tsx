@@ -10,6 +10,9 @@ import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
   user: { sub: string } | null;
+  profile: { id: string } | null;
+  preferences: { themeMode?: string | null; pnlDisplayMode?: string | null } | null;
+  setPreferences: (preferences: { themeMode?: string | null; pnlDisplayMode?: string | null }) => void;
   token: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
@@ -18,6 +21,9 @@ type AuthState = {
 
 const authState: AuthState = {
   user: null,
+  profile: null,
+  preferences: null,
+  setPreferences: vi.fn(),
   token: null,
   initializing: false,
   loginButton: <button>Sign in</button>,
@@ -34,7 +40,6 @@ const mockFetchAggregateStats = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
-const mockFetchUserPreferences = vi.fn();
 const mockUpdateUserPreferences = vi.fn();
 
 vi.mock("../api/trades", () => ({
@@ -47,8 +52,6 @@ vi.mock("../api/trades", () => ({
 }));
 
 vi.mock("../api/users", () => ({
-  fetchUserPreferences: (...args: Parameters<typeof mockFetchUserPreferences>) =>
-    mockFetchUserPreferences(...args),
   updateUserPreferences: (...args: Parameters<typeof mockUpdateUserPreferences>) =>
     mockUpdateUserPreferences(...args),
 }));
@@ -56,6 +59,7 @@ vi.mock("../api/users", () => ({
 describe("Home (guest mode)", () => {
   beforeEach(() => {
     authState.user = null;
+    authState.preferences = null;
     authState.token = null;
     mockFetchTrades.mockResolvedValue({
       items: [],
@@ -122,11 +126,8 @@ describe("Home (guest mode)", () => {
 describe("Home (authenticated)", () => {
   beforeEach(() => {
     authState.user = { sub: "user-1" };
+    authState.preferences = { themeMode: "LIGHT", pnlDisplayMode: "PNL" };
     authState.token = "token";
-    mockFetchUserPreferences.mockResolvedValue({
-      themeMode: "LIGHT",
-      pnlDisplayMode: "PNL",
-    });
     mockFetchTrades.mockResolvedValue({
       items: [
         {

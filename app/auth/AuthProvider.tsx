@@ -1,6 +1,8 @@
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { clearAuthToken, getAuthToken, setAuthToken } from "./authToken";
+import { fetchUserProfile } from "../api/users";
+import type { UserPreferences, UserProfile } from "../api/types";
 
 type UserInfo = {
   sub: string;
@@ -11,6 +13,9 @@ type UserInfo = {
 
 type AuthContextValue = {
   user: UserInfo | null;
+  profile: UserProfile | null;
+  preferences: UserPreferences | null;
+  setPreferences: (preferences: UserPreferences) => void;
   token: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
@@ -37,10 +42,48 @@ function decodeToken(token: string): UserInfo | null {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
   const logoutTimerRef = useRef<number | null>(null);
+  const profileRequestId = useRef(0);
+  const tokenSourceRef = useRef<"login" | "storage" | null>(null);
+
+  const preferenceStorageKey = useCallback((authId: string) => `user-preferences:${authId}`, []);
+
+  const loadPreferencesCache = useCallback(
+    (authId: string) => {
+      if (typeof window === "undefined") {
+        return null;
+      }
+      try {
+        const raw = window.localStorage.getItem(preferenceStorageKey(authId));
+        if (!raw) {
+          return null;
+        }
+        return JSON.parse(raw) as UserPreferences;
+      } catch {
+        return null;
+      }
+    },
+    [preferenceStorageKey]
+  );
+
+  const savePreferencesCache = useCallback(
+    (authId: string, next: UserPreferences) => {
+      if (typeof window === "undefined") {
+        return;
+      }
+      try {
+        window.localStorage.setItem(preferenceStorageKey(authId), JSON.stringify(next));
+      } catch {
+        // Ignore cache writes.
+      }
+    },
+    [preferenceStorageKey]
+  );
 
   const clearLogoutTimer = useCallback(() => {
     if (logoutTimerRef.current !== null) {
@@ -53,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearAuthToken();
     setToken(null);
     setUser(null);
+    setProfile(null);
+    setPreferencesState(null);
     clearLogoutTimer();
   }, [clearLogoutTimer]);
 
@@ -76,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (stored) {
       const info = decodeToken(stored);
       if (info && (!info.exp || Date.now() < info.exp * 1000)) {
+        tokenSourceRef.current = "storage";
         setToken(stored);
         setUser(info);
         scheduleLogout(info.exp);
@@ -104,6 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!credential) return;
     const info = decodeToken(credential);
     if (info) {
+      tokenSourceRef.current = "login";
       setAuthToken(credential);
       setToken(credential);
       setUser(info);
@@ -123,6 +170,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     scheduleLogout(info?.exp);
   }, [clearLogoutTimer, logout, scheduleLogout, token]);
+
+  useEffect(() => {
+    if (!token) {
+      profileRequestId.current += 1;
+      setProfile(null);
+      setPreferencesState(null);
+      return;
+    }
+    const authId = user?.sub || user?.email;
+    if (tokenSourceRef.current === "storage" && authId) {
+      const cached = loadPreferencesCache(authId);
+      if (cached) {
+        setPreferencesState(cached);
+        tokenSourceRef.current = null;
+        return;
+      }
+    }
+    const requestId = ++profileRequestId.current;
+    fetchUserProfile()
+      .then((data) => {
+        if (profileRequestId.current !== requestId) {
+          return;
+        }
+        setProfile(data);
+        const nextPreferences: UserPreferences = {
+          themeMode: data.themeMode,
+          pnlDisplayMode: data.pnlDisplayMode,
+        };
+        setPreferencesState(nextPreferences);
+        if (authId) {
+          savePreferencesCache(authId, nextPreferences);
+        }
+      })
+      .catch(() => {
+        if (profileRequestId.current !== requestId) {
+          return;
+        }
+        setProfile(null);
+      });
+    tokenSourceRef.current = null;
+  }, [loadPreferencesCache, savePreferencesCache, token, user?.email, user?.sub]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -167,15 +255,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     </div>
   ) : null;
 
+  const setPreferences = useCallback((next: UserPreferences) => {
+    setProfile((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        themeMode: next.themeMode ?? prev.themeMode,
+        pnlDisplayMode: next.pnlDisplayMode ?? prev.pnlDisplayMode,
+      };
+    });
+    setPreferencesState((prev) => ({
+      themeMode: next.themeMode ?? prev?.themeMode ?? null,
+      pnlDisplayMode: next.pnlDisplayMode ?? prev?.pnlDisplayMode ?? null,
+    }));
+    const authId = user?.sub || user?.email;
+    if (authId) {
+      savePreferencesCache(authId, {
+        themeMode: next.themeMode ?? preferences?.themeMode ?? null,
+        pnlDisplayMode: next.pnlDisplayMode ?? preferences?.pnlDisplayMode ?? null,
+      });
+    }
+  }, [preferences?.pnlDisplayMode, preferences?.themeMode, savePreferencesCache, user?.email, user?.sub]);
+
   const value = useMemo(
     () => ({
       user,
+      profile,
+      preferences,
+      setPreferences,
       token,
       initializing,
       loginButton,
       logout,
     }),
-    [initializing, loginButton, logout, token, user]
+    [initializing, loginButton, logout, preferences, profile, setPreferences, token, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
