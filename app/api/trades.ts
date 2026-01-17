@@ -1,10 +1,13 @@
 import { request } from "./client";
 import type { PagedResult, PnlSummary, AggregateStats, Trade, TradePayload } from "./types";
 
-export async function fetchTrades(page = 0, size = 50, month?: string) {
+export async function fetchTrades(page = 0, size = 50, month?: string, date?: string) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   if (month) {
     params.append("month", month);
+  }
+  if (date) {
+    params.append("date", date);
   }
   return request<PagedResult<Trade>>(`/trades/paged?${params.toString()}`);
 }

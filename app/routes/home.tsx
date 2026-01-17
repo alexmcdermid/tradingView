@@ -587,13 +587,13 @@ export default function Home() {
     };
   }, []);
 
-  const loadTrades = useCallback(async (targetPage: number, targetSize: number) => {
+  const loadTrades = useCallback(async (targetPage: number, targetSize: number, date?: string) => {
     if (!user || !token) {
       return;
     }
     try {
       setLoadingTrades(true);
-      const tradeData = await fetchTrades(targetPage, targetSize);
+      const tradeData = await fetchTrades(targetPage, targetSize, undefined, date);
       setTrades(tradeData.items);
       setPage(tradeData.page);
       setPageSize(tradeData.size);
@@ -641,11 +641,11 @@ export default function Home() {
   }, [token, user]);
 
   useEffect(() => {
-    if (!user || !token) {
+    if (!user || !token || selectedDate) {
       return;
     }
     loadTrades(page, pageSize);
-  }, [loadTrades, page, pageSize, token, user]);
+  }, [loadTrades, page, pageSize, selectedDate, token, user]);
 
   useEffect(() => {
     if (!user || !token) {
@@ -822,7 +822,11 @@ export default function Home() {
         } else {
           await createTrade(payload);
         }
-        await loadTrades(page, pageSize);
+        if (selectedDate) {
+          await loadTrades(0, pageSize, selectedDate);
+        } else {
+          await loadTrades(page, pageSize);
+        }
         await loadSummary(calendarMonth);
         await loadAggregateStats();
       } else {
@@ -885,7 +889,11 @@ export default function Home() {
       setDeletingTrade(true);
       if (user && token) {
         await deleteTrade(tradeToDelete.id);
-        await loadTrades(page, pageSize);
+        if (selectedDate) {
+          await loadTrades(0, pageSize, selectedDate);
+        } else {
+          await loadTrades(page, pageSize);
+        }
         await loadSummary(calendarMonth);
         await loadAggregateStats();
       } else {
@@ -1047,11 +1055,36 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, month, rate, fxDate));
+      return;
     }
+    setPage(0);
+    await loadTrades(0, pageSize);
   };
 
   const handleDateSelect = (date: string) => {
-    setSelectedDate((prev) => (prev === date ? null : date));
+    if (!user || !token) {
+      setSelectedDate((prev) => (prev === date ? null : date));
+      return;
+    }
+    setSelectedDate((prev) => {
+      const next = prev === date ? null : date;
+      setPage(0);
+      if (next) {
+        void loadTrades(0, pageSize, next);
+      } else {
+        void loadTrades(0, pageSize);
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelectedDate = () => {
+    setSelectedDate(null);
+    if (!user || !token) {
+      return;
+    }
+    setPage(0);
+    void loadTrades(0, pageSize);
   };
 
   const filteredTrades = useMemo(() => {
@@ -1312,7 +1345,7 @@ export default function Home() {
                 </Typography>
                 <Chip
                   label={selectedDate.replace(/-/g, "/")}
-                  onDelete={() => setSelectedDate(null)}
+                  onDelete={handleClearSelectedDate}
                   size="small"
                 />
               </Stack>

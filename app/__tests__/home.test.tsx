@@ -212,6 +212,40 @@ describe("Home (authenticated)", () => {
     });
   });
 
+  it("fetches trades for a selected day", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(1);
+    });
+
+    const user = userEvent.setup();
+    const dayButtons = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    });
+    const targetButton = dayButtons[0];
+    const label = targetButton.getAttribute("aria-label") || "";
+    const selectedDate = label.replace(/select\s+/i, "");
+
+    await user.click(targetButton);
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenLastCalledWith(
+        0,
+        expect.any(Number),
+        undefined,
+        selectedDate
+      );
+    });
+  });
+
   it("does not reload aggregate stats when changing calendar month", async () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
