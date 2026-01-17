@@ -21,6 +21,7 @@ interface MonthlyCalendarProps {
   onDateSelect?: (date: string) => void;
   readOnly?: boolean;
   holidays?: string[];
+  valueMode?: "pnl" | "percent";
 }
 
 function toDate(value?: string) {
@@ -134,6 +135,7 @@ export function MonthlyCalendar({
   onDateSelect,
   readOnly = false,
   holidays,
+  valueMode = "pnl",
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
 
@@ -147,10 +149,13 @@ export function MonthlyCalendar({
     const map = new Map<string, number>();
     daily.forEach((bucket) => {
       const dayKey = bucket.period.slice(0, 10);
-      map.set(dayKey, bucket.pnl);
+      const value = valueMode === "percent" ? bucket.pnlPercent : bucket.pnl;
+      if (value !== null && value !== undefined) {
+        map.set(dayKey, value);
+      }
     });
     return map;
-  }, [daily]);
+  }, [daily, valueMode]);
 
   const holidaySet = useMemo(() => {
     if (holidays && holidays.length > 0) {
@@ -215,7 +220,7 @@ export function MonthlyCalendar({
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          P/L per day
+          {valueMode === "percent" ? "Return % per day" : "P/L per day"}
         </Typography>
       </Stack>
 
@@ -283,7 +288,13 @@ export function MonthlyCalendar({
 
           const selectable = onDateSelect && !readOnly && !isHoliday;
           const displayValue =
-            isHoliday ? "Closed" : pnl == null ? "—" : pnl.toFixed(2);
+            isHoliday
+              ? "Closed"
+              : pnl == null
+                ? "—"
+                : valueMode === "percent"
+                  ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
+                  : pnl.toFixed(2);
 
           const content = (
             <Box
@@ -326,7 +337,14 @@ export function MonthlyCalendar({
           return pnl == null || isHoliday ? (
             <Box key={date}>{content}</Box>
           ) : (
-            <Tooltip key={date} title={`P/L: ${pnl.toFixed(2)}`}>
+            <Tooltip
+              key={date}
+              title={
+                valueMode === "percent"
+                  ? `Return: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
+                  : `P/L: ${pnl.toFixed(2)}`
+              }
+            >
               <span>{content}</span>
             </Tooltip>
           );

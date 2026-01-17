@@ -101,6 +101,18 @@ function formatNumber(value?: number | null, digits = 2) {
   });
 }
 
+function computeTradePnlPercent(trade: Trade) {
+  if (trade.pnlPercent !== undefined && trade.pnlPercent !== null) {
+    return trade.pnlPercent;
+  }
+  if (trade.entryPrice === null || trade.entryPrice === undefined) return null;
+  if (trade.quantity === null || trade.quantity === undefined) return null;
+  const multiplier = trade.assetType === "OPTION" ? 100 : 1;
+  const notional = Math.abs(trade.entryPrice * trade.quantity * multiplier);
+  if (notional <= 0) return null;
+  return Number(((trade.realizedPnl / notional) * 100).toFixed(2));
+}
+
 export function TradesTable({
   trades,
   loading,
@@ -132,6 +144,7 @@ export function TradesTable({
             <TableCell align="right">Exit</TableCell>
             <TableCell align="right">Fees</TableCell>
             <TableCell align="right">Realized P/L</TableCell>
+            <TableCell align="right">P/L %</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
             <TableCell>Notes</TableCell>
@@ -142,7 +155,7 @@ export function TradesTable({
           {loading ? (
             Array.from({ length: 5 }).map((_, idx) => (
               <TableRow key={idx}>
-                {Array.from({ length: 11 }).map((__, cellIdx) => (
+                {Array.from({ length: 13 }).map((__, cellIdx) => (
                   <TableCell key={cellIdx}>
                     <Skeleton />
                   </TableCell>
@@ -151,15 +164,24 @@ export function TradesTable({
             ))
           ) : trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12}>
+              <TableCell colSpan={13}>
                 <Typography color="text.secondary">
                   No trades yet. Log a trade to see it here.
                 </Typography>
               </TableCell>
             </TableRow>
           ) : (
-            trades.map((trade) => (
-              <TableRow key={trade.id} hover>
+            trades.map((trade) => {
+              const percent = computeTradePnlPercent(trade);
+              const percentLabel =
+                percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
+              return (
+                <TableRow
+                  key={trade.id}
+                  hover
+                  onClick={() => onEdit(trade)}
+                  sx={{ cursor: "pointer" }}
+                >
                 <TableCell sx={{ minWidth: 140, maxWidth: 220, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>
                     {trade.symbol}
@@ -197,6 +219,19 @@ export function TradesTable({
                     {formatNumber(trade.realizedPnl, 2)} {trade.currency}
                   </Typography>
                 </TableCell>
+                <TableCell align="right">
+                  {percent == null ? (
+                    percentLabel
+                  ) : (
+                    <Typography
+                      component="span"
+                      color={percent >= 0 ? "success.main" : "error.main"}
+                      fontWeight={700}
+                    >
+                      {percentLabel}
+                    </Typography>
+                  )}
+                </TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
                 <TableCell>
@@ -207,7 +242,13 @@ export function TradesTable({
                 <TableCell align="right">
                   <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                     <Tooltip title="Edit">
-                      <IconButton size="small" onClick={() => onEdit(trade)}>
+                      <IconButton
+                        size="small"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onEdit(trade);
+                        }}
+                      >
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
@@ -215,7 +256,10 @@ export function TradesTable({
                       <IconButton
                         size="small"
                         color="error"
-                        onClick={() => onDelete(trade)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onDelete(trade);
+                        }}
                       >
                         <DeleteIcon fontSize="small" />
                       </IconButton>
@@ -223,13 +267,14 @@ export function TradesTable({
                   </Stack>
                 </TableCell>
               </TableRow>
-            ))
+              );
+            })
           )}
         </TableBody>
         {paginationEnabled && (
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={12} sx={{ p: 0 }}>
+              <TableCell colSpan={13} sx={{ p: 0 }}>
                 <Box
                   sx={{
                     display: "flex",

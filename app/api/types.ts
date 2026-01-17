@@ -4,6 +4,8 @@ export type Currency = "USD" | "CAD";
 export type TradeDirection = "LONG" | "SHORT";
 
 export type OptionType = "CALL" | "PUT";
+export type ThemeMode = "LIGHT" | "DARK";
+export type PnlDisplayMode = "PNL" | "PERCENT";
 
 export interface Trade {
   id: string;
@@ -21,6 +23,7 @@ export interface Trade {
   openedAt: string;
   closedAt: string;
   realizedPnl: number;
+  pnlPercent?: number | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +50,7 @@ export interface PnlBucket {
   period: string;
   pnl: number;
   trades: number;
+  pnlPercent?: number | null;
 }
 
 export interface PnlSummary {
@@ -54,6 +58,7 @@ export interface PnlSummary {
   tradeCount: number;
   daily: PnlBucket[];
   monthly: PnlBucket[];
+  pnlPercent?: number;
   cadToUsdRate?: number;
   fxDate?: string;
 }
@@ -63,6 +68,7 @@ export interface AggregateStats {
   tradeCount: number;
   bestDay: PnlBucket | null;
   bestMonth: PnlBucket | null;
+  pnlPercent?: number;
   cadToUsdRate?: number;
   fxDate?: string;
 }
@@ -84,6 +90,11 @@ export interface AdminUser {
   premium: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UserPreferences {
+  themeMode?: ThemeMode | null;
+  pnlDisplayMode?: PnlDisplayMode | null;
 }
 
 export type ShareType = "SUMMARY" | "TRADES";

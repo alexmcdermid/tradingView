@@ -17,6 +17,8 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
 });
 
 const formatCurrency = (value: number) => numberFormatter.format(value);
+const formatPercent = (value: number) =>
+  `${value >= 0 ? "+" : ""}${numberFormatter.format(value)}%`;
 
 const formatPnl = (value: number) =>
   `${value >= 0 ? "+" : ""}${formatCurrency(value)} USD`;
@@ -47,18 +49,50 @@ const escapeXml = (value: string) =>
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
+const computeTradeNotional = (trade: {
+  entryPrice: number;
+  quantity: number;
+  assetType: string;
+}) => {
+  const multiplier = trade.assetType === "OPTION" ? 100 : 1;
+  return Math.abs(trade.entryPrice * trade.quantity * multiplier);
+};
+
+const computeTradesPercent = (
+  trades: Array<{ realizedPnl: number; currency: string; entryPrice: number; quantity: number; assetType: string }>,
+  cadToUsdRate?: number
+) => {
+  if (trades.length === 0) return undefined;
+  const rate = cadToUsdRate ?? 1;
+  let totalPnl = 0;
+  let totalNotional = 0;
+  trades.forEach((trade) => {
+    const notional = computeTradeNotional(trade);
+    const pnlUsd = trade.currency === "CAD" ? trade.realizedPnl * rate : trade.realizedPnl;
+    const notionalUsd = trade.currency === "CAD" ? notional * rate : notional;
+    totalPnl += pnlUsd;
+    totalNotional += notionalUsd;
+  });
+  if (!Number.isFinite(totalNotional) || totalNotional <= 0) return undefined;
+  return Number(((totalPnl / totalNotional) * 100).toFixed(2));
+};
+
 const buildShareImage = (options: {
   title: string;
   subtitle: string;
   pnl: number;
+  percent?: number;
   tradeCount: number;
 }) => {
-  const { title, subtitle, pnl, tradeCount } = options;
+  const { title, subtitle, pnl, percent, tradeCount } = options;
   const accent = pnl >= 0 ? "#16a34a" : "#dc2626";
   const pnlText = escapeXml(formatPnl(pnl));
   const safeTitle = escapeXml(title);
   const safeSubtitle = escapeXml(subtitle);
   const tradesLabel = `${tradeCount} trade${tradeCount === 1 ? "" : "s"}`;
+  const percentLabel =
+    percent === undefined || percent === null ? "" : ` • ${formatPercent(percent)} return`;
+  const footer = escapeXml(`Total P/L - ${tradesLabel}${percentLabel}`);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${safeTitle}">
@@ -86,7 +120,7 @@ const buildShareImage = (options: {
     ${pnlText}
   </text>
   <text x="120" y="390" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
-    Total P/L - ${escapeXml(tradesLabel)}
+    ${footer}
   </text>
 </svg>`;
 };
@@ -143,12 +177,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         title: "Monthly P/L",
         subtitle: formatMonthLabel(shared.month),
         pnl: shared.summary.totalPnl,
+        percent: shared.summary.pnlPercent,
         tradeCount: shared.summary.tradeCount ?? 0,
       }
     : {
         title: "Daily P/L",
         subtitle: formatDayLabel(shared.date),
         pnl: shared.totalPnl,
+        percent: computeTradesPercent(shared.trades, shared.cadToUsdRate),
         tradeCount: shared.trades.length,
       };
 

@@ -5,6 +5,7 @@ import React from "react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import Admin from "../routes/admin";
 import type { AdminUser } from "../api/types";
+import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
   user: { sub: string; email?: string } | null;
@@ -47,7 +48,11 @@ describe("Admin", () => {
     const router = createMemoryRouter([{ path: "/admin", element: <Admin /> }], {
       initialEntries: ["/admin"],
     });
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     expect(screen.getByText(/sign in to view admin users/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
@@ -71,7 +76,11 @@ describe("Admin", () => {
     const router = createMemoryRouter([{ path: "/admin", element: <Admin /> }], {
       initialEntries: ["/admin"],
     });
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     await waitFor(() => {
       expect(mockFetchUsers).toHaveBeenCalledTimes(1);

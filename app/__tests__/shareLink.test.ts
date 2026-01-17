@@ -14,6 +14,7 @@ describe("share link helpers", () => {
   const summary: PnlSummary = {
     totalPnl: 300,
     tradeCount: 3,
+    pnlPercent: 12.34,
     daily: [
       { period: "2024-01-15", pnl: 100, trades: 1 },
       { period: "2024-02-02", pnl: 200, trades: 2 },
@@ -43,7 +44,10 @@ describe("share link helpers", () => {
     expect(decoded?.origin).toBe("http://localhost:5173");
     expect(decoded?.generatedAt).toBe("2024-02-10T00:00:00Z");
     expect(decoded?.summary.daily).toEqual([{ period: "2024-02-02", pnl: 200, trades: 2 }]);
-    expect(decoded?.summary.monthly).toEqual([{ period: "2024-02", pnl: 200, trades: 2 }]);
+    expect(decoded?.summary.monthly).toEqual([
+      { period: "2024-02", pnl: 200, trades: 2, pnlPercent: 12.34 },
+    ]);
+    expect(decoded?.summary.pnlPercent).toBeCloseTo(12.34, 2);
   });
 
   it("returns null for invalid tokens", () => {
@@ -64,6 +68,7 @@ describe("share link helpers", () => {
     const largeSummary: PnlSummary = {
       totalPnl,
       tradeCount,
+      pnlPercent: 8.4,
       daily,
       monthly: [{ period: "2024-03", pnl: totalPnl, trades: tradeCount }],
       cadToUsdRate: 0.73,

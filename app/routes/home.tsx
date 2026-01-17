@@ -16,9 +16,14 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  FormControl,
+  FormControlLabel,
+  FormLabel,
   IconButton,
   Menu,
   MenuItem,
+  Radio,
+  RadioGroup,
   Snackbar,
   Stack,
   Toolbar,
@@ -37,6 +42,7 @@ import {
   updateTrade,
 } from "../api/trades";
 import type { AggregateStats, PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
+import { fetchUserPreferences, updateUserPreferences } from "../api/users";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
@@ -48,6 +54,7 @@ import {
   encodeShareToken,
 } from "../utils/shareLink";
 import { createShareLink } from "../api/shares";
+import { useColorMode } from "../theme/colorMode";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -442,10 +449,18 @@ export default function Home() {
   const [shareWarning, setShareWarning] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
+  const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
   const authBlockedRef = useRef(false);
   const { user, token, loginButton, initializing, logout } = useAuth();
+  const { mode, setMode } = useColorMode();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [preferencesDialogOpen, setPreferencesDialogOpen] = useState(false);
+  const [preferencesDraft, setPreferencesDraft] = useState<{
+    themeMode: "light" | "dark";
+    pnlDisplayMode: "pnl" | "percent";
+  } | null>(null);
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const guestSeeded = useRef<boolean>(false);
   const adminEmailSet = useMemo(() => {
     const adminList = import.meta.env.VITE_ADMIN_EMAILS;
@@ -489,43 +504,102 @@ export default function Home() {
     setError(message);
   };
 
+  useEffect(() => {
+    if (!user || !token) {
+      setCalendarValueMode("pnl");
+      return;
+    }
+    let active = true;
+    const loadPreferences = async () => {
+      try {
+        const preferences = await fetchUserPreferences();
+        if (!active) {
+          return;
+        }
+        setCalendarValueMode(preferences.pnlDisplayMode === "PERCENT" ? "percent" : "pnl");
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        handleRequestError(err);
+      }
+    };
+    loadPreferences();
+    return () => {
+      active = false;
+    };
+  }, [user, token]);
+
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
     const cadToUsd = rate ?? 1;
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
     const toUsd = (trade: Trade) =>
       trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
+    const toUsdNotional = (trade: Trade) => {
+      const multiplier = trade.assetType === "OPTION" ? 100 : 1;
+      const notional = trade.entryPrice * trade.quantity * multiplier;
+      const usdNotional = trade.currency === "CAD" ? notional * cadToUsd : notional;
+      return Math.abs(usdNotional);
+    };
     const filtered = month
       ? list.filter((trade) => trade.closedAt.startsWith(month))
       : list;
     const totalPnl = filtered.reduce((acc, trade) => acc + toUsd(trade), 0);
-    const dailyMap = new Map<string, { pnl: number; trades: number }>();
-    const monthlyMap = new Map<string, { pnl: number; trades: number }>();
+    const totalNotional = filtered.reduce((acc, trade) => {
+      const multiplier = trade.assetType === "OPTION" ? 100 : 1;
+      const notional = trade.entryPrice * trade.quantity * multiplier;
+      const usdNotional = trade.currency === "CAD" ? notional * cadToUsd : notional;
+      return acc + Math.abs(usdNotional);
+    }, 0);
+    const pnlPercent = totalNotional > 0
+      ? Number(((totalPnl / totalNotional) * 100).toFixed(2))
+      : undefined;
+    const dailyMap = new Map<string, { pnl: number; trades: number; notional: number }>();
+    const monthlyMap = new Map<string, { pnl: number; trades: number; notional: number }>();
 
     filtered.forEach((trade) => {
       const day = trade.closedAt.slice(0, 10);
       const month = trade.closedAt.slice(0, 7);
+      const notional = toUsdNotional(trade);
       dailyMap.set(day, {
         pnl: (dailyMap.get(day)?.pnl || 0) + toUsd(trade),
         trades: (dailyMap.get(day)?.trades || 0) + 1,
+        notional: (dailyMap.get(day)?.notional || 0) + notional,
       });
       monthlyMap.set(month, {
         pnl: (monthlyMap.get(month)?.pnl || 0) + toUsd(trade),
         trades: (monthlyMap.get(month)?.trades || 0) + 1,
+        notional: (monthlyMap.get(month)?.notional || 0) + notional,
       });
     });
 
     const daily: PnlBucket[] = Array.from(dailyMap.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .map(([period, data]) => ({ period, pnl: Number(data.pnl.toFixed(2)), trades: data.trades }));
+      .map(([period, data]) => ({
+        period,
+        pnl: Number(data.pnl.toFixed(2)),
+        trades: data.trades,
+        pnlPercent: data.notional > 0
+          ? Number(((data.pnl / data.notional) * 100).toFixed(2))
+          : undefined,
+      }));
     const monthly: PnlBucket[] = Array.from(monthlyMap.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .map(([period, data]) => ({ period, pnl: Number(data.pnl.toFixed(2)), trades: data.trades }));
+      .map(([period, data]) => ({
+        period,
+        pnl: Number(data.pnl.toFixed(2)),
+        trades: data.trades,
+        pnlPercent: data.notional > 0
+          ? Number(((data.pnl / data.notional) * 100).toFixed(2))
+          : undefined,
+      }));
 
     return {
       totalPnl: Number(totalPnl.toFixed(2)),
       tradeCount: filtered.length,
       daily,
       monthly,
+      pnlPercent,
       cadToUsdRate: cadToUsd,
       fxDate: rateDate,
     };
@@ -621,6 +695,7 @@ export default function Home() {
         tradeCount: allSummary.tradeCount,
         bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
         bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        pnlPercent: allSummary.pnlPercent,
         cadToUsdRate: rate,
         fxDate,
       });
@@ -637,6 +712,7 @@ export default function Home() {
         tradeCount: allSummary.tradeCount,
         bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
         bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+        pnlPercent: allSummary.pnlPercent,
         cadToUsdRate: rate,
         fxDate,
       });
@@ -678,6 +754,52 @@ export default function Home() {
   const handleOpenNewTrade = () => {
     setEditingTrade(null);
     setTradeDialogOpen(true);
+  };
+
+  const handleOpenPreferencesDialog = () => {
+    setPreferencesDraft({
+      themeMode: mode,
+      pnlDisplayMode: calendarValueMode,
+    });
+    setPreferencesDialogOpen(true);
+    setMenuAnchor(null);
+  };
+
+  const handleClosePreferencesDialog = () => {
+    if (savingPreferences) {
+      return;
+    }
+    setPreferencesDialogOpen(false);
+    setPreferencesDraft(null);
+  };
+
+  const handleSavePreferences = async () => {
+    if (!preferencesDraft || !user || !token) {
+      return;
+    }
+    const { themeMode, pnlDisplayMode } = preferencesDraft;
+    const hasChanges =
+      themeMode !== mode || pnlDisplayMode !== calendarValueMode;
+    if (!hasChanges) {
+      setPreferencesDialogOpen(false);
+      setPreferencesDraft(null);
+      return;
+    }
+    setSavingPreferences(true);
+    try {
+      await updateUserPreferences({
+        themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
+        pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
+      });
+      setMode(themeMode);
+      setCalendarValueMode(pnlDisplayMode);
+      setPreferencesDialogOpen(false);
+      setPreferencesDraft(null);
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setSavingPreferences(false);
+    }
   };
 
   const handleEditTrade = (trade: Trade) => {
@@ -744,6 +866,7 @@ export default function Home() {
             tradeCount: allSummary.tradeCount,
             bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
             bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
+            pnlPercent: allSummary.pnlPercent,
             cadToUsdRate: rate,
             fxDate,
           });
@@ -1043,6 +1166,9 @@ export default function Home() {
                       Admin
                     </MenuItem>
                   )}
+                  <MenuItem onClick={handleOpenPreferencesDialog}>
+                    Preferences
+                  </MenuItem>
                   {/* <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem> */}
                   <MenuItem
                     onClick={() => {
@@ -1079,6 +1205,7 @@ export default function Home() {
                 title="Total Realized P/L"
                 value={aggregateStats?.totalPnl}
                 trades={aggregateStats?.tradeCount}
+                percent={aggregateStats?.pnlPercent}
                 loading={loadingStats}
               />
             </Grid>
@@ -1112,7 +1239,11 @@ export default function Home() {
                     Monthly P/L Calendar
                   </Typography>
                   <Typography variant="body2" color={monthlyColor} fontWeight={700}>
-                    {summary ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)} USD` : ""}
+                    {summary
+                      ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)} USD${
+                          summary.pnlPercent != null ? ` (${summary.pnlPercent.toFixed(2)}%)` : ""
+                        }`
+                      : ""}
                   </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
@@ -1153,6 +1284,7 @@ export default function Home() {
                 onMonthChange={handleMonthChange}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}
+                valueMode={calendarValueMode}
               />
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
                 {fxRate
@@ -1234,6 +1366,62 @@ export default function Home() {
       />
 
       <Dialog
+        open={preferencesDialogOpen}
+        onClose={handleClosePreferencesDialog}
+        aria-labelledby="preferences-dialog-title"
+      >
+        <DialogTitle id="preferences-dialog-title">Preferences</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Theme</FormLabel>
+              <RadioGroup
+                value={preferencesDraft?.themeMode ?? mode}
+                onChange={(event) => {
+                  const next = event.target.value as "light" | "dark";
+                  setPreferencesDraft((prev) => ({
+                    themeMode: next,
+                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                  }));
+                }}
+              >
+                <FormControlLabel value="light" control={<Radio />} label="Light" />
+                <FormControlLabel value="dark" control={<Radio />} label="Dark" />
+              </RadioGroup>
+            </FormControl>
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Calendar values</FormLabel>
+              <RadioGroup
+                value={preferencesDraft?.pnlDisplayMode ?? calendarValueMode}
+                onChange={(event) => {
+                  const next = event.target.value as "pnl" | "percent";
+                  setPreferencesDraft((prev) => ({
+                    themeMode: prev?.themeMode ?? mode,
+                    pnlDisplayMode: next,
+                  }));
+                }}
+              >
+                <FormControlLabel value="pnl" control={<Radio />} label="P/L" />
+                <FormControlLabel value="percent" control={<Radio />} label="% Return" />
+              </RadioGroup>
+            </FormControl>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePreferencesDialog} disabled={savingPreferences}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSavePreferences}
+            disabled={savingPreferences}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={deleteDialogOpen}
         onClose={handleCloseDeleteDialog}
         aria-labelledby="delete-trade-dialog-title"
@@ -1300,11 +1488,13 @@ function StatCard({
   title,
   value,
   trades,
+  percent,
   loading,
 }: {
   title: string;
   value?: number;
   trades?: number;
+  percent?: number;
   loading?: boolean;
 }) {
   const display = value != null
@@ -1313,8 +1503,11 @@ function StatCard({
         maximumFractionDigits: 2,
       }) + " USD"
     : "—";
+  const percentLabel = percent != null
+    ? `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`
+    : null;
   return (
-    <Card variant="outlined">
+    <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
         <Typography variant="overline" color="text.secondary">
           {title}
@@ -1330,8 +1523,10 @@ function StatCard({
           {loading
             ? "Loading…"
             : trades !== undefined
-              ? `${trades} trade${trades === 1 ? "" : "s"}`
-              : "No trades"}
+              ? `${percentLabel ? `${percentLabel} return • ` : ""}${trades} trade${trades === 1 ? "" : "s"}`
+              : percentLabel
+                ? `${percentLabel} return`
+                : "No trades"}
         </Typography>
       </CardContent>
     </Card>
@@ -1357,7 +1552,7 @@ function BucketCard({
       }) + " USD"
     : "—";
   return (
-    <Card variant="outlined">
+    <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="overline" color="text.secondary">

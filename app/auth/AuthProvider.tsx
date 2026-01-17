@@ -1,11 +1,12 @@
 import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { clearAuthToken, getAuthToken, setAuthToken } from "./authToken";
 
 type UserInfo = {
   sub: string;
   email?: string;
   name?: string;
+  exp?: number;
 };
 
 type AuthContextValue = {
@@ -26,6 +27,7 @@ function decodeToken(token: string): UserInfo | null {
       sub: decoded.sub,
       email: decoded.email,
       name: decoded.name || decoded.email,
+      exp: typeof decoded.exp === "number" ? decoded.exp : undefined,
     };
   } catch {
     return null;
@@ -38,14 +40,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
+  const logoutTimerRef = useRef<number | null>(null);
+
+  const clearLogoutTimer = useCallback(() => {
+    if (logoutTimerRef.current !== null) {
+      window.clearTimeout(logoutTimerRef.current);
+      logoutTimerRef.current = null;
+    }
+  }, []);
+
+  const logout = useCallback(() => {
+    clearAuthToken();
+    setToken(null);
+    setUser(null);
+    clearLogoutTimer();
+  }, [clearLogoutTimer]);
+
+  const scheduleLogout = useCallback(
+    (exp?: number) => {
+      clearLogoutTimer();
+      if (!exp) return;
+      const expiresAt = exp * 1000;
+      const timeoutMs = expiresAt - Date.now();
+      if (timeoutMs <= 0) {
+        logout();
+        return;
+      }
+      logoutTimerRef.current = window.setTimeout(() => logout(), timeoutMs);
+    },
+    [clearLogoutTimer, logout]
+  );
 
   useEffect(() => {
     const stored = getAuthToken();
     if (stored) {
       const info = decodeToken(stored);
-      if (info) {
+      if (info && (!info.exp || Date.now() < info.exp * 1000)) {
         setToken(stored);
         setUser(info);
+        scheduleLogout(info.exp);
       } else {
         clearAuthToken();
       }
@@ -74,14 +107,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthToken(credential);
       setToken(credential);
       setUser(info);
+      scheduleLogout(info.exp);
     }
   };
 
-  const logout = () => {
-    clearAuthToken();
-    setToken(null);
-    setUser(null);
-  };
+  useEffect(() => {
+    if (!token) {
+      clearLogoutTimer();
+      return;
+    }
+    const info = decodeToken(token);
+    if (info?.exp && Date.now() >= info.exp * 1000) {
+      logout();
+      return;
+    }
+    scheduleLogout(info?.exp);
+  }, [clearLogoutTimer, logout, scheduleLogout, token]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const checkExpiry = () => {
+      const stored = getAuthToken();
+      if (!stored) return;
+      const info = decodeToken(stored);
+      if (info?.exp && Date.now() >= info.exp * 1000) {
+        logout();
+      }
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkExpiry();
+      }
+    };
+    window.addEventListener("focus", checkExpiry);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", checkExpiry);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [logout]);
 
   const loginButton = mounted ? (
     <div style={{ 

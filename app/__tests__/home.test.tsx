@@ -6,6 +6,7 @@ import React from "react";
 import Home from "../routes/home";
 import type { Trade } from "../api/types";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
   user: { sub: string } | null;
@@ -33,6 +34,8 @@ const mockFetchAggregateStats = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
+const mockFetchUserPreferences = vi.fn();
+const mockUpdateUserPreferences = vi.fn();
 
 vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
@@ -41,6 +44,13 @@ vi.mock("../api/trades", () => ({
   createTrade: (...args: Parameters<typeof mockCreateTrade>) => mockCreateTrade(...args),
   updateTrade: (...args: Parameters<typeof mockUpdateTrade>) => mockUpdateTrade(...args),
   deleteTrade: (...args: Parameters<typeof mockDeleteTrade>) => mockDeleteTrade(...args),
+}));
+
+vi.mock("../api/users", () => ({
+  fetchUserPreferences: (...args: Parameters<typeof mockFetchUserPreferences>) =>
+    mockFetchUserPreferences(...args),
+  updateUserPreferences: (...args: Parameters<typeof mockUpdateUserPreferences>) =>
+    mockUpdateUserPreferences(...args),
 }));
 
 describe("Home (guest mode)", () => {
@@ -83,7 +93,11 @@ describe("Home (guest mode)", () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     await userEvent.click(screen.getByRole("button", { name: /log trade/i }));
 
@@ -109,6 +123,10 @@ describe("Home (authenticated)", () => {
   beforeEach(() => {
     authState.user = { sub: "user-1" };
     authState.token = "token";
+    mockFetchUserPreferences.mockResolvedValue({
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+    });
     mockFetchTrades.mockResolvedValue({
       items: [
         {
@@ -166,7 +184,11 @@ describe("Home (authenticated)", () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     await waitFor(() => {
       expect(mockFetchTrades).toHaveBeenCalledTimes(1);
@@ -178,7 +200,11 @@ describe("Home (authenticated)", () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     await waitFor(() => {
       expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
@@ -189,7 +215,11 @@ describe("Home (authenticated)", () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
-    render(<RouterProvider router={router} />);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
 
     await waitFor(() => {
       expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);

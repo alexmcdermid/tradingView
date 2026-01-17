@@ -7,10 +7,19 @@ import {
   ScrollRestoration,
 } from "react-router";
 
-import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
+import {
+  CssBaseline,
+  ThemeProvider,
+  createTheme,
+  type PaletteMode,
+} from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
-import { AuthWrapper } from "./auth/AuthProvider";
+import { AuthWrapper, useAuth } from "./auth/AuthProvider";
+import { ColorModeContext } from "./theme/colorMode";
+import { fetchUserPreferences } from "./api/users";
+import type { ThemeMode } from "./api/types";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -44,24 +53,82 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const theme = createTheme({
-    palette: {
-      mode: "light",
-      primary: { main: "#0f4d92" },
-      secondary: { main: "#ff7043" },
-      background: { default: "#f4f7fb" },
-    },
-    shape: { borderRadius: 10 },
-    typography: { fontFamily: "Inter, system-ui, -apple-system, sans-serif" },
-  });
-
   return (
     <AuthWrapper>
+      <AppProviders />
+    </AuthWrapper>
+  );
+}
+
+function AppProviders() {
+  const { user, token } = useAuth();
+  const [mode, setMode] = useState<PaletteMode>(() => {
+    return "light";
+  });
+  const preferenceRequestId = useRef(0);
+
+  const mapThemeMode = useCallback((themeMode?: ThemeMode | null): PaletteMode => {
+    return themeMode === "DARK" ? "dark" : "light";
+  }, []);
+
+  useEffect(() => {
+    if (!user || !token) {
+      setMode("light");
+      return;
+    }
+    const requestId = ++preferenceRequestId.current;
+    fetchUserPreferences()
+      .then((preferences) => {
+        if (preferenceRequestId.current !== requestId) return;
+        setMode(mapThemeMode(preferences?.themeMode));
+      })
+      .catch(() => {
+        if (preferenceRequestId.current !== requestId) return;
+        setMode("light");
+      });
+  }, [mapThemeMode, token, user]);
+
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode,
+          primary: { main: mode === "dark" ? "#d4d4d8" : "#0f4d92" },
+          secondary: { main: mode === "dark" ? "#f59e0b" : "#ff7043" },
+          background:
+            mode === "dark"
+              ? { default: "#0b0b0c", paper: "#151515" }
+              : { default: "#f4f7fb" },
+        },
+        shape: { borderRadius: 10 },
+        typography: { fontFamily: "Inter, system-ui, -apple-system, sans-serif" },
+      }),
+    [mode]
+  );
+
+  const colorMode = useMemo(
+    () => ({
+      mode,
+      setMode: (next: PaletteMode) => {
+        preferenceRequestId.current += 1;
+        setMode(next);
+      },
+      toggleMode: () => {
+        const next = mode === "light" ? "dark" : "light";
+        preferenceRequestId.current += 1;
+        setMode(next);
+      },
+    }),
+    [mode]
+  );
+
+  return (
+    <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
-        <CssBaseline />
+        <CssBaseline enableColorScheme />
         <Outlet />
       </ThemeProvider>
-    </AuthWrapper>
+    </ColorModeContext.Provider>
   );
 }
 

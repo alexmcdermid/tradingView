@@ -57,6 +57,36 @@ const formatNumber = (value?: number | null, digits = 2) => {
   });
 };
 
+const formatPercent = (value: number) =>
+  `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+
+const computeTradeNotional = (trade: SharedTrade) => {
+  const multiplier = trade.assetType === "OPTION" ? 100 : 1;
+  return Math.abs(trade.entryPrice * trade.quantity * multiplier);
+};
+
+const computeTradePercent = (trade: SharedTrade) => {
+  const notional = computeTradeNotional(trade);
+  if (!Number.isFinite(notional) || notional <= 0) return null;
+  return Number(((trade.realizedPnl / notional) * 100).toFixed(2));
+};
+
+const computeTradesPercent = (trades: SharedTrade[], cadToUsdRate?: number) => {
+  if (trades.length === 0) return null;
+  const rate = cadToUsdRate ?? 1;
+  let totalPnl = 0;
+  let totalNotional = 0;
+  trades.forEach((trade) => {
+    const notional = computeTradeNotional(trade);
+    const pnlUsd = trade.currency === "CAD" ? trade.realizedPnl * rate : trade.realizedPnl;
+    const notionalUsd = trade.currency === "CAD" ? notional * rate : notional;
+    totalPnl += pnlUsd;
+    totalNotional += notionalUsd;
+  });
+  if (!Number.isFinite(totalNotional) || totalNotional <= 0) return null;
+  return Number(((totalPnl / totalNotional) * 100).toFixed(2));
+};
+
 const bestBucket = (buckets: PnlBucket[]) => {
   if (buckets.length === 0) return null;
   return buckets.reduce((best, bucket) => (bucket.pnl > best.pnl ? bucket : best));
@@ -197,6 +227,11 @@ export default function Share() {
   const dailyBuckets: PnlBucket[] = summary?.daily ?? [];
   const fxRate = summary?.cadToUsdRate ?? tradesPayload?.cadToUsdRate;
   const fxDate = summary?.fxDate ?? tradesPayload?.fxDate;
+  const summaryPercent = summary?.pnlPercent;
+  const tradesPercent = useMemo(
+    () => (tradesPayload ? computeTradesPercent(tradesPayload.trades, tradesPayload.cadToUsdRate) : null),
+    [tradesPayload]
+  );
 
   const renderHeader = () => (
     <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
@@ -287,13 +322,24 @@ export default function Share() {
                 <Typography variant="h4" fontWeight={800} color={summary.totalPnl >= 0 ? "success.main" : "error.main"}>
                   {formatCurrency(summary.totalPnl)} USD
                 </Typography>
+                {summaryPercent !== undefined && summaryPercent !== null && (
+                  <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                    {formatPercent(summaryPercent)} return
+                  </Typography>
+                )}
               </Stack>
               <Stack spacing={0.25}>
                 <Typography variant="overline" color="text.secondary">
                   Best day
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
-                  {bestDay ? `${bestDay.period}: ${formatCurrency(bestDay.pnl)} USD` : "No trades"}
+                  {bestDay
+                    ? `${bestDay.period}: ${formatCurrency(bestDay.pnl)} USD${
+                        bestDay.pnlPercent !== undefined && bestDay.pnlPercent !== null
+                          ? ` (${formatPercent(bestDay.pnlPercent)})`
+                          : ""
+                      }`
+                    : "No trades"}
                 </Typography>
               </Stack>
             </Stack>
@@ -326,6 +372,11 @@ export default function Share() {
                         <Typography variant="caption" color="text.secondary">
                           {bucket.trades} trade{bucket.trades === 1 ? "" : "s"}
                         </Typography>
+                        {bucket.pnlPercent !== undefined && bucket.pnlPercent !== null && (
+                          <Typography variant="caption" color="text.secondary">
+                            {formatPercent(bucket.pnlPercent)} return
+                          </Typography>
+                        )}
                         <Typography
                           variant="body2"
                           fontWeight={700}
@@ -363,6 +414,11 @@ export default function Share() {
                 >
                   {formatCurrency(tradesPayload.totalPnl)} USD
                 </Typography>
+                {tradesPercent !== null && tradesPercent !== undefined && (
+                  <Typography variant="body2" color="text.secondary" fontWeight={700}>
+                    {formatPercent(tradesPercent)} return
+                  </Typography>
+                )}
               </Stack>
               <Stack spacing={0.25}>
                 <Typography variant="overline" color="text.secondary">
@@ -410,6 +466,7 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
             <TableCell align="right">Exit</TableCell>
             <TableCell align="right">Fees</TableCell>
             <TableCell align="right">Realized P/L</TableCell>
+            <TableCell align="right">P/L %</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
             <TableCell>Notes</TableCell>
@@ -418,7 +475,7 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
         <TableBody>
           {trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11}>
+              <TableCell colSpan={12}>
                 <Typography color="text.secondary">
                   No trades recorded for this day.
                 </Typography>
@@ -464,6 +521,21 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                   >
                     {formatNumber(trade.realizedPnl, 2)} {trade.currency}
                   </Typography>
+                </TableCell>
+                <TableCell align="right">
+                  {(() => {
+                    const percent = computeTradePercent(trade);
+                    if (percent === null) return "—";
+                    return (
+                      <Typography
+                        component="span"
+                        color={percent >= 0 ? "success.main" : "error.main"}
+                        fontWeight={700}
+                      >
+                        {formatPercent(percent)}
+                      </Typography>
+                    );
+                  })()}
                 </TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
