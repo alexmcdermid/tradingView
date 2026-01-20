@@ -59,10 +59,22 @@ export default function App() {
   );
 }
 
+const THEME_STORAGE_KEY = "tv-theme-mode";
+
+function readStoredThemeMode(): PaletteMode | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return stored === "dark" || stored === "light" ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 function AppProviders() {
   const { user, token, preferences } = useAuth();
   const [mode, setMode] = useState<PaletteMode>(() => {
-    return "light";
+    return readStoredThemeMode() ?? "light";
   });
 
   const mapThemeMode = useCallback((themeMode?: ThemeMode | null): PaletteMode => {
@@ -70,12 +82,24 @@ function AppProviders() {
   }, []);
 
   useEffect(() => {
-    if (!user || !token) {
-      setMode("light");
+    if (user && token && preferences?.themeMode) {
+      setMode(mapThemeMode(preferences.themeMode));
       return;
     }
-    setMode(mapThemeMode(preferences?.themeMode));
+    const stored = readStoredThemeMode();
+    if (stored) {
+      setMode(stored);
+    }
   }, [mapThemeMode, preferences?.themeMode, token, user]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+    } catch {
+      // Ignore storage errors (e.g. disabled storage).
+    }
+  }, [mode]);
 
   const theme = useMemo(
     () =>
