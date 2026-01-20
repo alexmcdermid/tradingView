@@ -89,10 +89,8 @@ const buildShareImage = (options: {
   const pnlText = escapeXml(formatPnl(pnl));
   const safeTitle = escapeXml(title);
   const safeSubtitle = escapeXml(subtitle);
-  const tradesLabel = `${tradeCount} trade${tradeCount === 1 ? "" : "s"}`;
-  const percentLabel =
-    percent === undefined || percent === null ? "" : ` • ${formatPercent(percent)} return`;
-  const footer = escapeXml(`Total P/L - ${tradesLabel}${percentLabel}`);
+  const tradesValue = escapeXml(tradeCount.toLocaleString("en-US"));
+  const returnValue = escapeXml(percent === undefined || percent === null ? "N/A" : formatPercent(percent));
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg width="${WIDTH}" height="${HEIGHT}" viewBox="0 0 ${WIDTH} ${HEIGHT}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${safeTitle}">
@@ -101,26 +99,61 @@ const buildShareImage = (options: {
       <stop offset="0%" stop-color="#0f172a" />
       <stop offset="100%" stop-color="#1e293b" />
     </linearGradient>
+    <radialGradient id="glow-top" cx="85%" cy="0%" r="70%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.28" />
+      <stop offset="60%" stop-color="#0f172a" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glow-bottom" cx="10%" cy="100%" r="60%">
+      <stop offset="0%" stop-color="#22c55e" stop-opacity="0.18" />
+      <stop offset="65%" stop-color="#0f172a" stop-opacity="0" />
+    </radialGradient>
     <linearGradient id="card" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#ffffff" />
       <stop offset="100%" stop-color="#f8fafc" />
     </linearGradient>
+    <linearGradient id="card-header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f1f5f9" />
+      <stop offset="100%" stop-color="#ffffff" />
+    </linearGradient>
+    <filter id="card-shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#0f172a" flood-opacity="0.28" />
+    </filter>
   </defs>
   <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#bg)" />
-  <rect x="60" y="100" width="1080" height="430" rx="32" fill="url(#card)" />
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#glow-top)" />
+  <rect width="${WIDTH}" height="${HEIGHT}" fill="url(#glow-bottom)" />
+  <rect x="60" y="70" width="1080" height="490" rx="36" fill="url(#card)" filter="url(#card-shadow)" />
+  <rect x="60" y="70" width="1080" height="130" rx="36" fill="url(#card-header)" />
 
-  <text x="120" y="175" font-family="${FONT_FAMILY}" font-size="34" font-weight="700" fill="#0f172a">
+  <text x="120" y="155" font-family="${FONT_FAMILY}" font-size="40" font-weight="700" fill="#0f172a">
     ${safeTitle}
   </text>
-  <text x="120" y="220" font-family="${FONT_FAMILY}" font-size="28" fill="#475569">
+  <text x="120" y="202" font-family="${FONT_FAMILY}" font-size="26" fill="#475569">
     ${safeSubtitle}
   </text>
 
-  <text x="120" y="340" font-family="${FONT_FAMILY}" font-size="72" font-weight="800" fill="${accent}">
+  <text x="120" y="320" font-family="${FONT_FAMILY}" font-size="88" font-weight="800" fill="${accent}">
     ${pnlText}
   </text>
-  <text x="120" y="390" font-family="${FONT_FAMILY}" font-size="24" fill="#64748b">
-    ${footer}
+  <text x="120" y="370" font-family="${FONT_FAMILY}" font-size="22" fill="#64748b">
+    Total P/L (USD)
+  </text>
+
+  <rect x="120" y="405" width="408" height="120" rx="24" fill="#f1f5f9" />
+  <rect x="552" y="405" width="408" height="120" rx="24" fill="#f1f5f9" />
+
+  <text x="150" y="445" font-family="${FONT_FAMILY}" font-size="20" fill="#64748b">
+    Trades
+  </text>
+  <text x="150" y="495" font-family="${FONT_FAMILY}" font-size="40" font-weight="700" fill="#0f172a">
+    ${tradesValue}
+  </text>
+
+  <text x="582" y="445" font-family="${FONT_FAMILY}" font-size="20" fill="#64748b">
+    Return
+  </text>
+  <text x="582" y="495" font-family="${FONT_FAMILY}" font-size="40" font-weight="700" fill="#0f172a">
+    ${returnValue}
   </text>
 </svg>`;
 };
