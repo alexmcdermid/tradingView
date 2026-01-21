@@ -250,6 +250,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         width={loginWidth}
         useOneTap
         auto_select
+        itp_support
+        use_fedcm_for_prompt
         cancel_on_tap_outside={false}
       />
     </div>

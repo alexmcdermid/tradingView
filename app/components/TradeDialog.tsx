@@ -15,7 +15,7 @@ import {
   ToggleButtonGroup,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssetType, Currency, OptionType, TradeDirection } from "../api/types";
 
 export interface TradeFormValues {
@@ -77,6 +77,7 @@ export function TradeDialog({
   onClose,
   onSubmit,
 }: TradeDialogProps) {
+  const exitPriceTouched = useRef(false);
   const defaults: TradeFormValues = {
     symbol: "",
     currency: "USD",
@@ -105,6 +106,8 @@ export function TradeDialog({
         ...defaults,
         ...initialValues,
       });
+      exitPriceTouched.current =
+        initialValues?.exitPrice !== undefined && initialValues.exitPrice !== "";
     }
   }, [open, initialValues]);
 
@@ -123,11 +126,23 @@ export function TradeDialog({
       const raw = event.target.value;
       if (raw === "") {
         setValues((prev) => ({ ...prev, [field]: "" }));
+        if (field === "exitPrice") {
+          exitPriceTouched.current = true;
+        }
         return;
       }
       const parsed = Number(raw);
       if (Number.isNaN(parsed)) return;
-      setValues((prev) => ({ ...prev, [field]: parsed }));
+      setValues((prev) => {
+        const next = { ...prev, [field]: parsed };
+        if (field === "entryPrice" && !exitPriceTouched.current) {
+          next.exitPrice = parsed;
+        }
+        return next;
+      });
+      if (field === "exitPrice") {
+        exitPriceTouched.current = true;
+      }
     };
 
   const handleSubmit = () => {
