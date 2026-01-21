@@ -236,15 +236,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [logout]);
 
   const loginButton = mounted ? (
-    <div
-      style={{
-        width: `${loginWidth}px`,
-        minHeight: "44px",
-        display: "flex",
-        alignItems: "center",
-        overflow: "visible",
-      }}
-    >
+    <div style={{ 
+      width: `${loginWidth}px`,
+      height: '44px',
+      borderRadius: '22px',
+      overflow: 'hidden',
+    }}>
       <GoogleLogin
         onSuccess={(response) => handleSuccess(response.credential)}
         onError={() => logout()}
