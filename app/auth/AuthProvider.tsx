@@ -235,12 +235,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [logout]);
 
+  const loginHeight = '44px';
+
   const loginButton = mounted ? (
     <div
       style={{
         width: `${loginWidth}px`,
-        minHeight: "44px",
-        borderRadius: "999px",
+        minHeight: loginHeight,
+        borderRadius: "22px",
         overflow: "hidden",
       }}
     >
@@ -250,6 +252,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         text="signin_with"
         shape="pill"
         width={loginWidth}
+        containerProps={{ style: { height: loginHeight } }}
         useOneTap
         auto_select
         itp_support
