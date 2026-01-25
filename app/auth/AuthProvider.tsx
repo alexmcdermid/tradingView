@@ -236,14 +236,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [logout]);
 
   const loginButton = mounted ? (
-    <div style={{ width: `${loginWidth}px` }}>
+    <div style={{ 
+      width: `${loginWidth}px`,
+      height: '44px',
+      borderRadius: '22px',
+      overflow: 'hidden',
+    }}>
       <GoogleLogin
         onSuccess={(response) => handleSuccess(response.credential)}
         onError={() => logout()}
         text="signin_with"
         shape="pill"
         width={loginWidth}
-        containerProps={{ style: { height: "auto" } }}
         useOneTap
         auto_select
         itp_support
