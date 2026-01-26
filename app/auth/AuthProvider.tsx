@@ -1,8 +1,10 @@
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+import { NeonAuthUIProvider } from "@neondatabase/auth/react/ui";
+import { Button } from "@mui/material";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { clearAuthToken, getAuthToken, setAuthToken } from "./authToken";
 import { fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
+import { getNeonJwtToken, isNeonAuthConfigured, neonAuth, neonSignOut, signInWithGoogle, useNeonSession } from "./neonAuth";
 
 type UserInfo = {
   sub: string;
@@ -24,32 +26,35 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function decodeToken(token: string): UserInfo | null {
-  try {
-    const payload = token.split(".")[1];
-    const decoded = JSON.parse(atob(payload));
-    return {
-      sub: decoded.sub,
-      email: decoded.email,
-      name: decoded.name || decoded.email,
-      exp: typeof decoded.exp === "number" ? decoded.exp : undefined,
-    };
-  } catch {
+type NeonUser = {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+};
+
+function toUserInfo(user?: NeonUser | null): UserInfo | null {
+  if (!user) {
     return null;
   }
+  const authId = user.id || user.email || user.name;
+  if (!authId) {
+    return null;
+  }
+  return {
+    sub: authId,
+    email: user.email ?? undefined,
+    name: user.name ?? user.email ?? undefined,
+  };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
+  const session = useNeonSession();
+  const [token, setToken] = useState<string | null>(() => getAuthToken());
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
-  const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [loginWidth, setLoginWidth] = useState("220");
-  const logoutTimerRef = useRef<number | null>(null);
   const profileRequestId = useRef(0);
-  const tokenSourceRef = useRef<"login" | "storage" | null>(null);
 
   const preferenceStorageKey = useCallback((authId: string) => `user-preferences:${authId}`, []);
 
@@ -85,91 +90,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [preferenceStorageKey]
   );
 
-  const clearLogoutTimer = useCallback(() => {
-    if (logoutTimerRef.current !== null) {
-      window.clearTimeout(logoutTimerRef.current);
-      logoutTimerRef.current = null;
-    }
-  }, []);
-
   const logout = useCallback(() => {
+    void neonSignOut();
     clearAuthToken();
     setToken(null);
     setUser(null);
     setProfile(null);
     setPreferencesState(null);
-    clearLogoutTimer();
-  }, [clearLogoutTimer]);
-
-  const scheduleLogout = useCallback(
-    (exp?: number) => {
-      clearLogoutTimer();
-      if (!exp) return;
-      const expiresAt = exp * 1000;
-      const timeoutMs = expiresAt - Date.now();
-      if (timeoutMs <= 0) {
-        logout();
-        return;
-      }
-      logoutTimerRef.current = window.setTimeout(() => logout(), timeoutMs);
-    },
-    [clearLogoutTimer, logout]
-  );
-
-  useEffect(() => {
-    const stored = getAuthToken();
-    if (stored) {
-      const info = decodeToken(stored);
-      if (info && (!info.exp || Date.now() < info.exp * 1000)) {
-        tokenSourceRef.current = "storage";
-        setToken(stored);
-        setUser(info);
-        scheduleLogout(info.exp);
-      } else {
-        clearAuthToken();
-      }
-    }
-    setInitializing(false);
-    setMounted(true);
-
-    if (typeof window !== "undefined") {
-      const computeWidth = () => {
-        const w = window.innerWidth;
-        if (w < 400) return "180";
-        if (w < 640) return "200";
-        return "220";
-      };
-      setLoginWidth(computeWidth());
-      const handler = () => setLoginWidth(computeWidth());
-      window.addEventListener("resize", handler);
-      return () => window.removeEventListener("resize", handler);
-    }
   }, []);
 
-  const handleSuccess = (credential?: string | undefined) => {
-    if (!credential) return;
-    const info = decodeToken(credential);
-    if (info) {
-      tokenSourceRef.current = "login";
-      setAuthToken(credential);
-      setToken(credential);
-      setUser(info);
-      scheduleLogout(info.exp);
-    }
-  };
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (!token) {
-      clearLogoutTimer();
+    if (session.isPending) {
       return;
     }
-    const info = decodeToken(token);
-    if (info?.exp && Date.now() >= info.exp * 1000) {
-      logout();
+    if (!session.data?.user) {
+      clearAuthToken();
+      setToken(null);
+      setUser(null);
+      setProfile(null);
+      setPreferencesState(null);
       return;
     }
-    scheduleLogout(info?.exp);
-  }, [clearLogoutTimer, logout, scheduleLogout, token]);
+    const nextUser = toUserInfo(session.data.user);
+    setUser(nextUser);
+    let cancelled = false;
+    getNeonJwtToken().then((jwt) => {
+      if (cancelled) {
+        return;
+      }
+      if (jwt) {
+        setAuthToken(jwt);
+        setToken(jwt);
+        return;
+      }
+      clearAuthToken();
+      setToken(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.data?.user, session.isPending]);
 
   useEffect(() => {
     if (!token) {
@@ -179,12 +143,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const authId = user?.sub || user?.email;
-    if (tokenSourceRef.current === "storage" && authId) {
+    if (authId) {
       const cached = loadPreferencesCache(authId);
       if (cached) {
         setPreferencesState(cached);
-        tokenSourceRef.current = null;
-        return;
       }
     }
     const requestId = ++profileRequestId.current;
@@ -209,52 +171,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setProfile(null);
       });
-    tokenSourceRef.current = null;
   }, [loadPreferencesCache, savePreferencesCache, token, user?.email, user?.sub]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const checkExpiry = () => {
-      const stored = getAuthToken();
-      if (!stored) return;
-      const info = decodeToken(stored);
-      if (info?.exp && Date.now() >= info.exp * 1000) {
-        logout();
-      }
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkExpiry();
-      }
-    };
-    window.addEventListener("focus", checkExpiry);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", checkExpiry);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [logout]);
+  const handleGoogleSignIn = useCallback(() => {
+    const redirectTo = typeof window === "undefined" ? undefined : window.location.href;
+    void signInWithGoogle(redirectTo);
+  }, []);
 
-  const loginButton = mounted ? (
-    <div style={{ 
-      width: `${loginWidth}px`,
-      height: '44px',
-      borderRadius: '22px',
-      overflow: 'hidden',
-    }}>
-      <GoogleLogin
-        onSuccess={(response) => handleSuccess(response.credential)}
-        onError={() => logout()}
-        text="signin_with"
-        shape="pill"
-        width={loginWidth}
-        useOneTap
-        auto_select
-        itp_support
-        use_fedcm_for_prompt
-        cancel_on_tap_outside={false}
-      />
-    </div>
+  const loginButton = mounted && isNeonAuthConfigured ? (
+    <Button variant="contained" size="small" onClick={handleGoogleSignIn}>
+      Sign in with Google
+    </Button>
   ) : null;
 
   const setPreferences = useCallback((next: UserPreferences) => {
@@ -288,11 +215,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       preferences,
       setPreferences,
       token,
-      initializing,
+      initializing: session.isPending,
       loginButton,
       logout,
     }),
-    [initializing, loginButton, logout, preferences, profile, setPreferences, token, user]
+    [loginButton, logout, preferences, profile, setPreferences, session.isPending, token, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -307,22 +234,21 @@ export function useAuth() {
 }
 
 export function AuthWrapper({ children }: { children: React.ReactNode }) {
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-  if (!clientId) {
+  if (!isNeonAuthConfigured || !neonAuth) {
     return (
       <div style={{ maxWidth: 520, margin: "2rem auto", padding: "1rem" }}>
-        <p style={{ fontWeight: 600 }}>Google OAuth not configured</p>
+        <p style={{ fontWeight: 600 }}>Neon Auth not configured</p>
         <p>
-          Set <code>VITE_GOOGLE_CLIENT_ID</code> (e.g. in <code>.env.local</code>) to enable
-          sign-in. For local dev, register http://localhost:5173 as an authorized origin in
-          your Google OAuth client.
+          Set <code>VITE_NEON_AUTH_URL</code> (e.g. in <code>.env.local</code>) to enable
+          sign-in.
         </p>
       </div>
     );
   }
+  const redirectTo = typeof window === "undefined" ? undefined : window.location.origin;
   return (
-    <GoogleOAuthProvider clientId={clientId}>
+    <NeonAuthUIProvider authClient={neonAuth} redirectTo={redirectTo}>
       <AuthProvider>{children}</AuthProvider>
-    </GoogleOAuthProvider>
+    </NeonAuthUIProvider>
   );
 }

@@ -9,7 +9,7 @@ export function LoginCard({ loginButton }: LoginCardProps) {
   return (
     <Stack alignItems="center" justifyContent="center" sx={{ py: 8 }}>
       <Card sx={{ maxWidth: 420, width: "100%" }}>
-        <CardHeader title="Sign in" subheader="Use Google to access your trade journal" />
+        <CardHeader title="Sign in" subheader="Use Google (via Neon Auth) to access your trade journal" />
         <CardContent>
           <Stack spacing={2} alignItems="center">
             <Typography variant="body2" color="text.secondary" align="center">
