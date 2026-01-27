@@ -262,10 +262,12 @@ export function MonthlyCalendar({
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
           const isPastNoTrade = pnl == null && cellDate < todayStart;
           const isHoliday = holidaySet.has(date);
+          const hasPnl = pnl != null;
+          const showHolidayLabel = isHoliday && !hasPnl;
           const isSelected = selectedDate === date;
           const color =
-            pnl == null || isHoliday
-              ? isPastNoTrade
+            !hasPnl
+              ? showHolidayLabel || isPastNoTrade
                 ? "text.disabled"
                 : "text.secondary"
               : pnl > 0
@@ -274,10 +276,10 @@ export function MonthlyCalendar({
                   ? "error.main"
                   : "text.primary";
           const backgroundColor = (theme: Theme) => {
-            if (isHoliday) {
+            if (showHolidayLabel) {
               return theme.palette.action.disabledBackground;
             }
-            if (pnl == null) {
+            if (!hasPnl) {
               if (isPastNoTrade) return theme.palette.action.disabledBackground;
               return "transparent";
             }
@@ -286,11 +288,11 @@ export function MonthlyCalendar({
             return alpha(theme.palette.text.primary, 0.06);
           };
 
-          const selectable = onDateSelect && !readOnly && !isHoliday;
+          const selectable = onDateSelect && !readOnly;
           const displayValue =
-            isHoliday
-              ? "Closed"
-              : pnl == null
+            showHolidayLabel
+              ? "Holiday"
+              : !hasPnl
                 ? "—"
                 : valueMode === "percent"
                   ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
@@ -317,7 +319,7 @@ export function MonthlyCalendar({
                 backgroundClip: "padding-box",
                 appearance: "none",
                 outline: "none",
-                opacity: isHoliday ? 0.75 : 1,
+                opacity: showHolidayLabel ? 0.75 : 1,
               }}
             >
               <Typography variant="body2" fontWeight={600} sx={{ fontSize: { xs: "0.85rem", sm: "0.95rem" } }}>
@@ -334,9 +336,11 @@ export function MonthlyCalendar({
             </Box>
           );
 
-          return pnl == null || isHoliday ? (
-            <Box key={date}>{content}</Box>
-          ) : (
+          if (!hasPnl) {
+            return <Box key={date}>{content}</Box>;
+          }
+
+          return (
             <Tooltip
               key={date}
               title={

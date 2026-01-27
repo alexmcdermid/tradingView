@@ -46,4 +46,19 @@ describe("MonthlyCalendar", () => {
     await userEvent.click(screen.getByRole("button", { name: /select 2024-05-02/i }));
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-02");
   });
+
+  it("allows selecting holiday dates", async () => {
+    const onDateSelect = vi.fn();
+    render(
+      <MonthlyCalendar
+        daily={[]}
+        initialMonth="2024-05-01"
+        onDateSelect={onDateSelect}
+      />
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: /select 2024-05-27/i }));
+    expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
+    expect(screen.getByText(/holiday/i)).toBeInTheDocument();
+  });
 });
