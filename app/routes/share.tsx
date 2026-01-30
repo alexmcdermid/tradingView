@@ -345,7 +345,7 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(3)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
                 : "P/L shown in USD. CAD trades converted using the latest rate."}
             </Typography>
           </CardContent>
@@ -431,7 +431,7 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `Total P/L shown in USD. CAD trades converted at ${fxRate.toFixed(3)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                ? `Total P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
                 : "Total P/L shown in USD. CAD trades converted using the latest rate."}
             </Typography>
           </CardContent>
