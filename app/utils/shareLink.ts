@@ -61,42 +61,24 @@ type CompactSummaryToken = {
   s: CompactSummaryTuple;
 };
 
-type CompactTradeTuple =
-  | [
-      string,
-      AssetType,
-      TradeDirection,
-      number,
-      number,
-      number,
-      number,
-      number,
-      Currency,
-      string,
-      string,
-      string?,
-      OptionType?,
-      number?,
-      string?,
-    ]
-  | [
-      string,
-      AssetType,
-      TradeDirection,
-      number,
-      number,
-      number,
-      number,
-      number,
-      Currency,
-      string,
-      string,
-      string?,
-      OptionType?,
-      number?,
-      string?,
-      number,
-    ];
+type CompactTradeTuple = [
+  string,
+  AssetType,
+  TradeDirection,
+  number,
+  number,
+  number,
+  number,
+  number,
+  Currency,
+  string,
+  string,
+  string?,
+  OptionType?,
+  number?,
+  string?,
+  number?,
+];
 
 type CompactTradesToken = {
   d: string;
