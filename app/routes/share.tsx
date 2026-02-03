@@ -25,6 +25,7 @@ import type { PnlBucket } from "../api/types";
 import type { SharedTrade } from "../utils/shareLink";
 import { decodeShareToken, encodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 import { getShareLink } from "../api/shares";
+import { computeMarginFee } from "../utils/tradeMath";
 
 const formatMonthLabel = (value?: string) => {
   if (!value) return "Unknown month";
@@ -464,9 +465,10 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
             <TableCell align="right">Qty</TableCell>
             <TableCell align="right">Entry</TableCell>
             <TableCell align="right">Exit</TableCell>
-            <TableCell align="right">Fees</TableCell>
             <TableCell align="right">Realized P/L</TableCell>
             <TableCell align="right">P/L %</TableCell>
+            <TableCell align="right">Fees</TableCell>
+            <TableCell align="right">Margin Fee</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
             <TableCell>Notes</TableCell>
@@ -475,16 +477,27 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
         <TableBody>
           {trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={12}>
+              <TableCell colSpan={13}>
                 <Typography color="text.secondary">
                   No trades recorded for this day.
                 </Typography>
               </TableCell>
             </TableRow>
           ) : (
-            trades.map((trade, index) => (
-              <TableRow key={`${trade.symbol}-${trade.closedAt}-${index}`} hover>
-                <TableCell sx={{ minWidth: 140, maxWidth: 220, whiteSpace: "normal" }}>
+            trades.map((trade, index) => {
+              const marginFee = computeMarginFee({
+                entryPrice: trade.entryPrice,
+                quantity: trade.quantity,
+                assetType: trade.assetType,
+                marginRate: trade.marginRate ?? 0,
+                openedAt: trade.openedAt,
+                closedAt: trade.closedAt,
+              });
+              const hasMarginRate =
+                trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0;
+              return (
+                <TableRow key={`${trade.symbol}-${trade.closedAt}-${index}`} hover>
+                <TableCell sx={{ minWidth: 120, maxWidth: 180, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>
                     {trade.symbol}
                   </Typography>
@@ -512,7 +525,6 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                 <TableCell align="right">{formatNumber(trade.quantity, 0)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.entryPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.exitPrice, 2)}</TableCell>
-                <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
                 <TableCell align="right" sx={{ minWidth: 140 }}>
                   <Typography
                     component="span"
@@ -537,6 +549,10 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                     );
                   })()}
                 </TableCell>
+                <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
+                <TableCell align="right">
+                  {hasMarginRate ? formatNumber(marginFee, 2) : "—"}
+                </TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
                 <TableCell>
@@ -544,8 +560,9 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                     {trade.notes || "—"}
                   </Typography>
                 </TableCell>
-              </TableRow>
-            ))
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>

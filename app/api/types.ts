@@ -17,6 +17,7 @@ export interface Trade {
   entryPrice: number;
   exitPrice: number;
   fees: number;
+  marginRate?: number | null;
   optionType?: OptionType | null;
   strikePrice?: number | null;
   expiryDate?: string | null;
@@ -38,6 +39,7 @@ export interface TradePayload {
   entryPrice: number;
   exitPrice: number;
   fees?: number;
+  marginRate?: number;
   optionType?: OptionType;
   strikePrice?: number;
   expiryDate?: string;

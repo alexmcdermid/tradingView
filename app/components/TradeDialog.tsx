@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AssetType, Currency, OptionType, TradeDirection } from "../api/types";
+import { computeMarginFee, computeRealizedPnl } from "../utils/tradeMath";
 
 export interface TradeFormValues {
   symbol: string;
@@ -27,6 +28,7 @@ export interface TradeFormValues {
   entryPrice: number | "";
   exitPrice: number | "";
   fees: number | "";
+  marginRate: number | "";
   optionType?: OptionType;
   strikePrice?: number | "";
   expiryDate?: string;
@@ -48,15 +50,16 @@ function today() {
 }
 
 function computePnl(values: TradeFormValues) {
-  const quantity = Number(values.quantity);
-  const entry = Number(values.entryPrice);
-  const exit = Number(values.exitPrice);
+  const quantity = values.quantity === "" ? null : Number(values.quantity);
+  const entry = values.entryPrice === "" ? null : Number(values.entryPrice);
+  const exit = values.exitPrice === "" ? null : Number(values.exitPrice);
   const fees = values.fees === "" || values.fees === undefined ? 0 : Number(values.fees);
+  const marginRate = values.marginRate === "" || values.marginRate === undefined ? 0 : Number(values.marginRate);
 
   if (
-    values.quantity === "" ||
-    values.entryPrice === "" ||
-    values.exitPrice === "" ||
+    quantity === null ||
+    entry === null ||
+    exit === null ||
     Number.isNaN(quantity) ||
     Number.isNaN(entry) ||
     Number.isNaN(exit)
@@ -64,10 +67,17 @@ function computePnl(values: TradeFormValues) {
     return null;
   }
 
-  const directionMultiplier = values.direction === "SHORT" ? -1 : 1;
-  const movement = (exit - entry) * directionMultiplier;
-  const multiplier = values.assetType === "OPTION" ? 100 : 1;
-  return Number((movement * quantity * multiplier - fees).toFixed(2));
+  return computeRealizedPnl({
+    entryPrice: entry,
+    exitPrice: exit,
+    quantity,
+    assetType: values.assetType,
+    direction: values.direction,
+    fees,
+    marginRate,
+    openedAt: values.openedAt,
+    closedAt: values.closedAt,
+  });
 }
 
 export function TradeDialog({
@@ -87,6 +97,7 @@ export function TradeDialog({
     entryPrice: "",
     exitPrice: "",
     fees: "",
+    marginRate: "",
     optionType: "CALL",
     strikePrice: "",
     expiryDate: today(),
@@ -113,6 +124,20 @@ export function TradeDialog({
 
   const isOption = values.assetType === "OPTION";
   const pnlPreview = useMemo(() => computePnl(values), [values]);
+  const marginRateValue =
+    values.marginRate === "" || values.marginRate === undefined ? 0 : Number(values.marginRate);
+  const marginFeePreview = useMemo(
+    () =>
+      computeMarginFee({
+        entryPrice: values.entryPrice === "" ? null : Number(values.entryPrice),
+        quantity: values.quantity === "" ? null : Number(values.quantity),
+        assetType: values.assetType,
+        marginRate: marginRateValue,
+        openedAt: values.openedAt,
+        closedAt: values.closedAt,
+      }),
+    [values, marginRateValue]
+  );
 
   const handleChange =
     (field: keyof TradeFormValues) =>
@@ -159,6 +184,7 @@ export function TradeDialog({
       symbol: values.symbol.trim(),
       strikePrice: values.strikePrice === "" ? undefined : values.strikePrice,
       fees: values.fees === "" ? 0 : values.fees,
+      marginRate: values.marginRate === "" ? 0 : values.marginRate,
       quantity: values.quantity === "" ? 0 : values.quantity,
       entryPrice: values.entryPrice === "" ? 0 : values.entryPrice,
       exitPrice: values.exitPrice === "" ? 0 : values.exitPrice,
@@ -258,6 +284,22 @@ export function TradeDialog({
               inputProps={{ min: 0, step: 0.01 }}
             />
             <TextField
+              label="Margin Rate (%)"
+              type="number"
+              value={values.marginRate}
+              onChange={handleNumericChange("marginRate")}
+              fullWidth
+              inputProps={{ min: 0, step: 0.01 }}
+              helperText={
+                marginRateValue > 0
+                  ? `Est. margin fee: ${marginFeePreview.toFixed(2)} ${values.currency}`
+                  : undefined
+              }
+            />
+          </Stack>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+            <TextField
               label="Opened"
               type="date"
               value={values.openedAt}
@@ -339,6 +381,14 @@ export function TradeDialog({
               {pnlPreview == null ? "—" : pnlPreview.toFixed(2)}
             </Typography>
           </Typography>
+          {marginRateValue > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              Margin fee:{" "}
+              <Typography component="span" fontWeight={700}>
+                {marginFeePreview.toFixed(2)} {values.currency}
+              </Typography>
+            </Typography>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

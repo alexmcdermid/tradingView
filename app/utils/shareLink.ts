@@ -26,6 +26,7 @@ export type SharedTrade = Pick<
   | "entryPrice"
   | "exitPrice"
   | "fees"
+  | "marginRate"
   | "realizedPnl"
   | "openedAt"
   | "closedAt"
@@ -60,23 +61,42 @@ type CompactSummaryToken = {
   s: CompactSummaryTuple;
 };
 
-type CompactTradeTuple = [
-  string,
-  AssetType,
-  TradeDirection,
-  number,
-  number,
-  number,
-  number,
-  number,
-  Currency,
-  string,
-  string,
-  string?,
-  OptionType?,
-  number?,
-  string?,
-];
+type CompactTradeTuple =
+  | [
+      string,
+      AssetType,
+      TradeDirection,
+      number,
+      number,
+      number,
+      number,
+      number,
+      Currency,
+      string,
+      string,
+      string?,
+      OptionType?,
+      number?,
+      string?,
+    ]
+  | [
+      string,
+      AssetType,
+      TradeDirection,
+      number,
+      number,
+      number,
+      number,
+      number,
+      Currency,
+      string,
+      string,
+      string?,
+      OptionType?,
+      number?,
+      string?,
+      number,
+    ];
 
 type CompactTradesToken = {
   d: string;
@@ -270,6 +290,7 @@ const normalizeTradeForShare = (trade: Trade): SharedTrade => ({
   entryPrice: toNumber(trade.entryPrice),
   exitPrice: toNumber(trade.exitPrice),
   fees: toNumber(trade.fees),
+  marginRate: toNumber(trade.marginRate),
   realizedPnl: toNumber(trade.realizedPnl),
   openedAt: toDateOnly(trade.openedAt),
   closedAt: toDateOnly(trade.closedAt),
@@ -279,25 +300,31 @@ const normalizeTradeForShare = (trade: Trade): SharedTrade => ({
   expiryDate: trade.assetType === "OPTION" ? trade.expiryDate ?? undefined : undefined,
 });
 
-const buildTradeTuple = (trade: SharedTrade): CompactTradeTuple => [
-  trade.symbol,
-  trade.assetType,
-  trade.direction,
-  toNumber(trade.quantity),
-  toNumber(trade.entryPrice),
-  toNumber(trade.exitPrice),
-  toNumber(trade.fees),
-  toNumber(trade.realizedPnl),
-  trade.currency,
-  toDateOnly(trade.openedAt),
-  toDateOnly(trade.closedAt),
-  normalizeNotes(trade.notes ?? undefined),
-  trade.assetType === "OPTION" && trade.optionType ? trade.optionType : undefined,
-  trade.assetType === "OPTION" && trade.strikePrice !== undefined && trade.strikePrice !== null
-    ? toNumber(trade.strikePrice)
-    : undefined,
-  trade.assetType === "OPTION" && trade.expiryDate ? trade.expiryDate : undefined,
-];
+const buildTradeTuple = (trade: SharedTrade): CompactTradeTuple => {
+  const tuple: Array<string | number | undefined> = [
+    trade.symbol,
+    trade.assetType,
+    trade.direction,
+    toNumber(trade.quantity),
+    toNumber(trade.entryPrice),
+    toNumber(trade.exitPrice),
+    toNumber(trade.fees),
+    toNumber(trade.realizedPnl),
+    trade.currency,
+    toDateOnly(trade.openedAt),
+    toDateOnly(trade.closedAt),
+    normalizeNotes(trade.notes ?? undefined),
+    trade.assetType === "OPTION" && trade.optionType ? trade.optionType : undefined,
+    trade.assetType === "OPTION" && trade.strikePrice !== undefined && trade.strikePrice !== null
+      ? toNumber(trade.strikePrice)
+      : undefined,
+    trade.assetType === "OPTION" && trade.expiryDate ? trade.expiryDate : undefined,
+  ];
+  if (trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0) {
+    tuple.push(toNumber(trade.marginRate));
+  }
+  return tuple as CompactTradeTuple;
+};
 
 const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
   if (!Array.isArray(tuple) || tuple.length < 11) return null;
@@ -317,6 +344,7 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
     optionTypeRaw,
     strikePriceRaw,
     expiryDateRaw,
+    marginRateRaw,
   ] = tuple;
 
   if (typeof symbol !== "string" || !isAssetType(assetTypeRaw) || !isDirection(directionRaw)) {
@@ -331,6 +359,8 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
     strikePriceRaw === undefined || strikePriceRaw === null ? undefined : toNumber(strikePriceRaw);
   const expiryDate = expiryDateRaw ? String(expiryDateRaw) : undefined;
   const notes = typeof notesRaw === "string" ? normalizeNotes(notesRaw) : undefined;
+  const marginRate =
+    marginRateRaw === undefined || marginRateRaw === null ? undefined : toNumber(marginRateRaw);
 
   return {
     symbol,
@@ -341,6 +371,7 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
     entryPrice: toNumber(entryPriceRaw),
     exitPrice: toNumber(exitPriceRaw),
     fees: toNumber(feesRaw),
+    marginRate,
     realizedPnl: toNumber(realizedPnlRaw),
     openedAt: openedAtRaw,
     closedAt: closedAtRaw,

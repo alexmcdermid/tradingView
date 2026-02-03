@@ -24,6 +24,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { Trade } from "../api/types";
+import { computeMarginFee } from "../utils/tradeMath";
 
 interface TradesTableProps {
   trades: Trade[];
@@ -142,9 +143,10 @@ export function TradesTable({
             <TableCell align="right">Qty</TableCell>
             <TableCell align="right">Entry</TableCell>
             <TableCell align="right">Exit</TableCell>
-            <TableCell align="right">Fees</TableCell>
             <TableCell align="right">Realized P/L</TableCell>
             <TableCell align="right">P/L %</TableCell>
+            <TableCell align="right">Fees</TableCell>
+            <TableCell align="right">Margin Fee</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
             <TableCell>Notes</TableCell>
@@ -155,7 +157,7 @@ export function TradesTable({
           {loading ? (
             Array.from({ length: 5 }).map((_, idx) => (
               <TableRow key={idx}>
-                {Array.from({ length: 13 }).map((__, cellIdx) => (
+                {Array.from({ length: 14 }).map((__, cellIdx) => (
                   <TableCell key={cellIdx}>
                     <Skeleton />
                   </TableCell>
@@ -164,7 +166,7 @@ export function TradesTable({
             ))
           ) : trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13}>
+              <TableCell colSpan={14}>
                 <Typography color="text.secondary">
                   No trades yet. Log a trade to see it here.
                 </Typography>
@@ -173,6 +175,15 @@ export function TradesTable({
           ) : (
             trades.map((trade) => {
               const percent = computeTradePnlPercent(trade);
+              const marginFee = computeMarginFee({
+                entryPrice: trade.entryPrice,
+                quantity: trade.quantity,
+                assetType: trade.assetType,
+                marginRate: trade.marginRate ?? 0,
+                openedAt: trade.openedAt,
+                closedAt: trade.closedAt,
+              });
+              const hasMarginRate = trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0;
               const percentLabel =
                 percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
               return (
@@ -182,7 +193,7 @@ export function TradesTable({
                   onClick={() => onEdit(trade)}
                   sx={{ cursor: "pointer" }}
                 >
-                <TableCell sx={{ minWidth: 140, maxWidth: 220, whiteSpace: "normal" }}>
+                <TableCell sx={{ minWidth: 120, maxWidth: 180, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>
                     {trade.symbol}
                   </Typography>
@@ -209,7 +220,6 @@ export function TradesTable({
                 <TableCell align="right">{formatNumber(trade.quantity, 0)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.entryPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.exitPrice, 2)}</TableCell>
-                <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
                 <TableCell align="right" sx={{ minWidth: 140 }}>
                   <Typography
                     component="span"
@@ -231,6 +241,10 @@ export function TradesTable({
                       {percentLabel}
                     </Typography>
                   )}
+                </TableCell>
+                <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
+                <TableCell align="right">
+                  {hasMarginRate ? formatNumber(marginFee, 2) : "—"}
                 </TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
@@ -274,7 +288,7 @@ export function TradesTable({
         {paginationEnabled && (
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={13} sx={{ p: 0 }}>
+              <TableCell colSpan={14} sx={{ p: 0 }}>
                 <Box
                   sx={{
                     display: "flex",

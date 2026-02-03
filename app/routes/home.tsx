@@ -48,6 +48,7 @@ import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
+import { computeRealizedPnl } from "../utils/tradeMath";
 import {
   buildSharePayload,
   buildTradesSharePayload,
@@ -64,14 +65,17 @@ export function meta({}: Route.MetaArgs) {
 }
 
 const computePnl = (payload: TradePayload) => {
-  const quantity = Number(payload.quantity || 0);
-  const entry = Number(payload.entryPrice || 0);
-  const exit = Number(payload.exitPrice || 0);
-  const fees = Number(payload.fees || 0);
-  const directionMultiplier = payload.direction === "SHORT" ? -1 : 1;
-  const movement = (exit - entry) * directionMultiplier;
-  const multiplier = payload.assetType === "OPTION" ? 100 : 1;
-  return Number((movement * quantity * multiplier - fees).toFixed(2));
+  return computeRealizedPnl({
+    entryPrice: payload.entryPrice,
+    exitPrice: payload.exitPrice,
+    quantity: payload.quantity,
+    assetType: payload.assetType,
+    direction: payload.direction,
+    fees: payload.fees ?? 0,
+    marginRate: payload.marginRate ?? 0,
+    openedAt: payload.openedAt,
+    closedAt: payload.closedAt,
+  }) ?? 0;
 };
 
 const parseEmailList = (value?: string) => {
@@ -190,6 +194,7 @@ type SeedTemplate = {
   entryPrice: number;
   exitPrice: number;
   fees: number;
+  marginRate?: number;
   optionType?: TradePayload["optionType"];
   strikePrice?: TradePayload["strikePrice"];
   expiryOffsetDays?: number;
@@ -398,6 +403,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       entryPrice: template.entryPrice,
       exitPrice: template.exitPrice,
       fees: template.fees ?? 0,
+      marginRate: template.marginRate ?? 0,
       optionType: template.optionType ?? undefined,
       strikePrice: template.strikePrice ?? undefined,
       expiryDate: expiryDate ?? undefined,
@@ -411,6 +417,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       id: `seed-${index + 1}`,
       ...payload,
       fees: payload.fees ?? 0,
+      marginRate: payload.marginRate ?? 0,
       optionType: template.optionType ?? null,
       strikePrice: template.strikePrice ?? null,
       expiryDate,
@@ -803,6 +810,7 @@ export default function Home() {
       entryPrice: Number(values.entryPrice),
       exitPrice: Number(values.exitPrice),
       fees: Number(values.fees || 0),
+      marginRate: values.marginRate === "" ? 0 : Number(values.marginRate),
       optionType: values.assetType === "OPTION" ? values.optionType : undefined,
       strikePrice:
         values.assetType === "OPTION" && values.strikePrice !== undefined
@@ -838,6 +846,7 @@ export default function Home() {
           id: editingTrade?.id || `guest-${Date.now()}`,
           ...payload,
           fees: Number(payload.fees || 0),
+          marginRate: Number(payload.marginRate || 0),
           strikePrice: payload.strikePrice ?? null,
           expiryDate: payload.expiryDate ?? null,
           optionType: payload.optionType ?? null,
@@ -1367,6 +1376,7 @@ export default function Home() {
                 entryPrice: editingTrade.entryPrice,
                 exitPrice: editingTrade.exitPrice,
                 fees: editingTrade.fees,
+                marginRate: editingTrade.marginRate ?? "",
                 optionType: editingTrade.optionType || undefined,
                 strikePrice: editingTrade.strikePrice || undefined,
                 expiryDate: editingTrade.expiryDate || undefined,
