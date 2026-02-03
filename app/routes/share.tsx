@@ -493,8 +493,6 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                 openedAt: trade.openedAt,
                 closedAt: trade.closedAt,
               });
-              const hasMarginRate =
-                trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0;
               return (
                 <TableRow key={`${trade.symbol}-${trade.closedAt}-${index}`} hover>
                 <TableCell sx={{ minWidth: 120, maxWidth: 180, whiteSpace: "normal" }}>
@@ -550,9 +548,7 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                   })()}
                 </TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
-                <TableCell align="right">
-                  {hasMarginRate ? formatNumber(marginFee, 2) : "—"}
-                </TableCell>
+                <TableCell align="right">{formatNumber(marginFee, 2)}</TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
                 <TableCell>

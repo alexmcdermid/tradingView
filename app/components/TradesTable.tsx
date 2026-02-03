@@ -183,7 +183,6 @@ export function TradesTable({
                 openedAt: trade.openedAt,
                 closedAt: trade.closedAt,
               });
-              const hasMarginRate = trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0;
               const percentLabel =
                 percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
               return (
@@ -243,9 +242,7 @@ export function TradesTable({
                   )}
                 </TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
-                <TableCell align="right">
-                  {hasMarginRate ? formatNumber(marginFee, 2) : "—"}
-                </TableCell>
+                <TableCell align="right">{formatNumber(marginFee, 2)}</TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
                 <TableCell>

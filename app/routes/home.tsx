@@ -215,6 +215,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       entryPrice: 182,
       exitPrice: 187,
       fees: 1.5,
+      marginRate: 6.25,
       notes: "Earnings pop",
     },
     {
@@ -258,6 +259,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       entryPrice: 6.2,
       exitPrice: 8.4,
       fees: 1.2,
+      marginRate: 4.5,
       optionType: "CALL",
       strikePrice: 260,
       expiryOffsetDays: 18,
@@ -284,6 +286,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       entryPrice: 120,
       exitPrice: 124,
       fees: 4.95,
+      marginRate: 5.75,
     },
     {
       symbol: "TD",
@@ -370,6 +373,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
       entryPrice: 4.8,
       exitPrice: 6.1,
       fees: 1.5,
+      marginRate: 3.9,
       optionType: "PUT",
       strikePrice: 410,
       expiryOffsetDays: 20,
