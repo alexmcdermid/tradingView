@@ -381,14 +381,6 @@ export function TradeDialog({
               {pnlPreview == null ? "—" : pnlPreview.toFixed(2)}
             </Typography>
           </Typography>
-          {marginRateValue > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              Margin fee:{" "}
-              <Typography component="span" fontWeight={700}>
-                {marginFeePreview.toFixed(2)} {values.currency}
-              </Typography>
-            </Typography>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions>
