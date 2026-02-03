@@ -146,7 +146,7 @@ export function TradesTable({
             <TableCell align="right">Realized P/L</TableCell>
             <TableCell align="right">P/L %</TableCell>
             <TableCell align="right">Fees</TableCell>
-            <TableCell align="right">Margin Fee</TableCell>
+            <TableCell align="right">Margin</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
             <TableCell>Notes</TableCell>
