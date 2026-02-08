@@ -37,6 +37,14 @@ export async function fetchSummary(month?: string) {
   return request<PnlSummary>(`/trades/summary${search}`);
 }
 
-export async function fetchAggregateStats() {
-  return request<AggregateStats>("/trades/stats");
+export async function fetchAggregateStats(year?: number, month?: string) {
+  const params = new URLSearchParams();
+  if (typeof year === "number") {
+    params.append("year", String(year));
+  }
+  if (month) {
+    params.append("month", month);
+  }
+  const search = params.toString();
+  return request<AggregateStats>(`/trades/stats/scoped${search ? `?${search}` : ""}`);
 }

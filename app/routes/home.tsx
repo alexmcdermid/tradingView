@@ -26,6 +26,7 @@ import {
   RadioGroup,
   Snackbar,
   Stack,
+  TextField,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -461,6 +462,10 @@ export default function Home() {
   const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
+  const [statsYearFilter, setStatsYearFilter] = useState<number | null>(null);
+  const [statsMonthFilter, setStatsMonthFilter] = useState<string | null>(null);
+  const [statsYearDraft, setStatsYearDraft] = useState("");
+  const [statsMonthDraft, setStatsMonthDraft] = useState("");
   const authBlockedRef = useRef(false);
   const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
   const { mode, setMode } = useColorMode();
@@ -598,6 +603,53 @@ export default function Home() {
     };
   }, []);
 
+  const pickBestBucket = useCallback((buckets: PnlBucket[]) => {
+    if (buckets.length === 0) {
+      return null;
+    }
+    return buckets.reduce((best, bucket) => (bucket.pnl > best.pnl ? bucket : best));
+  }, []);
+
+  const resolveLatestTradeYear = useCallback((list: Trade[]) => {
+    const fallbackYear = new Date().getUTCFullYear();
+    if (list.length === 0) {
+      return fallbackYear;
+    }
+    const latestYear = list.reduce((best, trade) => {
+      const parsedYear = Number(trade.closedAt.slice(0, 4));
+      if (!Number.isFinite(parsedYear)) {
+        return best;
+      }
+      return Math.max(best, parsedYear);
+    }, 0);
+    return latestYear > 0 ? latestYear : fallbackYear;
+  }, []);
+
+  const buildScopedAggregateStats = useCallback(
+    (list: Trade[], year?: number, month?: string | null, rate?: number, fxDate?: string): AggregateStats => {
+      const scopedYear = year ?? (month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
+      const scoped = computeSummary(list, String(scopedYear), rate, fxDate);
+      const bestMonth = pickBestBucket(scoped.monthly);
+      const scopedMonth = month ?? bestMonth?.period ?? null;
+      const bestDayCandidates = scopedMonth
+        ? scoped.daily.filter((bucket) => bucket.period.startsWith(scopedMonth))
+        : [];
+      const bestDay = pickBestBucket(bestDayCandidates);
+      return {
+        totalPnl: scoped.totalPnl,
+        tradeCount: scoped.tradeCount,
+        bestDay,
+        bestMonth,
+        pnlPercent: scoped.pnlPercent,
+        cadToUsdRate: scoped.cadToUsdRate,
+        fxDate: scoped.fxDate,
+        year: scopedYear,
+        month: scopedMonth,
+      };
+    },
+    [computeSummary, pickBestBucket, resolveLatestTradeYear]
+  );
+
   const loadTrades = useCallback(async (targetPage: number, targetSize: number, date?: string) => {
     if (!user || !token) {
       return;
@@ -642,14 +694,14 @@ export default function Home() {
     }
     try {
       setLoadingStats(true);
-      const stats = await fetchAggregateStats();
+      const stats = await fetchAggregateStats(statsYearFilter ?? undefined, statsMonthFilter ?? undefined);
       setAggregateStats(stats);
     } catch (err) {
       handleRequestError(err);
     } finally {
       setLoadingStats(false);
     }
-  }, [token, user]);
+  }, [statsMonthFilter, statsYearFilter, token, user]);
 
   useEffect(() => {
     if (!user || !token || selectedDate) {
@@ -682,16 +734,9 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(seed, calendarMonth, rate, fxDate));
-      const allSummary = computeSummary(seed, undefined, rate, fxDate);
-      setAggregateStats({
-        totalPnl: allSummary.totalPnl,
-        tradeCount: allSummary.tradeCount,
-        bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-        bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-        pnlPercent: allSummary.pnlPercent,
-        cadToUsdRate: rate,
-        fxDate,
-      });
+      setAggregateStats(
+        buildScopedAggregateStats(seed, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+      );
       guestSeeded.current = true;
       return;
     }
@@ -699,18 +744,21 @@ export default function Home() {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, calendarMonth, rate, fxDate));
-      const allSummary = computeSummary(trades, undefined, rate, fxDate);
-      setAggregateStats({
-        totalPnl: allSummary.totalPnl,
-        tradeCount: allSummary.tradeCount,
-        bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-        bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-        pnlPercent: allSummary.pnlPercent,
-        cadToUsdRate: rate,
-        fxDate,
-      });
+      setAggregateStats(
+        buildScopedAggregateStats(trades, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+      );
     }
-  }, [calendarMonth, computeSummary, trades, token, user, initializing]);
+  }, [
+    buildScopedAggregateStats,
+    calendarMonth,
+    computeSummary,
+    initializing,
+    statsMonthFilter,
+    statsYearFilter,
+    token,
+    trades,
+    user,
+  ]);
 
   useEffect(() => {
     const isAuthed = !!user && !!token;
@@ -754,6 +802,15 @@ export default function Home() {
       themeMode: mode,
       pnlDisplayMode: calendarValueMode,
     });
+    const initialYear =
+      statsYearFilter != null
+        ? String(statsYearFilter)
+        : aggregateStats?.year != null
+          ? String(aggregateStats.year)
+          : "";
+    const initialMonth = statsMonthFilter ?? aggregateStats?.month ?? "";
+    setStatsYearDraft(initialYear);
+    setStatsMonthDraft(initialMonth);
     setPreferencesDialogOpen(true);
     setMenuAnchor(null);
   };
@@ -767,36 +824,70 @@ export default function Home() {
   };
 
   const handleSavePreferences = async () => {
-    if (!preferencesDraft || !user || !token) {
+    if (!preferencesDraft) return;
+
+    const yearText = statsYearDraft.trim();
+    const monthText = statsMonthDraft.trim();
+    let nextYear: number | null = null;
+    if (yearText) {
+      if (!/^\d{4}$/.test(yearText)) {
+        setError("Year must be in YYYY format.");
+        return;
+      }
+      nextYear = Number(yearText);
+    }
+    if (monthText && !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthText)) {
+      setError("Month must be in YYYY-MM format.");
       return;
     }
+    if (nextYear != null && monthText && !monthText.startsWith(`${nextYear}-`)) {
+      setError("Selected month must be within the selected year.");
+      return;
+    }
+
+    const normalizedMonth = monthText || null;
     const { themeMode, pnlDisplayMode } = preferencesDraft;
-    const hasChanges =
-      themeMode !== mode || pnlDisplayMode !== calendarValueMode;
-    if (!hasChanges) {
+    const hasPreferenceChanges = themeMode !== mode || pnlDisplayMode !== calendarValueMode;
+    const hasWidgetChanges =
+      nextYear !== statsYearFilter || normalizedMonth !== statsMonthFilter;
+
+    if (!hasPreferenceChanges && !hasWidgetChanges) {
       setPreferencesDialogOpen(false);
       setPreferencesDraft(null);
       return;
     }
-    setSavingPreferences(true);
-    try {
-      await updateUserPreferences({
-        themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
-        pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
-      });
+
+    if (hasPreferenceChanges && user && token) {
+      setSavingPreferences(true);
+      try {
+        await updateUserPreferences({
+          themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
+          pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
+        });
+      } catch (err) {
+        handleRequestError(err);
+        setSavingPreferences(false);
+        return;
+      } finally {
+        setSavingPreferences(false);
+      }
       setPreferences({
         themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
         pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
       });
+    }
+
+    if (hasPreferenceChanges) {
       setMode(themeMode);
       setCalendarValueMode(pnlDisplayMode);
-      setPreferencesDialogOpen(false);
-      setPreferencesDraft(null);
-    } catch (err) {
-      handleRequestError(err);
-    } finally {
-      setSavingPreferences(false);
     }
+    if (hasWidgetChanges) {
+      setStatsYearFilter(nextYear);
+      setStatsMonthFilter(normalizedMonth);
+    }
+
+    setPreferencesDialogOpen(false);
+    setPreferencesDraft(null);
   };
 
   const handleEditTrade = (trade: Trade) => {
@@ -863,16 +954,9 @@ export default function Home() {
             ? prev.map((t) => (t.id === editingTrade.id ? localTrade : t))
             : [localTrade, ...prev];
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
-          const allSummary = computeSummary(next, undefined, rate, fxDate);
-          setAggregateStats({
-            totalPnl: allSummary.totalPnl,
-            tradeCount: allSummary.tradeCount,
-            bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-            bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-            pnlPercent: allSummary.pnlPercent,
-            cadToUsdRate: rate,
-            fxDate,
-          });
+          setAggregateStats(
+            buildScopedAggregateStats(next, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+          );
           return next;
         });
       }
@@ -915,15 +999,9 @@ export default function Home() {
         setTrades((prev) => {
           const next = prev.filter((t) => t.id !== tradeToDelete.id);
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
-          const allSummary = computeSummary(next, undefined, rate, fxDate);
-          setAggregateStats({
-            totalPnl: allSummary.totalPnl,
-            tradeCount: allSummary.tradeCount,
-            bestDay: allSummary.daily.length > 0 ? allSummary.daily.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-            bestMonth: allSummary.monthly.length > 0 ? allSummary.monthly.reduce((best, b) => b.pnl > best.pnl ? b : best) : null,
-            cadToUsdRate: rate,
-            fxDate,
-          });
+          setAggregateStats(
+            buildScopedAggregateStats(next, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+          );
           return next;
         });
       }
@@ -1105,16 +1183,8 @@ export default function Home() {
     return trades.filter((trade) => trade.closedAt.startsWith(selectedDate));
   }, [selectedDate, trades]);
 
-  const bestBucket = useMemo(() => {
-    if (!summary || summary.daily.length === 0) return null;
-    return summary.daily.reduce((best, bucket) =>
-      bucket.pnl > best.pnl ? bucket : best
-    );
-  }, [summary]);
-
-  const bestMonth = useMemo(() => {
-    return aggregateStats?.bestMonth || null;
-  }, [aggregateStats]);
+  const scopedStatsYear = aggregateStats?.year ?? statsYearFilter ?? new Date().getUTCFullYear();
+  const scopedStatsMonth = aggregateStats?.month ?? statsMonthFilter ?? aggregateStats?.bestMonth?.period ?? null;
 
   const monthlyColor = useMemo(() => {
     if (!summary) return undefined;
@@ -1234,7 +1304,7 @@ export default function Home() {
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 4 }}>
               <StatCard
-                title="Total Realized P/L"
+                title={`Total Realized P/L (${scopedStatsYear})`}
                 value={aggregateStats?.totalPnl}
                 trades={aggregateStats?.tradeCount}
                 percent={aggregateStats?.pnlPercent}
@@ -1243,15 +1313,15 @@ export default function Home() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title="Best Day (month)"
-                bucket={bestBucket}
-                loading={loadingSummary}
+                title={`Best Month (${scopedStatsYear})`}
+                bucket={aggregateStats?.bestMonth || null}
+                loading={loadingStats}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title="Best Month (all time)"
-                bucket={bestMonth}
+                title={`Best Day (${scopedStatsMonth ?? "month"})`}
+                bucket={aggregateStats?.bestDay || null}
                 loading={loadingStats}
               />
             </Grid>
@@ -1402,6 +1472,8 @@ export default function Home() {
         open={preferencesDialogOpen}
         onClose={handleClosePreferencesDialog}
         aria-labelledby="preferences-dialog-title"
+        fullWidth
+        maxWidth="xs"
       >
         <DialogTitle id="preferences-dialog-title">Preferences</DialogTitle>
         <DialogContent>
@@ -1438,6 +1510,21 @@ export default function Home() {
                 <FormControlLabel value="percent" control={<Radio />} label="% Return" />
               </RadioGroup>
             </FormControl>
+            <TextField
+              label="Stats year (optional)"
+              value={statsYearDraft}
+              onChange={(event) => setStatsYearDraft(event.target.value)}
+              placeholder="Auto (most recent trade year)"
+              inputProps={{ inputMode: "numeric", pattern: "[0-9]{4}", maxLength: 4 }}
+            />
+            <TextField
+              label="Stats month for best day (optional)"
+              type="month"
+              value={statsMonthDraft}
+              onChange={(event) => setStatsMonthDraft(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              helperText="Leave empty to use the best month in the selected year."
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1577,13 +1664,11 @@ function BucketCard({
   loading?: boolean;
   icon?: ReactNode;
 }) {
-  const value = bucket?.pnl;
-  const formattedValue = value != null 
-    ? value.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + " USD"
-    : "—";
+  const value = bucket?.pnl ?? 0;
+  const formattedValue = value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + " USD";
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>

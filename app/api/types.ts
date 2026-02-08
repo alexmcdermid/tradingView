@@ -73,6 +73,8 @@ export interface AggregateStats {
   pnlPercent?: number;
   cadToUsdRate?: number;
   fxDate?: string;
+  year?: number | null;
+  month?: string | null;
 }
 
 export interface PagedResult<T> {
