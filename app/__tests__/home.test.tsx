@@ -246,7 +246,7 @@ describe("Home (authenticated)", () => {
     });
   });
 
-  it("does not reload aggregate stats when changing calendar month", async () => {
+  it("reloads aggregate stats when changing calendar month", async () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
@@ -267,6 +267,6 @@ describe("Home (authenticated)", () => {
       expect(mockFetchSummary).toHaveBeenCalledTimes(2);
     });
 
-    expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
+    expect(mockFetchAggregateStats).toHaveBeenCalledTimes(2);
   });
 });

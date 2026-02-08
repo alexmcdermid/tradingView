@@ -162,6 +162,55 @@ const copyTextToClipboard = async (value: string) => {
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
+type StatsScope = {
+  year?: number;
+  month?: string;
+  day?: string;
+  normalized: string;
+};
+
+const isValidIsoDate = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return false;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() + 1 === month &&
+    date.getUTCDate() === day
+  );
+};
+
+const parseStatsScope = (value: string): StatsScope | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { normalized: "" };
+  }
+  if (/^\d{4}$/.test(trimmed)) {
+    return {
+      year: Number(trimmed),
+      normalized: trimmed,
+    };
+  }
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(trimmed)) {
+    return {
+      year: Number(trimmed.slice(0, 4)),
+      month: trimmed,
+      normalized: trimmed,
+    };
+  }
+  if (/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(trimmed) && isValidIsoDate(trimmed)) {
+    return {
+      year: Number(trimmed.slice(0, 4)),
+      month: trimmed.slice(0, 7),
+      day: trimmed,
+      normalized: trimmed,
+    };
+  }
+  return null;
+};
+
 const buildDate = (year: number, monthIndex: number, day: number) =>
   `${year}-${pad2(monthIndex + 1)}-${pad2(day)}`;
 
@@ -462,10 +511,8 @@ export default function Home() {
   const [sharing, setSharing] = useState(false);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
-  const [statsYearFilter, setStatsYearFilter] = useState<number | null>(null);
-  const [statsMonthFilter, setStatsMonthFilter] = useState<string | null>(null);
-  const [statsYearDraft, setStatsYearDraft] = useState("");
-  const [statsMonthDraft, setStatsMonthDraft] = useState("");
+  const [statsScopeFilter, setStatsScopeFilter] = useState<string | null>(null);
+  const [statsScopeDraft, setStatsScopeDraft] = useState("");
   const authBlockedRef = useRef(false);
   const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
   const { mode, setMode } = useColorMode();
@@ -491,6 +538,29 @@ export default function Home() {
     }
     return adminEmailSet.has(user.email.toLowerCase());
   }, [adminEmailSet, user?.email]);
+  const parsedStatsScope = useMemo(() => {
+    if (!statsScopeFilter) {
+      return { year: undefined, month: undefined, day: undefined };
+    }
+    const parsed = parseStatsScope(statsScopeFilter);
+    if (!parsed) {
+      return { year: undefined, month: undefined, day: undefined };
+    }
+    return parsed;
+  }, [statsScopeFilter]);
+  const hasExplicitStatsScope = !!statsScopeFilter?.trim();
+  const effectiveStatsScope = useMemo(() => {
+    if (!hasExplicitStatsScope) {
+      const fallbackYear = Number(calendarMonth.slice(0, 4));
+      const fallbackMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(calendarMonth) ? calendarMonth : undefined;
+      return {
+        year: Number.isFinite(fallbackYear) ? fallbackYear : undefined,
+        month: fallbackMonth,
+        day: undefined,
+      };
+    }
+    return parsedStatsScope;
+  }, [calendarMonth, hasExplicitStatsScope, parsedStatsScope]);
 
   const handleRequestError = (err: unknown) => {
     const message = err instanceof Error ? err.message : "Request failed";
@@ -626,15 +696,24 @@ export default function Home() {
   }, []);
 
   const buildScopedAggregateStats = useCallback(
-    (list: Trade[], year?: number, month?: string | null, rate?: number, fxDate?: string): AggregateStats => {
-      const scopedYear = year ?? (month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
+    (
+      list: Trade[],
+      year?: number,
+      month?: string | null,
+      day?: string | null,
+      rate?: number,
+      fxDate?: string
+    ): AggregateStats => {
+      const scopedYear = year
+        ?? (day ? Number(day.slice(0, 4)) : month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
       const scoped = computeSummary(list, String(scopedYear), rate, fxDate);
       const bestMonth = pickBestBucket(scoped.monthly);
-      const scopedMonth = month ?? bestMonth?.period ?? null;
-      const bestDayCandidates = scopedMonth
-        ? scoped.daily.filter((bucket) => bucket.period.startsWith(scopedMonth))
-        : [];
-      const bestDay = pickBestBucket(bestDayCandidates);
+      const scopedMonth = month ?? (day ? day.slice(0, 7) : bestMonth?.period ?? null);
+      const bestDay = day
+        ? (scoped.daily.find((bucket) => bucket.period === day) ?? null)
+        : pickBestBucket(scopedMonth
+            ? scoped.daily.filter((bucket) => bucket.period.startsWith(scopedMonth))
+            : []);
       return {
         totalPnl: scoped.totalPnl,
         tradeCount: scoped.tradeCount,
@@ -645,6 +724,7 @@ export default function Home() {
         fxDate: scoped.fxDate,
         year: scopedYear,
         month: scopedMonth,
+        day: day ?? null,
       };
     },
     [computeSummary, pickBestBucket, resolveLatestTradeYear]
@@ -694,14 +774,18 @@ export default function Home() {
     }
     try {
       setLoadingStats(true);
-      const stats = await fetchAggregateStats(statsYearFilter ?? undefined, statsMonthFilter ?? undefined);
+      const stats = await fetchAggregateStats(
+        effectiveStatsScope.year,
+        effectiveStatsScope.month,
+        effectiveStatsScope.day
+      );
       setAggregateStats(stats);
     } catch (err) {
       handleRequestError(err);
     } finally {
       setLoadingStats(false);
     }
-  }, [statsMonthFilter, statsYearFilter, token, user]);
+  }, [effectiveStatsScope.day, effectiveStatsScope.month, effectiveStatsScope.year, token, user]);
 
   useEffect(() => {
     if (!user || !token || selectedDate) {
@@ -735,7 +819,14 @@ export default function Home() {
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(seed, calendarMonth, rate, fxDate));
       setAggregateStats(
-        buildScopedAggregateStats(seed, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+        buildScopedAggregateStats(
+          seed,
+          effectiveStatsScope.year,
+          effectiveStatsScope.month,
+          effectiveStatsScope.day,
+          rate,
+          fxDate
+        )
       );
       guestSeeded.current = true;
       return;
@@ -745,7 +836,14 @@ export default function Home() {
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, calendarMonth, rate, fxDate));
       setAggregateStats(
-        buildScopedAggregateStats(trades, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+        buildScopedAggregateStats(
+          trades,
+          effectiveStatsScope.year,
+          effectiveStatsScope.month,
+          effectiveStatsScope.day,
+          rate,
+          fxDate
+        )
       );
     }
   }, [
@@ -753,8 +851,9 @@ export default function Home() {
     calendarMonth,
     computeSummary,
     initializing,
-    statsMonthFilter,
-    statsYearFilter,
+    effectiveStatsScope.day,
+    effectiveStatsScope.month,
+    effectiveStatsScope.year,
     token,
     trades,
     user,
@@ -802,15 +901,7 @@ export default function Home() {
       themeMode: mode,
       pnlDisplayMode: calendarValueMode,
     });
-    const initialYear =
-      statsYearFilter != null
-        ? String(statsYearFilter)
-        : aggregateStats?.year != null
-          ? String(aggregateStats.year)
-          : "";
-    const initialMonth = statsMonthFilter ?? aggregateStats?.month ?? "";
-    setStatsYearDraft(initialYear);
-    setStatsMonthDraft(initialMonth);
+    setStatsScopeDraft(statsScopeFilter ?? "");
     setPreferencesDialogOpen(true);
     setMenuAnchor(null);
   };
@@ -826,30 +917,16 @@ export default function Home() {
   const handleSavePreferences = async () => {
     if (!preferencesDraft) return;
 
-    const yearText = statsYearDraft.trim();
-    const monthText = statsMonthDraft.trim();
-    let nextYear: number | null = null;
-    if (yearText) {
-      if (!/^\d{4}$/.test(yearText)) {
-        setError("Year must be in YYYY format.");
-        return;
-      }
-      nextYear = Number(yearText);
-    }
-    if (monthText && !/^\d{4}-(0[1-9]|1[0-2])$/.test(monthText)) {
-      setError("Month must be in YYYY-MM format.");
-      return;
-    }
-    if (nextYear != null && monthText && !monthText.startsWith(`${nextYear}-`)) {
-      setError("Selected month must be within the selected year.");
+    const parsedScope = parseStatsScope(statsScopeDraft);
+    if (!parsedScope) {
+      setError("Widget scope must be blank or use YYYY, YYYY-MM, or YYYY-MM-DD.");
       return;
     }
 
-    const normalizedMonth = monthText || null;
+    const normalizedScope = parsedScope.normalized || null;
     const { themeMode, pnlDisplayMode } = preferencesDraft;
     const hasPreferenceChanges = themeMode !== mode || pnlDisplayMode !== calendarValueMode;
-    const hasWidgetChanges =
-      nextYear !== statsYearFilter || normalizedMonth !== statsMonthFilter;
+    const hasWidgetChanges = normalizedScope !== statsScopeFilter;
 
     if (!hasPreferenceChanges && !hasWidgetChanges) {
       setPreferencesDialogOpen(false);
@@ -882,8 +959,7 @@ export default function Home() {
       setCalendarValueMode(pnlDisplayMode);
     }
     if (hasWidgetChanges) {
-      setStatsYearFilter(nextYear);
-      setStatsMonthFilter(normalizedMonth);
+      setStatsScopeFilter(normalizedScope);
     }
 
     setPreferencesDialogOpen(false);
@@ -955,7 +1031,14 @@ export default function Home() {
             : [localTrade, ...prev];
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           setAggregateStats(
-            buildScopedAggregateStats(next, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+            buildScopedAggregateStats(
+              next,
+              effectiveStatsScope.year,
+              effectiveStatsScope.month,
+              effectiveStatsScope.day,
+              rate,
+              fxDate
+            )
           );
           return next;
         });
@@ -1000,7 +1083,14 @@ export default function Home() {
           const next = prev.filter((t) => t.id !== tradeToDelete.id);
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           setAggregateStats(
-            buildScopedAggregateStats(next, statsYearFilter ?? undefined, statsMonthFilter, rate, fxDate)
+            buildScopedAggregateStats(
+              next,
+              effectiveStatsScope.year,
+              effectiveStatsScope.month,
+              effectiveStatsScope.day,
+              rate,
+              fxDate
+            )
           );
           return next;
         });
@@ -1183,8 +1273,9 @@ export default function Home() {
     return trades.filter((trade) => trade.closedAt.startsWith(selectedDate));
   }, [selectedDate, trades]);
 
-  const scopedStatsYear = aggregateStats?.year ?? statsYearFilter ?? new Date().getUTCFullYear();
-  const scopedStatsMonth = aggregateStats?.month ?? statsMonthFilter ?? aggregateStats?.bestMonth?.period ?? null;
+  const scopedStatsYear = aggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
+  const scopedStatsMonth = aggregateStats?.month ?? effectiveStatsScope.month ?? aggregateStats?.bestMonth?.period ?? null;
+  const scopedStatsDay = aggregateStats?.day ?? effectiveStatsScope.day ?? null;
 
   const monthlyColor = useMemo(() => {
     if (!summary) return undefined;
@@ -1320,7 +1411,7 @@ export default function Home() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <BucketCard
-                title={`Best Day (${scopedStatsMonth ?? "month"})`}
+                title={scopedStatsDay ? `Day (${scopedStatsDay})` : `Best Day (${scopedStatsMonth ?? "month"})`}
                 bucket={aggregateStats?.bestDay || null}
                 loading={loadingStats}
               />
@@ -1473,7 +1564,7 @@ export default function Home() {
         onClose={handleClosePreferencesDialog}
         aria-labelledby="preferences-dialog-title"
         fullWidth
-        maxWidth="xs"
+        maxWidth="sm"
       >
         <DialogTitle id="preferences-dialog-title">Preferences</DialogTitle>
         <DialogContent>
@@ -1511,19 +1602,11 @@ export default function Home() {
               </RadioGroup>
             </FormControl>
             <TextField
-              label="Stats year (optional)"
-              value={statsYearDraft}
-              onChange={(event) => setStatsYearDraft(event.target.value)}
+              label="Widget scope (optional)"
+              value={statsScopeDraft}
+              onChange={(event) => setStatsScopeDraft(event.target.value)}
               placeholder="Auto (most recent trade year)"
-              inputProps={{ inputMode: "numeric", pattern: "[0-9]{4}", maxLength: 4 }}
-            />
-            <TextField
-              label="Stats month for best day (optional)"
-              type="month"
-              value={statsMonthDraft}
-              onChange={(event) => setStatsMonthDraft(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-              helperText="Leave empty to use the best month in the selected year."
+              helperText="Leave blank for auto. Accepted: YYYY, YYYY-MM, or YYYY-MM-DD."
             />
           </Stack>
         </DialogContent>
@@ -1690,7 +1773,7 @@ function BucketCard({
             ? "Loading…"
             : bucket
               ? `${bucket.period} • ${bucket.trades} trade${bucket.trades === 1 ? "" : "s"}`
-              : "No data yet"}
+              : "0 trades"}
         </Typography>
       </CardContent>
     </Card>

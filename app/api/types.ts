@@ -75,6 +75,7 @@ export interface AggregateStats {
   fxDate?: string;
   year?: number | null;
   month?: string | null;
+  day?: string | null;
 }
 
 export interface PagedResult<T> {
