@@ -14,7 +14,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
-    "@react-oauth/google": "^0.12.2",
+    "@neondatabase/auth": "^0.1.0-beta.21",
     "@react-router/node": "^7.10.1",
     "@react-router/serve": "^7.10.1",
     "@resvg/resvg-js": "^2.6.0",

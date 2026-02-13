@@ -51,7 +51,7 @@ Create a `.env.local` file for local development:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8080/api/v1
-VITE_GOOGLE_CLIENT_ID=your-google-client-id
+VITE_NEON_AUTH_URL=https://<your-neon-auth-domain>/neondb/auth
 VITE_USE_HEADER_AUTH=true
 VITE_USER_ID=local-user
 VITE_ADMIN_EMAILS=admin@example.com
@@ -62,13 +62,15 @@ VITE_APP_ENV=local
 
 **Required:**
 - `VITE_API_BASE_URL` — Backend API base URL (e.g. `https://dev-api.tradelog.ca/api/v1`)
-- `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID for authentication
+- `VITE_NEON_AUTH_URL` — Neon Auth base URL (ends with `/neondb/auth`)
 
 **Optional:**
 - `VITE_ADMIN_EMAILS` — Comma-separated list of admin email addresses
 - `VITE_USE_HEADER_AUTH` — Enable header-based auth for development (set to `false` in production)
 - `VITE_USER_ID` — Default user ID for header-based auth (dev only)
 - `VITE_APP_ENV` — Environment label shown in share links (e.g. "dev", "prod")
+
+Neon Auth should have Google as the only enabled provider for now (email/password disabled).
 
 ## Project Structure
 
@@ -81,7 +83,8 @@ app/
 │   └── types.ts      # TypeScript interfaces
 ├── auth/             # Authentication logic
 │   ├── AuthProvider.tsx
-│   └── authToken.ts
+│   ├── authToken.ts
+│   └── neonAuth.ts
 ├── components/       # Reusable components
 │   ├── LoginCard.tsx
 │   ├── MonthlyCalendar.tsx
@@ -134,7 +137,7 @@ This repo auto-deploys to **dev** on pushes to `main` (after CI tests pass). Pro
 The Dockerfile accepts build arguments for runtime config:
 ```dockerfile
 ARG VITE_API_BASE_URL
-ARG VITE_GOOGLE_CLIENT_ID
+ARG VITE_NEON_AUTH_URL
 ARG VITE_ADMIN_EMAILS
 ARG VITE_USE_HEADER_AUTH=false
 ARG VITE_APP_ENV
@@ -147,7 +150,7 @@ ARG VITE_APP_ENV
 - `DEV_ECR_TRADINGVIEW_REPO`
 - `DEV_FRONTEND_SERVICE_ARN`
 - `DEV_API_BASE_URL`
-- `DEV_GOOGLE_CLIENT_ID`
+- `DEV_NEON_AUTH_URL`
 - `DEV_ADMIN_EMAILS` (optional)
 
 ### GitHub Secrets (Prod)
@@ -157,7 +160,7 @@ ARG VITE_APP_ENV
 - `PROD_ECR_TRADINGVIEW_REPO`
 - `PROD_FRONTEND_SERVICE_ARN`
 - `PROD_API_BASE_URL`
-- `PROD_GOOGLE_CLIENT_ID`
+- `PROD_NEON_AUTH_URL`
 - `PROD_ADMIN_EMAILS` (optional)
 
 ## CI/CD Pipeline
