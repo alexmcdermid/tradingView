@@ -178,14 +178,12 @@ const normalizeAccount = (account: TradingAccount): TradingAccount => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   };
-  const legacyFee = toFiniteNumber(account.defaultFees, 0);
-  const legacyMargin = toFiniteNumber(account.defaultMarginRate, 0);
   return {
     ...account,
-    defaultStockFees: toFiniteNumber(account.defaultStockFees, legacyFee),
-    defaultOptionFees: toFiniteNumber(account.defaultOptionFees, legacyFee),
-    defaultMarginRateUsd: toFiniteNumber(account.defaultMarginRateUsd, legacyMargin),
-    defaultMarginRateCad: toFiniteNumber(account.defaultMarginRateCad, legacyMargin),
+    defaultStockFees: toFiniteNumber(account.defaultStockFees, 0),
+    defaultOptionFees: toFiniteNumber(account.defaultOptionFees, 0),
+    defaultMarginRateUsd: toFiniteNumber(account.defaultMarginRateUsd, 0),
+    defaultMarginRateCad: toFiniteNumber(account.defaultMarginRateCad, 0),
   };
 };
 
@@ -1988,10 +1986,10 @@ export default function Home() {
             ) : (
               <Stack spacing={1}>
                 {accounts.map((account) => {
-                  const stockFeeRaw = Number(account.defaultStockFees ?? account.defaultFees ?? 0);
-                  const optionFeeRaw = Number(account.defaultOptionFees ?? account.defaultFees ?? 0);
-                  const marginUsdRaw = Number(account.defaultMarginRateUsd ?? account.defaultMarginRate ?? 0);
-                  const marginCadRaw = Number(account.defaultMarginRateCad ?? account.defaultMarginRate ?? 0);
+                  const stockFeeRaw = Number(account.defaultStockFees);
+                  const optionFeeRaw = Number(account.defaultOptionFees);
+                  const marginUsdRaw = Number(account.defaultMarginRateUsd);
+                  const marginCadRaw = Number(account.defaultMarginRateCad);
                   const stockFee = Number.isFinite(stockFeeRaw) ? stockFeeRaw : 0;
                   const optionFee = Number.isFinite(optionFeeRaw) ? optionFeeRaw : 0;
                   const marginUsd = Number.isFinite(marginUsdRaw) ? marginUsdRaw : 0;

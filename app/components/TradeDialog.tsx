@@ -58,16 +58,18 @@ function today() {
 }
 
 function accountFeeForAsset(account: TradingAccount, assetType: AssetType) {
-  const legacyFee = Number(account.defaultFees ?? 0);
-  const stockFee = Number(account.defaultStockFees ?? legacyFee);
-  const optionFee = Number(account.defaultOptionFees ?? legacyFee);
+  const stockFeeRaw = Number(account.defaultStockFees);
+  const optionFeeRaw = Number(account.defaultOptionFees);
+  const stockFee = Number.isFinite(stockFeeRaw) ? stockFeeRaw : 0;
+  const optionFee = Number.isFinite(optionFeeRaw) ? optionFeeRaw : 0;
   return assetType === "OPTION" ? optionFee : stockFee;
 }
 
 function accountMarginForCurrency(account: TradingAccount, currency: Currency) {
-  const legacyMargin = Number(account.defaultMarginRate ?? 0);
-  const usdMargin = Number(account.defaultMarginRateUsd ?? legacyMargin);
-  const cadMargin = Number(account.defaultMarginRateCad ?? legacyMargin);
+  const usdMarginRaw = Number(account.defaultMarginRateUsd);
+  const cadMarginRaw = Number(account.defaultMarginRateCad);
+  const usdMargin = Number.isFinite(usdMarginRaw) ? usdMarginRaw : 0;
+  const cadMargin = Number.isFinite(cadMarginRaw) ? cadMarginRaw : 0;
   return currency === "CAD" ? cadMargin : usdMargin;
 }
 
