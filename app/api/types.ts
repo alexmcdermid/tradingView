@@ -118,9 +118,6 @@ export interface UserProfile {
 export interface TradingAccount {
   id: string;
   name: string;
-  // Backward compatibility for older API payloads.
-  defaultFees?: number;
-  defaultMarginRate?: number;
   defaultStockFees: number;
   defaultOptionFees: number;
   defaultMarginRateUsd: number;
