@@ -1,5 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
-import CandlestickChartOutlinedIcon from "@mui/icons-material/CandlestickChartOutlined";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ShareIcon from "@mui/icons-material/Share";
 import {
   Alert,
@@ -42,8 +43,21 @@ import {
   fetchTrades,
   updateTrade,
 } from "../api/trades";
-import type { AggregateStats, PnlBucket, PnlSummary, Trade, TradePayload } from "../api/types";
-import { updateUserPreferences } from "../api/users";
+import type {
+  AggregateStats,
+  PnlBucket,
+  PnlSummary,
+  ShareLinkResponse,
+  Trade,
+  TradePayload,
+  TradingAccount,
+} from "../api/types";
+import {
+  createUserAccount,
+  deleteUserAccount,
+  listUserAccounts,
+  updateUserPreferences,
+} from "../api/users";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
 import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
@@ -53,9 +67,8 @@ import { computeRealizedPnl } from "../utils/tradeMath";
 import {
   buildSharePayload,
   buildTradesSharePayload,
-  encodeShareToken,
 } from "../utils/shareLink";
-import { createShareLink } from "../api/shares";
+import { createShareLink, deleteShareLink, listUserShareLinks } from "../api/shares";
 import { useColorMode } from "../theme/colorMode";
 
 export function meta({}: Route.MetaArgs) {
@@ -159,6 +172,39 @@ const copyTextToClipboard = async (value: string) => {
   
   return success;
 };
+
+const normalizeAccount = (account: TradingAccount): TradingAccount => {
+  const toFiniteNumber = (value: unknown, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const legacyFee = toFiniteNumber(account.defaultFees, 0);
+  const legacyMargin = toFiniteNumber(account.defaultMarginRate, 0);
+  return {
+    ...account,
+    defaultStockFees: toFiniteNumber(account.defaultStockFees, legacyFee),
+    defaultOptionFees: toFiniteNumber(account.defaultOptionFees, legacyFee),
+    defaultMarginRateUsd: toFiniteNumber(account.defaultMarginRateUsd, legacyMargin),
+    defaultMarginRateCad: toFiniteNumber(account.defaultMarginRateCad, legacyMargin),
+  };
+};
+
+const blurActiveElement = () => {
+  if (typeof document === "undefined") return;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement) {
+    active.blur();
+  }
+};
+
+const formatShareTimestamp = (value: string) =>
+  new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
@@ -509,6 +555,22 @@ export default function Home() {
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [shareWarning, setShareWarning] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
+  const [shareManagerOpen, setShareManagerOpen] = useState(false);
+  const [shareLinks, setShareLinks] = useState<ShareLinkResponse[]>([]);
+  const [loadingShareLinks, setLoadingShareLinks] = useState(false);
+  const [deletingShareCode, setDeletingShareCode] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [accountsDialogOpen, setAccountsDialogOpen] = useState(false);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [savingAccount, setSavingAccount] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
+  const [accountDraft, setAccountDraft] = useState({
+    name: "",
+    defaultStockFees: "0",
+    defaultOptionFees: "0",
+    defaultMarginRateUsd: "0",
+    defaultMarginRateCad: "0",
+  });
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
   const [statsScopeFilter, setStatsScopeFilter] = useState<string | null>(null);
@@ -868,6 +930,7 @@ export default function Home() {
       setSelectedDate(null);
       setPage(0);
       setPageMeta({ totalPages: 0, hasNext: false, hasPrevious: false, totalElements: 0 });
+      setAccounts([]);
       guestSeeded.current = false;
     } else if (wasAuthenticated.current && !isAuthed) {
       setTrades([]);
@@ -879,6 +942,7 @@ export default function Home() {
       setAggregateStats(null);
       setLoadingTrades(false);
       setLoadingSummary(false);
+      setAccounts([]);
       guestSeeded.current = false;
     }
     wasAuthenticated.current = isAuthed;
@@ -891,12 +955,162 @@ export default function Home() {
     }
   }, [user]);
 
+  const loadShareLinks = async () => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      setLoadingShareLinks(true);
+      const links = await listUserShareLinks();
+      setShareLinks(links);
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setLoadingShareLinks(false);
+    }
+  };
+
+  const loadAccounts = async () => {
+    if (!user || !token) {
+      return;
+    }
+    try {
+      setLoadingAccounts(true);
+      const nextAccounts = await listUserAccounts();
+      setAccounts(nextAccounts.map(normalizeAccount));
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user || !token) {
+      return;
+    }
+    void loadAccounts();
+  }, [token, user]);
+
+  const handleOpenShareManager = () => {
+    if (!user || !token) {
+      setShareWarning("Sign in to manage share links.");
+      return;
+    }
+    setMenuAnchor(null);
+    blurActiveElement();
+    setShareManagerOpen(true);
+    void loadShareLinks();
+  };
+
+  const handleCopyManagedShareLink = async (code: string) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const urlString = new URL(`/share/${code}`, window.location.origin).toString();
+    const copied = await copyTextToClipboard(urlString);
+    if (!copied) {
+      prompt("Copy this share link:", urlString);
+      setShareMessage("Share link copied to dialog.");
+      return;
+    }
+    setShareMessage("Share link copied.");
+  };
+
+  const handleDeleteManagedShareLink = async (code: string) => {
+    try {
+      setDeletingShareCode(code);
+      await deleteShareLink(code);
+      setShareLinks((prev) => prev.filter((link) => link.code !== code));
+      setShareMessage("Share link deleted.");
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setDeletingShareCode(null);
+    }
+  };
+
+  const handleOpenAccountsDialog = () => {
+    if (!user || !token) {
+      setShareWarning("Sign in to manage accounts.");
+      return;
+    }
+    blurActiveElement();
+    setAccountsDialogOpen(true);
+    void loadAccounts();
+    setMenuAnchor(null);
+  };
+
+  const handleCreateAccount = async () => {
+    if (!accountDraft.name.trim()) {
+      setError("Account name is required.");
+      return;
+    }
+    const stockFees = Number(accountDraft.defaultStockFees);
+    const optionFees = Number(accountDraft.defaultOptionFees);
+    const marginUsd = Number(accountDraft.defaultMarginRateUsd);
+    const marginCad = Number(accountDraft.defaultMarginRateCad);
+    if (
+      !Number.isFinite(stockFees) ||
+      !Number.isFinite(optionFees) ||
+      !Number.isFinite(marginUsd) ||
+      !Number.isFinite(marginCad) ||
+      stockFees < 0 ||
+      optionFees < 0 ||
+      marginUsd < 0 ||
+      marginCad < 0
+    ) {
+      setError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
+      return;
+    }
+    try {
+      setSavingAccount(true);
+      const created = await createUserAccount({
+        name: accountDraft.name.trim(),
+        defaultStockFees: Number(stockFees.toFixed(2)),
+        defaultOptionFees: Number(optionFees.toFixed(2)),
+        defaultMarginRateUsd: Number(marginUsd.toFixed(4)),
+        defaultMarginRateCad: Number(marginCad.toFixed(4)),
+      });
+      const normalizedCreated = normalizeAccount(created);
+      setAccounts((prev) => [
+        normalizedCreated,
+        ...prev.filter((account) => account.id !== normalizedCreated.id),
+      ]);
+      setAccountDraft({
+        name: "",
+        defaultStockFees: "0",
+        defaultOptionFees: "0",
+        defaultMarginRateUsd: "0",
+        defaultMarginRateCad: "0",
+      });
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setSavingAccount(false);
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    try {
+      setDeletingAccountId(accountId);
+      await deleteUserAccount(accountId);
+      setAccounts((prev) => prev.filter((account) => account.id !== accountId));
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setDeletingAccountId(null);
+    }
+  };
+
   const handleOpenNewTrade = () => {
+    blurActiveElement();
     setEditingTrade(null);
     setTradeDialogOpen(true);
   };
 
   const handleOpenPreferencesDialog = () => {
+    blurActiveElement();
     setPreferencesDraft({
       themeMode: mode,
       pnlDisplayMode: calendarValueMode,
@@ -925,7 +1139,9 @@ export default function Home() {
 
     const normalizedScope = parsedScope.normalized || null;
     const { themeMode, pnlDisplayMode } = preferencesDraft;
-    const hasPreferenceChanges = themeMode !== mode || pnlDisplayMode !== calendarValueMode;
+    const hasPreferenceChanges =
+      themeMode !== mode ||
+      pnlDisplayMode !== calendarValueMode;
     const hasWidgetChanges = normalizedScope !== statsScopeFilter;
 
     if (!hasPreferenceChanges && !hasWidgetChanges) {
@@ -967,6 +1183,7 @@ export default function Home() {
   };
 
   const handleEditTrade = (trade: Trade) => {
+    blurActiveElement();
     setEditingTrade(trade);
     setTradeDialogOpen(true);
   };
@@ -982,6 +1199,7 @@ export default function Home() {
       exitPrice: Number(values.exitPrice),
       fees: Number(values.fees || 0),
       marginRate: values.marginRate === "" ? 0 : Number(values.marginRate),
+      accountId: values.accountId || undefined,
       optionType: values.assetType === "OPTION" ? values.optionType : undefined,
       strikePrice:
         values.assetType === "OPTION" && values.strikePrice !== undefined
@@ -1018,6 +1236,7 @@ export default function Home() {
           ...payload,
           fees: Number(payload.fees || 0),
           marginRate: Number(payload.marginRate || 0),
+          accountId: payload.accountId ?? null,
           strikePrice: payload.strikePrice ?? null,
           expiryDate: payload.expiryDate ?? null,
           optionType: payload.optionType ?? null,
@@ -1053,6 +1272,7 @@ export default function Home() {
   };
 
   const handleDeleteTrade = (trade: Trade) => {
+    blurActiveElement();
     setTradeToDelete(trade);
     setDeleteDialogOpen(true);
   };
@@ -1126,6 +1346,7 @@ export default function Home() {
         requiresAuth: false,
         expiryDays: 30,
       });
+      setShareLinks((prev) => [shareLink, ...prev.filter((link) => link.code !== shareLink.code)]);
       
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const urlString = shareUrl.toString();
@@ -1183,6 +1404,7 @@ export default function Home() {
         origin: window.location.origin,
         cadToUsdRate: summary?.cadToUsdRate,
         fxDate: summary?.fxDate,
+        accountNamesById,
       });
       
       const shareLink = await createShareLink({
@@ -1191,6 +1413,7 @@ export default function Home() {
         requiresAuth: false,
         expiryDays: 7,
       });
+      setShareLinks((prev) => [shareLink, ...prev.filter((link) => link.code !== shareLink.code)]);
       
       const shareUrl = new URL(`/share/${shareLink.code}`, window.location.origin);
       const urlString = shareUrl.toString();
@@ -1272,6 +1495,10 @@ export default function Home() {
     if (!selectedDate) return trades;
     return trades.filter((trade) => trade.closedAt.startsWith(selectedDate));
   }, [selectedDate, trades]);
+  const accountNamesById = useMemo(
+    () => Object.fromEntries(accounts.map((account) => [account.id, account.name])),
+    [accounts]
+  );
 
   const scopedStatsYear = aggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
   const scopedStatsMonth = aggregateStats?.month ?? effectiveStatsScope.month ?? aggregateStats?.bestMonth?.period ?? null;
@@ -1361,6 +1588,12 @@ export default function Home() {
                   )}
                   <MenuItem onClick={handleOpenPreferencesDialog}>
                     Preferences
+                  </MenuItem>
+                  <MenuItem onClick={handleOpenAccountsDialog}>
+                    Manage Accounts
+                  </MenuItem>
+                  <MenuItem onClick={handleOpenShareManager}>
+                    Manage Share Links
                   </MenuItem>
                   {/* <MenuItem onClick={() => setMenuAnchor(null)}>Settings (coming soon)</MenuItem> */}
                   <MenuItem
@@ -1490,6 +1723,7 @@ export default function Home() {
           <Box>
             <TradesTable
               trades={filteredTrades}
+              accountNamesById={accountNamesById}
               loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
@@ -1548,9 +1782,11 @@ export default function Home() {
                 openedAt: editingTrade.openedAt,
                 closedAt: editingTrade.closedAt,
                 notes: editingTrade.notes || undefined,
+                accountId: editingTrade.accountId || undefined,
               }
             : undefined
         }
+        accounts={accounts}
         submitting={savingTrade}
         onClose={() => {
           setTradeDialogOpen(false);
@@ -1560,11 +1796,261 @@ export default function Home() {
       />
 
       <Dialog
+        open={shareManagerOpen}
+        onClose={() => setShareManagerOpen(false)}
+        aria-labelledby="share-manager-dialog-title"
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle id="share-manager-dialog-title">Manage Share Links</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={1.5}>
+            {loadingShareLinks ? (
+              <Typography variant="body2" color="text.secondary">
+                Loading share links...
+              </Typography>
+            ) : shareLinks.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No share links yet. Create one from Share Month or Share Day.
+              </Typography>
+            ) : (
+              shareLinks.map((link) => {
+                const expired = new Date(link.expiresAt).getTime() < Date.now();
+                return (
+                  <Box
+                    key={link.code}
+                    sx={{
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      p: 1.5,
+                    }}
+                  >
+                    <Stack spacing={1}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        spacing={1}
+                      >
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                          <Chip label={link.shareType} size="small" />
+                          <Chip
+                            label={expired ? "Expired" : "Active"}
+                            size="small"
+                            color={expired ? "default" : "success"}
+                            variant={expired ? "outlined" : "filled"}
+                          />
+                          <Chip
+                            label={link.requiresAuth ? "Auth required" : "Public"}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Stack>
+                        <Typography variant="body2" fontFamily="monospace">
+                          {link.code}
+                        </Typography>
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">
+                        Created: {formatShareTimestamp(link.createdAt)} | Expires: {formatShareTimestamp(link.expiresAt)} | Views: {link.accessCount}
+                      </Typography>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<ContentCopyIcon />}
+                          onClick={() => void handleCopyManagedShareLink(link.code)}
+                        >
+                          Copy Link
+                        </Button>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          startIcon={<DeleteOutlineIcon />}
+                          disabled={deletingShareCode === link.code}
+                          onClick={() => void handleDeleteManagedShareLink(link.code)}
+                        >
+                          {deletingShareCode === link.code ? "Deleting..." : "Delete"}
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                );
+              })
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShareManagerOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={accountsDialogOpen}
+        onClose={() => {
+          if (!savingAccount && !deletingAccountId) {
+            setAccountsDialogOpen(false);
+          }
+        }}
+        aria-labelledby="accounts-dialog-title"
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle id="accounts-dialog-title">Accounts</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={2}>
+            <Stack spacing={1.5}>
+              <TextField
+                label="Brokerage Name"
+                value={accountDraft.name}
+                onChange={(event) =>
+                  setAccountDraft((prev) => ({
+                    ...prev,
+                    name: event.target.value,
+                  }))
+                }
+                fullWidth
+              />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField
+                  label="Stock Fee"
+                  type="number"
+                  value={accountDraft.defaultStockFees}
+                  onChange={(event) =>
+                    setAccountDraft((prev) => ({
+                      ...prev,
+                      defaultStockFees: event.target.value,
+                    }))
+                  }
+                  inputProps={{ min: 0, step: 0.01 }}
+                  fullWidth
+                />
+                <TextField
+                  label="Option Fee"
+                  type="number"
+                  value={accountDraft.defaultOptionFees}
+                  onChange={(event) =>
+                    setAccountDraft((prev) => ({
+                      ...prev,
+                      defaultOptionFees: event.target.value,
+                    }))
+                  }
+                  inputProps={{ min: 0, step: 0.01 }}
+                  fullWidth
+                />
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField
+                  label="Margin USD %"
+                  type="number"
+                  value={accountDraft.defaultMarginRateUsd}
+                  onChange={(event) =>
+                    setAccountDraft((prev) => ({
+                      ...prev,
+                      defaultMarginRateUsd: event.target.value,
+                    }))
+                  }
+                  inputProps={{ min: 0, step: 0.01 }}
+                  fullWidth
+                />
+                <TextField
+                  label="Margin CAD %"
+                  type="number"
+                  value={accountDraft.defaultMarginRateCad}
+                  onChange={(event) =>
+                    setAccountDraft((prev) => ({
+                      ...prev,
+                      defaultMarginRateCad: event.target.value,
+                    }))
+                  }
+                  inputProps={{ min: 0, step: 0.01 }}
+                  fullWidth
+                />
+              </Stack>
+            </Stack>
+            <Button
+              variant="outlined"
+              onClick={handleCreateAccount}
+              disabled={savingAccount}
+            >
+              {savingAccount ? "Adding..." : "Add Account"}
+            </Button>
+
+            {loadingAccounts ? (
+              <Typography variant="body2" color="text.secondary">
+                Loading accounts...
+              </Typography>
+            ) : accounts.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No accounts yet. Trades can still be logged without selecting an account.
+              </Typography>
+            ) : (
+              <Stack spacing={1}>
+                {accounts.map((account) => {
+                  const stockFeeRaw = Number(account.defaultStockFees ?? account.defaultFees ?? 0);
+                  const optionFeeRaw = Number(account.defaultOptionFees ?? account.defaultFees ?? 0);
+                  const marginUsdRaw = Number(account.defaultMarginRateUsd ?? account.defaultMarginRate ?? 0);
+                  const marginCadRaw = Number(account.defaultMarginRateCad ?? account.defaultMarginRate ?? 0);
+                  const stockFee = Number.isFinite(stockFeeRaw) ? stockFeeRaw : 0;
+                  const optionFee = Number.isFinite(optionFeeRaw) ? optionFeeRaw : 0;
+                  const marginUsd = Number.isFinite(marginUsdRaw) ? marginUsdRaw : 0;
+                  const marginCad = Number.isFinite(marginCadRaw) ? marginCadRaw : 0;
+                  return (
+                    <Box
+                      key={account.id}
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        p: 1.5,
+                      }}
+                    >
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={1}
+                        justifyContent="space-between"
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                      >
+                        <Typography variant="body2" fontWeight={700}>
+                          {account.name}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          Stock fee: {stockFee.toFixed(2)} | Option fee: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
+                        </Typography>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={() => void handleDeleteAccount(account.id)}
+                          disabled={deletingAccountId === account.id}
+                        >
+                          {deletingAccountId === account.id ? "Deleting..." : "Delete"}
+                        </Button>
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setAccountsDialogOpen(false)}
+            disabled={savingAccount || !!deletingAccountId}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={preferencesDialogOpen}
         onClose={handleClosePreferencesDialog}
         aria-labelledby="preferences-dialog-title"
         fullWidth
-        maxWidth="sm"
+        maxWidth="md"
       >
         <DialogTitle id="preferences-dialog-title">Preferences</DialogTitle>
         <DialogContent>

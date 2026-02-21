@@ -471,13 +471,14 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
             <TableCell align="right">Margin</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
+            <TableCell>Account</TableCell>
             <TableCell>Notes</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={13}>
+              <TableCell colSpan={14}>
                 <Typography color="text.secondary">
                   No trades recorded for this day.
                 </Typography>
@@ -551,6 +552,7 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                 <TableCell align="right">{formatNumber(marginFee, 2)}</TableCell>
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
+                <TableCell>{trade.accountName || "—"}</TableCell>
                 <TableCell>
                   <Typography variant="body2" noWrap title={trade.notes || ""}>
                     {trade.notes || "—"}

@@ -100,6 +100,7 @@ describe("share link helpers", () => {
         entryPrice: 120,
         exitPrice: 130,
         fees: 1,
+        accountId: "acc-1",
         optionType: null,
         strikePrice: null,
         expiryDate: null,
@@ -120,6 +121,7 @@ describe("share link helpers", () => {
         entryPrice: 75,
         exitPrice: 70,
         fees: 2,
+        accountId: "acc-2",
         optionType: null,
         strikePrice: null,
         expiryDate: null,
@@ -140,6 +142,7 @@ describe("share link helpers", () => {
         entryPrice: 300,
         exitPrice: 310,
         fees: 1,
+        accountId: "acc-1",
         optionType: null,
         strikePrice: null,
         expiryDate: null,
@@ -158,6 +161,10 @@ describe("share link helpers", () => {
       generatedAt: "2024-02-10T12:00:00Z",
       cadToUsdRate: 0.75,
       fxDate: "2024-02-10",
+      accountNamesById: {
+        "acc-1": "Wealthsimple",
+        "acc-2": "Questrade",
+      },
     });
     const token = encodeShareToken(payload);
     const decoded = decodeShareToken(token);
@@ -169,6 +176,8 @@ describe("share link helpers", () => {
     expect(decoded.date).toBe("2024-02-10");
     expect(decoded.trades).toHaveLength(2);
     expect(decoded.trades[0].symbol).toBe("AAPL");
+    expect(decoded.trades[0].accountName).toBe("Wealthsimple");
+    expect(decoded.trades[1].accountName).toBe("Questrade");
     expect(decoded.cadToUsdRate).toBe(0.75);
     expect(decoded.fxDate).toBe("2024-02-10");
     expect(decoded.totalPnl).toBeCloseTo(107.63, 2);

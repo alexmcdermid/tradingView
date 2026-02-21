@@ -28,6 +28,7 @@ import { computeMarginFee } from "../utils/tradeMath";
 
 interface TradesTableProps {
   trades: Trade[];
+  accountNamesById?: Record<string, string>;
   loading?: boolean;
   onEdit: (trade: Trade) => void;
   onDelete: (trade: Trade) => void;
@@ -116,6 +117,7 @@ function computeTradePnlPercent(trade: Trade) {
 
 export function TradesTable({
   trades,
+  accountNamesById,
   loading,
   onEdit,
   onDelete,
@@ -149,6 +151,7 @@ export function TradesTable({
             <TableCell align="right">Margin</TableCell>
             <TableCell>Opened</TableCell>
             <TableCell>Closed</TableCell>
+            <TableCell>Account</TableCell>
             <TableCell>Notes</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
@@ -157,7 +160,7 @@ export function TradesTable({
           {loading ? (
             Array.from({ length: 5 }).map((_, idx) => (
               <TableRow key={idx}>
-                {Array.from({ length: 14 }).map((__, cellIdx) => (
+                {Array.from({ length: 15 }).map((__, cellIdx) => (
                   <TableCell key={cellIdx}>
                     <Skeleton />
                   </TableCell>
@@ -166,7 +169,7 @@ export function TradesTable({
             ))
           ) : trades.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={14}>
+              <TableCell colSpan={15}>
                 <Typography color="text.secondary">
                   No trades yet. Log a trade to see it here.
                 </Typography>
@@ -246,6 +249,11 @@ export function TradesTable({
                 <TableCell>{formatDate(trade.openedAt)}</TableCell>
                 <TableCell>{formatDate(trade.closedAt)}</TableCell>
                 <TableCell>
+                  {trade.accountId
+                    ? accountNamesById?.[trade.accountId] || "—"
+                    : "—"}
+                </TableCell>
+                <TableCell>
                   <Typography variant="body2" noWrap title={trade.notes || ""}>
                     {trade.notes || "—"}
                   </Typography>
@@ -285,7 +293,7 @@ export function TradesTable({
         {paginationEnabled && (
           <TableFooter>
             <TableRow>
-              <TableCell colSpan={14} sx={{ p: 0 }}>
+              <TableCell colSpan={15} sx={{ p: 0 }}>
                 <Box
                   sx={{
                     display: "flex",

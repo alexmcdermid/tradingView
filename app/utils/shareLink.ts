@@ -34,7 +34,9 @@ export type SharedTrade = Pick<
   | "optionType"
   | "strikePrice"
   | "expiryDate"
->;
+> & {
+  accountName?: string;
+};
 
 export type SharedTradesPayload = {
   date: string;
@@ -78,6 +80,7 @@ type CompactTradeTuple = [
   number?,
   string?,
   number?,
+  string?,
 ];
 
 type CompactTradesToken = {
@@ -263,7 +266,10 @@ const normalizeNotes = (value?: string | null) => {
   return trimmed.length > 0 ? trimmed : undefined;
 };
 
-const normalizeTradeForShare = (trade: Trade): SharedTrade => ({
+const normalizeTradeForShare = (
+  trade: Trade,
+  accountNamesById?: Record<string, string>
+): SharedTrade => ({
   symbol: trade.symbol,
   currency: trade.currency,
   assetType: trade.assetType,
@@ -280,6 +286,7 @@ const normalizeTradeForShare = (trade: Trade): SharedTrade => ({
   optionType: trade.assetType === "OPTION" ? trade.optionType ?? undefined : undefined,
   strikePrice: trade.assetType === "OPTION" ? trade.strikePrice ?? undefined : undefined,
   expiryDate: trade.assetType === "OPTION" ? trade.expiryDate ?? undefined : undefined,
+  accountName: trade.accountId ? accountNamesById?.[trade.accountId] : undefined,
 });
 
 const buildTradeTuple = (trade: SharedTrade): CompactTradeTuple => {
@@ -305,6 +312,12 @@ const buildTradeTuple = (trade: SharedTrade): CompactTradeTuple => {
   if (trade.marginRate !== null && trade.marginRate !== undefined && trade.marginRate > 0) {
     tuple.push(toNumber(trade.marginRate));
   }
+  if (trade.accountName) {
+    if (tuple.length === 15) {
+      tuple.push(undefined);
+    }
+    tuple.push(trade.accountName);
+  }
   return tuple as CompactTradeTuple;
 };
 
@@ -327,6 +340,7 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
     strikePriceRaw,
     expiryDateRaw,
     marginRateRaw,
+    accountNameRaw,
   ] = tuple;
 
   if (typeof symbol !== "string" || !isAssetType(assetTypeRaw) || !isDirection(directionRaw)) {
@@ -343,6 +357,8 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
   const notes = typeof notesRaw === "string" ? normalizeNotes(notesRaw) : undefined;
   const marginRate =
     marginRateRaw === undefined || marginRateRaw === null ? undefined : toNumber(marginRateRaw);
+  const accountName =
+    typeof accountNameRaw === "string" ? normalizeNotes(accountNameRaw) : undefined;
 
   return {
     symbol,
@@ -361,6 +377,7 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
     optionType: assetTypeRaw === "OPTION" ? optionType : undefined,
     strikePrice: assetTypeRaw === "OPTION" ? strikePrice : undefined,
     expiryDate: assetTypeRaw === "OPTION" ? expiryDate : undefined,
+    accountName,
   };
 };
 
@@ -449,11 +466,14 @@ export function buildTradesSharePayload(
     generatedAt?: string;
     cadToUsdRate?: number;
     fxDate?: string;
+    accountNamesById?: Record<string, string>;
   } = {}
 ): SharedTradesPayload {
   const dateKey = date.slice(0, 10);
   const filteredTrades = trades.filter((trade) => trade.closedAt.startsWith(dateKey));
-  const sharedTrades = filteredTrades.map(normalizeTradeForShare);
+  const sharedTrades = filteredTrades.map((trade) =>
+    normalizeTradeForShare(trade, options.accountNamesById)
+  );
   const totalPnl = computeTradesTotal(sharedTrades, options.cadToUsdRate);
 
   return {
