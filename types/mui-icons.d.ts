@@ -41,3 +41,24 @@ declare module "@mui/icons-material/Share" {
   const Icon: React.FC<SvgIconProps>;
   export default Icon;
 }
+
+declare module "@mui/icons-material/ContentCopy" {
+  import * as React from "react";
+  import { SvgIconProps } from "@mui/material/SvgIcon";
+  const Icon: React.FC<SvgIconProps>;
+  export default Icon;
+}
+
+declare module "@mui/icons-material/DeleteOutline" {
+  import * as React from "react";
+  import { SvgIconProps } from "@mui/material/SvgIcon";
+  const Icon: React.FC<SvgIconProps>;
+  export default Icon;
+}
+
+declare module "@mui/icons-material/LinkOutlined" {
+  import * as React from "react";
+  import { SvgIconProps } from "@mui/material/SvgIcon";
+  const Icon: React.FC<SvgIconProps>;
+  export default Icon;
+}

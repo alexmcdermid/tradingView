@@ -16,7 +16,13 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AssetType, Currency, OptionType, TradeDirection } from "../api/types";
+import type {
+  AssetType,
+  Currency,
+  OptionType,
+  TradeDirection,
+  TradingAccount,
+} from "../api/types";
 import { computeMarginFee, computeRealizedPnl } from "../utils/tradeMath";
 
 export interface TradeFormValues {
@@ -29,6 +35,7 @@ export interface TradeFormValues {
   exitPrice: number | "";
   fees: number | "";
   marginRate: number | "";
+  accountId?: string;
   optionType?: OptionType;
   strikePrice?: number | "";
   expiryDate?: string;
@@ -40,6 +47,7 @@ export interface TradeFormValues {
 interface TradeDialogProps {
   open: boolean;
   initialValues?: Partial<TradeFormValues>;
+  accounts?: TradingAccount[];
   submitting?: boolean;
   onClose: () => void;
   onSubmit: (values: TradeFormValues) => void;
@@ -47,6 +55,22 @@ interface TradeDialogProps {
 
 function today() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function accountFeeForAsset(account: TradingAccount, assetType: AssetType) {
+  const stockFeeRaw = Number(account.defaultStockFees);
+  const optionFeeRaw = Number(account.defaultOptionFees);
+  const stockFee = Number.isFinite(stockFeeRaw) ? stockFeeRaw : 0;
+  const optionFee = Number.isFinite(optionFeeRaw) ? optionFeeRaw : 0;
+  return assetType === "OPTION" ? optionFee : stockFee;
+}
+
+function accountMarginForCurrency(account: TradingAccount, currency: Currency) {
+  const usdMarginRaw = Number(account.defaultMarginRateUsd);
+  const cadMarginRaw = Number(account.defaultMarginRateCad);
+  const usdMargin = Number.isFinite(usdMarginRaw) ? usdMarginRaw : 0;
+  const cadMargin = Number.isFinite(cadMarginRaw) ? cadMarginRaw : 0;
+  return currency === "CAD" ? cadMargin : usdMargin;
 }
 
 function computePnl(values: TradeFormValues) {
@@ -83,6 +107,7 @@ function computePnl(values: TradeFormValues) {
 export function TradeDialog({
   open,
   initialValues,
+  accounts = [],
   submitting,
   onClose,
   onSubmit,
@@ -98,6 +123,7 @@ export function TradeDialog({
     exitPrice: "",
     fees: "",
     marginRate: "",
+    accountId: "",
     optionType: "CALL",
     strikePrice: "",
     expiryDate: today(),
@@ -182,6 +208,7 @@ export function TradeDialog({
     onSubmit({
       ...values,
       symbol: values.symbol.trim(),
+      accountId: values.accountId || undefined,
       strikePrice: values.strikePrice === "" ? undefined : values.strikePrice,
       fees: values.fees === "" ? 0 : values.fees,
       marginRate: values.marginRate === "" ? 0 : values.marginRate,
@@ -198,7 +225,6 @@ export function TradeDialog({
       onClose={onClose}
       maxWidth="md"
       fullWidth
-      disableRestoreFocus
     >
       <DialogTitle>{initialValues ? "Edit Trade" : "New Trade"}</DialogTitle>
       <DialogContent dividers>
@@ -215,7 +241,22 @@ export function TradeDialog({
             <ToggleButtonGroup
               exclusive
               value={values.currency}
-              onChange={(_, value) => value && setValues((prev) => ({ ...prev, currency: value }))}
+              onChange={(_, value) =>
+                value &&
+                setValues((prev) => {
+                  const nextCurrency = value as Currency;
+                  const selectedAccount = prev.accountId
+                    ? accounts.find((account) => account.id === prev.accountId)
+                    : undefined;
+                  return {
+                    ...prev,
+                    currency: nextCurrency,
+                    marginRate: selectedAccount
+                      ? accountMarginForCurrency(selectedAccount, nextCurrency)
+                      : prev.marginRate,
+                  };
+                })
+              }
             >
               <ToggleButton value="USD">USD</ToggleButton>
               <ToggleButton value="CAD">CAD</ToggleButton>
@@ -225,13 +266,22 @@ export function TradeDialog({
               value={values.assetType}
               onChange={(_, value) =>
                 value &&
-                setValues((prev) => ({
-                  ...prev,
-                  assetType: value as AssetType,
-                  optionType: value === "OPTION" ? prev.optionType || "CALL" : undefined,
-                  strikePrice: value === "OPTION" ? prev.strikePrice : "",
-                  expiryDate: value === "OPTION" ? today() : "",
-                }))
+                setValues((prev) => {
+                  const nextAssetType = value as AssetType;
+                  const selectedAccount = prev.accountId
+                    ? accounts.find((account) => account.id === prev.accountId)
+                    : undefined;
+                  return {
+                    ...prev,
+                    assetType: nextAssetType,
+                    optionType: value === "OPTION" ? prev.optionType || "CALL" : undefined,
+                    strikePrice: value === "OPTION" ? prev.strikePrice : "",
+                    expiryDate: value === "OPTION" ? today() : "",
+                    fees: selectedAccount
+                      ? accountFeeForAsset(selectedAccount, nextAssetType)
+                      : prev.fees,
+                  };
+                })
               }
             >
               <ToggleButton value="STOCK">Stock</ToggleButton>
@@ -246,6 +296,36 @@ export function TradeDialog({
               <ToggleButton value="SHORT">Short</ToggleButton>
             </ToggleButtonGroup>
           </Stack>
+
+          <FormControl fullWidth>
+            <InputLabel id="account-label">Account (Optional - Setup in Account Dropdown)</InputLabel>
+            <Select
+              labelId="account-label"
+              label="Account (Optional)"
+              value={values.accountId || ""}
+              onChange={(event) => {
+                const accountId = event.target.value;
+                const selected = accounts.find((account) => account.id === accountId);
+                setValues((prev) => ({
+                  ...prev,
+                  accountId,
+                  fees: selected ? accountFeeForAsset(selected, prev.assetType) : prev.fees,
+                  marginRate: selected
+                    ? accountMarginForCurrency(selected, prev.currency)
+                    : prev.marginRate,
+                }));
+              }}
+            >
+              <MenuItem value="">
+                <em>None</em>
+              </MenuItem>
+              {accounts.map((account) => (
+                <MenuItem key={account.id} value={account.id}>
+                  {account.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <TextField

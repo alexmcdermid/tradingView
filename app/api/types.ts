@@ -18,6 +18,7 @@ export interface Trade {
   exitPrice: number;
   fees: number;
   marginRate?: number | null;
+  accountId?: string | null;
   optionType?: OptionType | null;
   strikePrice?: number | null;
   expiryDate?: string | null;
@@ -40,6 +41,7 @@ export interface TradePayload {
   exitPrice: number;
   fees?: number;
   marginRate?: number;
+  accountId?: string;
   optionType?: OptionType;
   strikePrice?: number;
   expiryDate?: string;
@@ -111,6 +113,25 @@ export interface UserProfile {
   updatedAt: string;
   themeMode?: ThemeMode | null;
   pnlDisplayMode?: PnlDisplayMode | null;
+}
+
+export interface TradingAccount {
+  id: string;
+  name: string;
+  defaultStockFees: number;
+  defaultOptionFees: number;
+  defaultMarginRateUsd: number;
+  defaultMarginRateCad: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TradingAccountPayload {
+  name: string;
+  defaultStockFees: number;
+  defaultOptionFees: number;
+  defaultMarginRateUsd: number;
+  defaultMarginRateCad: number;
 }
 
 export type ShareType = "SUMMARY" | "TRADES";

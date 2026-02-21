@@ -41,6 +41,7 @@ const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
 const mockUpdateUserPreferences = vi.fn();
+const mockListUserAccounts = vi.fn();
 
 vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
@@ -54,6 +55,10 @@ vi.mock("../api/trades", () => ({
 vi.mock("../api/users", () => ({
   updateUserPreferences: (...args: Parameters<typeof mockUpdateUserPreferences>) =>
     mockUpdateUserPreferences(...args),
+  listUserAccounts: (...args: Parameters<typeof mockListUserAccounts>) =>
+    mockListUserAccounts(...args),
+  createUserAccount: vi.fn(),
+  deleteUserAccount: vi.fn(),
 }));
 
 describe("Home (guest mode)", () => {
@@ -86,6 +91,7 @@ describe("Home (guest mode)", () => {
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
     });
+    mockListUserAccounts.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -174,6 +180,7 @@ describe("Home (authenticated)", () => {
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
     });
+    mockListUserAccounts.mockResolvedValue([]);
   });
 
   afterEach(() => {

@@ -1,4 +1,4 @@
-import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
+import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { clearAuthToken, getAuthToken, setAuthToken } from "./authToken";
 import { fetchUserProfile } from "../api/users";
@@ -235,23 +235,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [logout]);
 
+  useGoogleOneTapLogin({
+    onSuccess: (response) => handleSuccess(response.credential),
+    onError: () => {
+      // Ignore one-tap prompt dismissals/errors; the button remains available.
+    },
+    auto_select: true,
+    use_fedcm_for_prompt: true,
+    cancel_on_tap_outside: false,
+    disabled: !mounted || !!token,
+  });
+
   const loginButton = mounted ? (
-    <div style={{ 
-      width: `${loginWidth}px`,
-      height: '44px',
-      borderRadius: '22px',
-      overflow: 'hidden',
-    }}>
+    <div
+      style={{
+        width: `${loginWidth}px`,
+        height: "44px",
+        borderRadius: "22px",
+        overflow: "hidden",
+      }}
+    >
       <GoogleLogin
         onSuccess={(response) => handleSuccess(response.credential)}
         onError={() => logout()}
         text="signin_with"
         shape="pill"
         width={loginWidth}
-        useOneTap
-        auto_select
         itp_support
-        use_fedcm_for_prompt
+        use_fedcm_for_button
         cancel_on_tap_outside={false}
       />
     </div>
@@ -279,7 +290,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pnlDisplayMode: next.pnlDisplayMode ?? preferences?.pnlDisplayMode ?? null,
       });
     }
-  }, [preferences?.pnlDisplayMode, preferences?.themeMode, savePreferencesCache, user?.email, user?.sub]);
+  }, [
+    preferences?.pnlDisplayMode,
+    preferences?.themeMode,
+    savePreferencesCache,
+    user?.email,
+    user?.sub,
+  ]);
 
   const value = useMemo(
     () => ({
