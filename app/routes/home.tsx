@@ -1776,6 +1776,7 @@ export default function Home() {
 
       <TradeDialog
         open={tradeDialogOpen}
+        isEditing={!!editingTrade}
         initialValues={
           editingTrade
             ? {
@@ -1796,7 +1797,9 @@ export default function Home() {
                 notes: editingTrade.notes || undefined,
                 accountId: editingTrade.accountId || undefined,
               }
-            : undefined
+            : selectedDate
+              ? { closedAt: selectedDate }
+              : undefined
         }
         accounts={accounts}
         submitting={savingTrade}
@@ -1939,7 +1942,7 @@ export default function Home() {
                   fullWidth
                 />
                 <TextField
-                  label="Option Fee"
+                  label="Option Fee / Contract"
                   type="number"
                   value={accountDraft.defaultOptionFees}
                   onChange={(event) =>
@@ -2028,7 +2031,7 @@ export default function Home() {
                           {account.name}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          Stock fee: {stockFee.toFixed(2)} | Option fee: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
+                          Stock fee/trade: {stockFee.toFixed(2)} | Option fee/contract: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
                         </Typography>
                         <Button
                           size="small"

@@ -47,6 +47,7 @@ export interface TradeFormValues {
 interface TradeDialogProps {
   open: boolean;
   initialValues?: Partial<TradeFormValues>;
+  isEditing?: boolean;
   accounts?: TradingAccount[];
   submitting?: boolean;
   onClose: () => void;
@@ -63,6 +64,19 @@ function accountFeeForAsset(account: TradingAccount, assetType: AssetType) {
   const stockFee = Number.isFinite(stockFeeRaw) ? stockFeeRaw : 0;
   const optionFee = Number.isFinite(optionFeeRaw) ? optionFeeRaw : 0;
   return assetType === "OPTION" ? optionFee : stockFee;
+}
+
+function accountFeesForTrade(
+  account: TradingAccount,
+  assetType: AssetType,
+  quantity: number | "" | undefined
+) {
+  const baseFee = accountFeeForAsset(account, assetType);
+  if (assetType !== "OPTION") {
+    return baseFee;
+  }
+  const contracts = typeof quantity === "number" && Number.isFinite(quantity) ? Math.max(0, quantity) : 0;
+  return Number((baseFee * contracts).toFixed(2));
 }
 
 function accountMarginForCurrency(account: TradingAccount, currency: Currency) {
@@ -120,6 +134,7 @@ function computePnl(values: TradeFormValues) {
 export function TradeDialog({
   open,
   initialValues,
+  isEditing = false,
   accounts = [],
   submitting,
   onClose,
@@ -189,7 +204,16 @@ export function TradeDialog({
     (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const raw = event.target.value;
       if (raw === "") {
-        setValues((prev) => ({ ...prev, [field]: "" }));
+        setValues((prev) => {
+          const next = { ...prev, [field]: "" };
+          if (field === "quantity" && prev.accountId && prev.assetType === "OPTION") {
+            const selectedAccount = accounts.find((account) => account.id === prev.accountId);
+            if (selectedAccount) {
+              next.fees = accountFeesForTrade(selectedAccount, prev.assetType, "");
+            }
+          }
+          return next;
+        });
         if (field === "exitPrice") {
           exitPriceTouched.current = true;
         }
@@ -200,7 +224,13 @@ export function TradeDialog({
       setValues((prev) => {
         const next = { ...prev, [field]: parsed };
         if (field === "entryPrice" && !exitPriceTouched.current) {
-          next.exitPrice = parsed;
+          next.exitPrice = prev.direction === "SHORT" ? 0 : parsed;
+        }
+        if (field === "quantity" && prev.accountId && prev.assetType === "OPTION") {
+          const selectedAccount = accounts.find((account) => account.id === prev.accountId);
+          if (selectedAccount) {
+            next.fees = accountFeesForTrade(selectedAccount, prev.assetType, parsed);
+          }
         }
         return next;
       });
@@ -239,7 +269,7 @@ export function TradeDialog({
       maxWidth="md"
       fullWidth
     >
-      <DialogTitle>{initialValues ? "Edit Trade" : "New Trade"}</DialogTitle>
+      <DialogTitle>{isEditing ? "Edit Trade" : "New Trade"}</DialogTitle>
       <DialogContent dividers>
           <Stack spacing={2}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -296,7 +326,7 @@ export function TradeDialog({
                     strikePrice: value === "OPTION" ? prev.strikePrice : "",
                     expiryDate: value === "OPTION" ? today() : "",
                     fees: selectedAccount
-                      ? accountFeeForAsset(selectedAccount, nextAssetType)
+                      ? accountFeesForTrade(selectedAccount, nextAssetType, prev.quantity)
                       : prev.fees,
                     marginRate: selectedAccount
                       ? accountMarginForTrade(
@@ -323,7 +353,7 @@ export function TradeDialog({
                   const selectedAccount = prev.accountId
                     ? accounts.find((account) => account.id === prev.accountId)
                     : undefined;
-                  return {
+                  const nextValues = {
                     ...prev,
                     direction: nextDirection,
                     marginRate: selectedAccount
@@ -335,6 +365,15 @@ export function TradeDialog({
                         )
                       : prev.marginRate,
                   };
+                  if (!exitPriceTouched.current) {
+                    nextValues.exitPrice =
+                      nextDirection === "SHORT"
+                        ? 0
+                        : prev.entryPrice === ""
+                          ? ""
+                          : prev.entryPrice;
+                  }
+                  return nextValues;
                 })
               }
             >
@@ -355,7 +394,9 @@ export function TradeDialog({
                 setValues((prev) => ({
                   ...prev,
                   accountId,
-                  fees: selected ? accountFeeForAsset(selected, prev.assetType) : prev.fees,
+                  fees: selected
+                    ? accountFeesForTrade(selected, prev.assetType, prev.quantity)
+                    : prev.fees,
                   marginRate: selected
                     ? accountMarginForTrade(
                         selected,
