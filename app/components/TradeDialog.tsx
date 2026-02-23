@@ -73,6 +73,19 @@ function accountMarginForCurrency(account: TradingAccount, currency: Currency) {
   return currency === "CAD" ? cadMargin : usdMargin;
 }
 
+function accountMarginForTrade(
+  account: TradingAccount,
+  currency: Currency,
+  assetType: AssetType,
+  direction: TradeDirection
+) {
+  // Default covered short options to no margin borrowing cost (covered/cash secured); user can override manually.
+  if (assetType === "OPTION" && direction === "SHORT") {
+    return 0;
+  }
+  return accountMarginForCurrency(account, currency);
+}
+
 function computePnl(values: TradeFormValues) {
   const quantity = values.quantity === "" ? null : Number(values.quantity);
   const entry = values.entryPrice === "" ? null : Number(values.entryPrice);
@@ -252,7 +265,12 @@ export function TradeDialog({
                     ...prev,
                     currency: nextCurrency,
                     marginRate: selectedAccount
-                      ? accountMarginForCurrency(selectedAccount, nextCurrency)
+                      ? accountMarginForTrade(
+                          selectedAccount,
+                          nextCurrency,
+                          prev.assetType,
+                          prev.direction
+                        )
                       : prev.marginRate,
                   };
                 })
@@ -280,6 +298,14 @@ export function TradeDialog({
                     fees: selectedAccount
                       ? accountFeeForAsset(selectedAccount, nextAssetType)
                       : prev.fees,
+                    marginRate: selectedAccount
+                      ? accountMarginForTrade(
+                          selectedAccount,
+                          prev.currency,
+                          nextAssetType,
+                          prev.direction
+                        )
+                      : prev.marginRate,
                   };
                 })
               }
@@ -290,7 +316,27 @@ export function TradeDialog({
             <ToggleButtonGroup
               exclusive
               value={values.direction}
-              onChange={(_, value) => value && setValues((prev) => ({ ...prev, direction: value }))}
+              onChange={(_, value) =>
+                value &&
+                setValues((prev) => {
+                  const nextDirection = value as TradeDirection;
+                  const selectedAccount = prev.accountId
+                    ? accounts.find((account) => account.id === prev.accountId)
+                    : undefined;
+                  return {
+                    ...prev,
+                    direction: nextDirection,
+                    marginRate: selectedAccount
+                      ? accountMarginForTrade(
+                          selectedAccount,
+                          prev.currency,
+                          prev.assetType,
+                          nextDirection
+                        )
+                      : prev.marginRate,
+                  };
+                })
+              }
             >
               <ToggleButton value="LONG">Long</ToggleButton>
               <ToggleButton value="SHORT">Short</ToggleButton>
@@ -311,7 +357,12 @@ export function TradeDialog({
                   accountId,
                   fees: selected ? accountFeeForAsset(selected, prev.assetType) : prev.fees,
                   marginRate: selected
-                    ? accountMarginForCurrency(selected, prev.currency)
+                    ? accountMarginForTrade(
+                        selected,
+                        prev.currency,
+                        prev.assetType,
+                        prev.direction
+                      )
                     : prev.marginRate,
                 }));
               }}
