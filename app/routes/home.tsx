@@ -187,6 +187,18 @@ const normalizeAccount = (account: TradingAccount): TradingAccount => {
   };
 };
 
+const sortAccountsByName = (accounts: TradingAccount[]) =>
+  [...accounts].sort((a, b) => {
+    const byName = a.name.localeCompare(b.name, undefined, {
+      sensitivity: "base",
+      numeric: true,
+    });
+    if (byName !== 0) {
+      return byName;
+    }
+    return a.id.localeCompare(b.id);
+  });
+
 const blurActiveElement = () => {
   if (typeof document === "undefined") return;
   const active = document.activeElement;
@@ -975,7 +987,7 @@ export default function Home() {
     try {
       setLoadingAccounts(true);
       const nextAccounts = await listUserAccounts();
-      setAccounts(nextAccounts.map(normalizeAccount));
+      setAccounts(sortAccountsByName(nextAccounts.map(normalizeAccount)));
     } catch (err) {
       handleRequestError(err);
     } finally {
@@ -1071,10 +1083,12 @@ export default function Home() {
         defaultMarginRateCad: Number(marginCad.toFixed(4)),
       });
       const normalizedCreated = normalizeAccount(created);
-      setAccounts((prev) => [
-        normalizedCreated,
-        ...prev.filter((account) => account.id !== normalizedCreated.id),
-      ]);
+      setAccounts((prev) =>
+        sortAccountsByName([
+          normalizedCreated,
+          ...prev.filter((account) => account.id !== normalizedCreated.id),
+        ])
+      );
       setAccountDraft({
         name: "",
         defaultStockFees: "0",
