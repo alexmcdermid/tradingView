@@ -324,7 +324,7 @@ export function TradeDialog({
                     assetType: nextAssetType,
                     optionType: value === "OPTION" ? prev.optionType || "CALL" : undefined,
                     strikePrice: value === "OPTION" ? prev.strikePrice : "",
-                    expiryDate: value === "OPTION" ? today() : "",
+                    expiryDate: value === "OPTION" ? prev.expiryDate || today() : prev.expiryDate,
                     fees: selectedAccount
                       ? accountFeesForTrade(selectedAccount, nextAssetType, prev.quantity)
                       : prev.fees,

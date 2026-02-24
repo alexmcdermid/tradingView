@@ -1798,7 +1798,7 @@ export default function Home() {
                 accountId: editingTrade.accountId || undefined,
               }
             : selectedDate
-              ? { closedAt: selectedDate }
+              ? { closedAt: selectedDate, expiryDate: selectedDate }
               : undefined
         }
         accounts={accounts}
