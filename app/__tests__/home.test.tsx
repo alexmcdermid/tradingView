@@ -276,4 +276,38 @@ describe("Home (authenticated)", () => {
 
     expect(mockFetchAggregateStats).toHaveBeenCalledTimes(2);
   });
+
+  it("prefills option expiry from the selected calendar day when logging a trade", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(1);
+    });
+
+    const user = userEvent.setup();
+    const dayButtons = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    });
+    const targetButton = dayButtons[0];
+    const label = targetButton.getAttribute("aria-label") || "";
+    const selectedDate = label.replace(/select\s+/i, "");
+
+    await user.click(targetButton);
+    await user.click(screen.getByRole("button", { name: /log trade/i }));
+
+    const closedInput = screen.getByLabelText(/closed/i) as HTMLInputElement;
+    expect(closedInput.value).toBe(selectedDate);
+
+    await user.click(screen.getByRole("button", { name: /option/i }));
+
+    const expiryInput = screen.getByLabelText(/expiry/i) as HTMLInputElement;
+    expect(expiryInput.value).toBe(selectedDate);
+  });
 });

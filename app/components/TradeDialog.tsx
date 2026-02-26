@@ -54,6 +54,23 @@ interface TradeDialogProps {
   onSubmit: (values: TradeFormValues) => void;
 }
 
+function buildInitialFormValues(
+  defaults: TradeFormValues,
+  initialValues?: Partial<TradeFormValues>
+): TradeFormValues {
+  const merged: TradeFormValues = {
+    ...defaults,
+    ...initialValues,
+  };
+
+  // When a calendar day is selected we prefill `closedAt`; use the same day for option expiry by default.
+  if (initialValues?.closedAt && !initialValues?.expiryDate) {
+    merged.expiryDate = initialValues.closedAt;
+  }
+
+  return merged;
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -160,17 +177,11 @@ export function TradeDialog({
     notes: "",
   };
 
-  const [values, setValues] = useState<TradeFormValues>({
-    ...defaults,
-    ...initialValues,
-  });
+  const [values, setValues] = useState<TradeFormValues>(buildInitialFormValues(defaults, initialValues));
 
   useEffect(() => {
     if (open) {
-      setValues({
-        ...defaults,
-        ...initialValues,
-      });
+      setValues(buildInitialFormValues(defaults, initialValues));
       exitPriceTouched.current =
         initialValues?.exitPrice !== undefined && initialValues.exitPrice !== "";
     }

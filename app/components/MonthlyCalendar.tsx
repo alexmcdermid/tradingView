@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, type Theme } from "@mui/material/styles";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { PnlBucket } from "../api/types";
 
 interface MonthlyCalendarProps {
@@ -54,6 +54,9 @@ const pad2 = (value: number) => String(value).padStart(2, "0");
 
 const toIsoDate = (date: Date) =>
   `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+
+const toLocalIsoDate = (date: Date) =>
+  `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 
 const observedDate = (year: number, monthIndex: number, day: number) => {
   const date = new Date(Date.UTC(year, monthIndex, day));
@@ -138,12 +141,27 @@ export function MonthlyCalendar({
   valueMode = "pnl",
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
+  const pendingFocusDateRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (month) {
       setActiveMonth(toDate(month));
     }
   }, [month]);
+
+  useEffect(() => {
+    const targetDate = pendingFocusDateRef.current;
+    if (!targetDate || typeof document === "undefined") {
+      return;
+    }
+    const button = document.querySelector<HTMLButtonElement>(
+      `button[data-calendar-date="${targetDate}"]`
+    );
+    if (button) {
+      button.focus();
+      pendingFocusDateRef.current = null;
+    }
+  }, [activeMonth, selectedDate]);
 
   const pnlByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -191,6 +209,45 @@ export function MonthlyCalendar({
       }
       return next;
     });
+  };
+
+  const setVisibleMonthForDate = (date: Date) => {
+    const next = new Date(date.getFullYear(), date.getMonth(), 1);
+    setActiveMonth(next);
+    if (onMonthChange) {
+      onMonthChange(`${next.getFullYear()}-${pad2(next.getMonth() + 1)}`);
+    }
+  };
+
+  const handleDayKeyDown = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentDate: string
+  ) => {
+    if (!onDateSelect || readOnly) return;
+
+    const deltaByKey: Record<string, number> = {
+      ArrowLeft: -1,
+      ArrowRight: 1,
+      ArrowUp: -7,
+      ArrowDown: 7,
+    };
+    const delta = deltaByKey[event.key];
+    if (!delta) {
+      return;
+    }
+
+    event.preventDefault();
+    const nextDate = toDay(currentDate);
+    nextDate.setDate(nextDate.getDate() + delta);
+    const nextDateIso = toLocalIsoDate(nextDate);
+    const nextMonthKey = `${nextDate.getFullYear()}-${pad2(nextDate.getMonth() + 1)}`;
+    const currentMonthKey = `${activeMonth.getFullYear()}-${pad2(activeMonth.getMonth() + 1)}`;
+
+    pendingFocusDateRef.current = nextDateIso;
+    if (nextMonthKey !== currentMonthKey) {
+      setVisibleMonthForDate(nextDate);
+    }
+    onDateSelect(nextDateIso);
   };
 
   return (
@@ -303,8 +360,14 @@ export function MonthlyCalendar({
               component={selectable ? "button" : "div"}
               type={selectable ? "button" : undefined}
               onClick={selectable ? () => onDateSelect?.(date) : undefined}
+              onKeyDown={
+                selectable
+                  ? (event: KeyboardEvent<HTMLButtonElement>) => handleDayKeyDown(event, date)
+                  : undefined
+              }
               aria-label={selectable ? `Select ${date}` : undefined}
               aria-pressed={selectable ? isSelected : undefined}
+              data-calendar-date={selectable ? date : undefined}
               sx={{
                 borderRadius: 1,
                 p: { xs: 0.5, sm: 0.75 },
