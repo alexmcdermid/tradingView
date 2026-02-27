@@ -277,6 +277,55 @@ describe("Home (authenticated)", () => {
     expect(mockFetchAggregateStats).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps keyboard day navigation active after crossing into a new month", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(1);
+    });
+
+    const user = userEvent.setup();
+    const dateButtons = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    });
+    const visibleDates = dateButtons
+      .map((button) => button.getAttribute("aria-label")?.replace(/select\s+/i, ""))
+      .filter((value): value is string => Boolean(value))
+      .sort();
+    const startDate = visibleDates[visibleDates.length - 1];
+    const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const nextDate1 = toIsoDate(new Date(start.getTime() + 24 * 60 * 60 * 1000));
+    const nextDate2 = toIsoDate(new Date(start.getTime() + 2 * 24 * 60 * 60 * 1000));
+
+    const startButton = screen.getByRole("button", { name: new RegExp(`select ${startDate}`, "i") });
+    await user.click(startButton);
+    expect(startButton).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    const day1 = await screen.findByRole("button", {
+      name: new RegExp(`select ${nextDate1}`, "i"),
+    });
+    await waitFor(() => {
+      expect(day1).toHaveAttribute("aria-pressed", "true");
+    });
+
+    await user.keyboard("{ArrowRight}");
+    const day2 = await screen.findByRole("button", {
+      name: new RegExp(`select ${nextDate2}`, "i"),
+    });
+    await waitFor(() => {
+      expect(day2).toHaveAttribute("aria-pressed", "true");
+    });
+  });
+
   it("prefills option expiry from the selected calendar day when logging a trade", async () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },

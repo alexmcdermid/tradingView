@@ -16,7 +16,7 @@ interface MonthlyCalendarProps {
   daily: PnlBucket[];
   initialMonth?: string; // YYYY-MM or YYYY-MM-DD
   month?: string; // controlled month (YYYY-MM or YYYY-MM-DD)
-  onMonthChange?: (month: string) => void;
+  onMonthChange?: (month: string, options?: { preserveSelection?: boolean }) => void;
   selectedDate?: string | null;
   onDateSelect?: (date: string) => void;
   readOnly?: boolean;
@@ -223,7 +223,9 @@ export function MonthlyCalendar({
     const next = new Date(date.getFullYear(), date.getMonth(), 1);
     setActiveMonth(next);
     if (onMonthChange) {
-      onMonthChange(`${next.getFullYear()}-${pad2(next.getMonth() + 1)}`);
+      onMonthChange(`${next.getFullYear()}-${pad2(next.getMonth() + 1)}`, {
+        preserveSelection: true,
+      });
     }
   };
 

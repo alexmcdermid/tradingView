@@ -1464,13 +1464,22 @@ export default function Home() {
     }
   };
 
-  const handleMonthChange = async (month: string) => {
+  const handleMonthChange = async (
+    month: string,
+    options?: { preserveSelection?: boolean }
+  ) => {
+    const preserveSelection = options?.preserveSelection === true;
     setCalendarMonth(month);
-    setSelectedDate(null);
+    if (!preserveSelection) {
+      setSelectedDate(null);
+    }
     if (!user || !token) {
       const rate = summary?.cadToUsdRate;
       const fxDate = summary?.fxDate;
       setSummary(computeSummary(trades, month, rate, fxDate));
+      return;
+    }
+    if (preserveSelection) {
       return;
     }
     setPage(0);
