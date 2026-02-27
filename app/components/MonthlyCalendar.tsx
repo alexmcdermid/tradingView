@@ -142,6 +142,7 @@ export function MonthlyCalendar({
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
   const pendingFocusDateRef = useRef<string | null>(null);
+  const keyboardFocusDateRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (month) {
@@ -150,7 +151,12 @@ export function MonthlyCalendar({
   }, [month]);
 
   useEffect(() => {
-    const targetDate = pendingFocusDateRef.current;
+    const pendingTargetDate = pendingFocusDateRef.current;
+    const retainedKeyboardTarget =
+      keyboardFocusDateRef.current && selectedDate === keyboardFocusDateRef.current
+        ? keyboardFocusDateRef.current
+        : null;
+    const targetDate = pendingTargetDate || retainedKeyboardTarget;
     if (!targetDate || typeof document === "undefined") {
       return;
     }
@@ -159,9 +165,11 @@ export function MonthlyCalendar({
     );
     if (button) {
       button.focus();
-      pendingFocusDateRef.current = null;
+      if (pendingTargetDate === targetDate) {
+        pendingFocusDateRef.current = null;
+      }
     }
-  }, [activeMonth, selectedDate]);
+  }, [activeMonth, selectedDate, daily]);
 
   const pnlByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -244,6 +252,7 @@ export function MonthlyCalendar({
     const currentMonthKey = `${activeMonth.getFullYear()}-${pad2(activeMonth.getMonth() + 1)}`;
 
     pendingFocusDateRef.current = nextDateIso;
+    keyboardFocusDateRef.current = nextDateIso;
     if (nextMonthKey !== currentMonthKey) {
       setVisibleMonthForDate(nextDate);
     }
