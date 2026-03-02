@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MonthlyCalendar } from "../MonthlyCalendar";
@@ -109,5 +109,28 @@ describe("MonthlyCalendar", () => {
     await user.keyboard("{ArrowRight}");
     const june2 = screen.getByRole("button", { name: /select 2024-06-02/i });
     expect(document.activeElement).toBe(june2);
+  });
+
+  it("supports swiping left and right to change months on mobile", () => {
+    render(<MonthlyCalendar daily={daily} initialMonth="2024-05-01" />);
+
+    const calendar = screen.getByTestId("monthly-calendar");
+    expect(screen.getByText(/may 2024/i)).toBeInTheDocument();
+
+    fireEvent.touchStart(calendar, {
+      changedTouches: [{ clientX: 300, clientY: 120 }],
+    });
+    fireEvent.touchEnd(calendar, {
+      changedTouches: [{ clientX: 160, clientY: 125 }],
+    });
+    expect(screen.getByText(/june 2024/i)).toBeInTheDocument();
+
+    fireEvent.touchStart(calendar, {
+      changedTouches: [{ clientX: 120, clientY: 120 }],
+    });
+    fireEvent.touchEnd(calendar, {
+      changedTouches: [{ clientX: 260, clientY: 115 }],
+    });
+    expect(screen.getByText(/may 2024/i)).toBeInTheDocument();
   });
 });

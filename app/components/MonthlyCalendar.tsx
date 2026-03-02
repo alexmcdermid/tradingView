@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, type Theme } from "@mui/material/styles";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
 import type { PnlBucket } from "../api/types";
 
 interface MonthlyCalendarProps {
@@ -128,6 +128,7 @@ const getUsMarketHolidays = (year: number) => {
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const SWIPE_MIN_DISTANCE_PX = 48;
 
 export function MonthlyCalendar({
   daily,
@@ -143,6 +144,7 @@ export function MonthlyCalendar({
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
   const pendingFocusDateRef = useRef<string | null>(null);
   const keyboardFocusDateRef = useRef<string | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (month) {
@@ -261,8 +263,45 @@ export function MonthlyCalendar({
     onDateSelect(nextDateIso);
   };
 
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (readOnly || event.changedTouches.length === 0) {
+      return;
+    }
+    const touch = event.changedTouches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (readOnly || event.changedTouches.length === 0) {
+      touchStartRef.current = null;
+      return;
+    }
+
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+
+    if (Math.abs(deltaX) < SWIPE_MIN_DISTANCE_PX || Math.abs(deltaX) <= Math.abs(deltaY)) {
+      return;
+    }
+
+    changeMonth(deltaX < 0 ? 1 : -1);
+  };
+
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
+    <Paper
+      variant="outlined"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      data-testid="monthly-calendar"
+      sx={{ p: 2 }}
+    >
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
           {!readOnly && (
