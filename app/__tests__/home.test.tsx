@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import React from "react";
@@ -249,6 +249,52 @@ describe("Home (authenticated)", () => {
         expect.any(Number),
         undefined,
         selectedDate
+      );
+    });
+  });
+
+  it("updates trade closed date when dragging a table row onto a calendar day", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(1);
+    });
+
+    const editButton = await screen.findByRole("button", { name: /edit/i });
+    const tradeRow = editButton.closest("tr");
+    expect(tradeRow).not.toBeNull();
+
+    const targetDay = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    })[0];
+    const label = targetDay.getAttribute("aria-label") || "";
+    const targetDate = label.replace(/select\s+/i, "");
+
+    const store = new Map<string, string>();
+    const dataTransfer = {
+      effectAllowed: "none",
+      dropEffect: "none",
+      setData: (type: string, value: string) => {
+        store.set(type, value);
+      },
+      getData: (type: string) => store.get(type) ?? "",
+    };
+
+    fireEvent.dragStart(tradeRow as HTMLElement, { dataTransfer });
+    fireEvent.dragOver(targetDay, { dataTransfer });
+    fireEvent.drop(targetDay, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockUpdateTrade).toHaveBeenCalledWith(
+        "1",
+        expect.objectContaining({ closedAt: targetDate })
       );
     });
   });

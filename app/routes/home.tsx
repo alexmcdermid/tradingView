@@ -92,6 +92,26 @@ const computePnl = (payload: TradePayload) => {
   }) ?? 0;
 };
 
+const tradeToPayload = (trade: Trade, overrides?: Partial<TradePayload>): TradePayload => ({
+  symbol: trade.symbol,
+  currency: trade.currency,
+  assetType: trade.assetType,
+  direction: trade.direction,
+  quantity: trade.quantity,
+  entryPrice: trade.entryPrice,
+  exitPrice: trade.exitPrice,
+  fees: trade.fees ?? 0,
+  marginRate: trade.marginRate ?? 0,
+  accountId: trade.accountId ?? undefined,
+  optionType: trade.assetType === "OPTION" ? trade.optionType ?? undefined : undefined,
+  strikePrice: trade.assetType === "OPTION" ? trade.strikePrice ?? undefined : undefined,
+  expiryDate: trade.assetType === "OPTION" ? trade.expiryDate ?? undefined : undefined,
+  openedAt: trade.openedAt,
+  closedAt: trade.closedAt,
+  notes: trade.notes ?? undefined,
+  ...overrides,
+});
+
 const parseEmailList = (value?: string) => {
   if (!value) {
     return new Set<string>();
@@ -1283,6 +1303,64 @@ export default function Home() {
     }
   };
 
+  const handleDropTradeToDate = async (tradeId: string, date: string) => {
+    const trade = trades.find((item) => item.id === tradeId);
+    if (!trade || trade.closedAt === date) {
+      return;
+    }
+
+    const payload = tradeToPayload(trade, { closedAt: date });
+
+    try {
+      if (user && token) {
+        await updateTrade(trade.id, payload);
+        if (selectedDate) {
+          await loadTrades(0, pageSize, selectedDate);
+        } else {
+          await loadTrades(page, pageSize);
+        }
+        await loadSummary(calendarMonth);
+        await loadAggregateStats();
+      } else {
+        const realizedPnl = computePnl(payload);
+        const now = new Date().toISOString();
+        const rate = summary?.cadToUsdRate;
+        const fxDate = summary?.fxDate;
+        setTrades((prev) => {
+          const next = prev.map((item) =>
+            item.id === trade.id
+              ? {
+                  ...item,
+                  ...payload,
+                  accountId: payload.accountId ?? null,
+                  optionType: payload.optionType ?? null,
+                  strikePrice: payload.strikePrice ?? null,
+                  expiryDate: payload.expiryDate ?? null,
+                  notes: payload.notes ?? null,
+                  realizedPnl,
+                  updatedAt: now,
+                }
+              : item
+          );
+          setSummary(computeSummary(next, calendarMonth, rate, fxDate));
+          setAggregateStats(
+            buildScopedAggregateStats(
+              next,
+              effectiveStatsScope.year,
+              effectiveStatsScope.month,
+              effectiveStatsScope.day,
+              rate,
+              fxDate
+            )
+          );
+          return next;
+        });
+      }
+    } catch (err) {
+      handleRequestError(err);
+    }
+  };
+
   const handleDeleteTrade = (trade: Trade) => {
     blurActiveElement();
     setTradeToDelete(trade);
@@ -1731,6 +1809,7 @@ export default function Home() {
                 onMonthChange={handleMonthChange}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}
+                onTradeDrop={handleDropTradeToDate}
                 valueMode={calendarValueMode}
               />
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>

@@ -26,6 +26,9 @@ import {
 import type { Trade } from "../api/types";
 import { computeMarginFee } from "../utils/tradeMath";
 
+const TRADE_DRAG_MIME = "application/x-trade-id";
+const TRADE_DRAG_PREFIX = "trade:";
+
 interface TradesTableProps {
   trades: Trade[];
   accountNamesById?: Record<string, string>;
@@ -192,8 +195,19 @@ export function TradesTable({
                 <TableRow
                   key={trade.id}
                   hover
+                  draggable
+                  onDragStart={(event) => {
+                    const target = event.target as HTMLElement;
+                    if (target.closest("button")) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData(TRADE_DRAG_MIME, trade.id);
+                    event.dataTransfer.setData("text/plain", `${TRADE_DRAG_PREFIX}${trade.id}`);
+                  }}
                   onClick={() => onEdit(trade)}
-                  sx={{ cursor: "pointer" }}
+                  sx={{ cursor: "grab" }}
                 >
                 <TableCell sx={{ minWidth: 120, maxWidth: 180, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>

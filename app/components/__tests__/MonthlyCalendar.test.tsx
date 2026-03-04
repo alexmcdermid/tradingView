@@ -133,4 +133,27 @@ describe("MonthlyCalendar", () => {
     });
     expect(screen.getByText(/may 2024/i)).toBeInTheDocument();
   });
+
+  it("supports dropping a trade onto a day cell", () => {
+    const onTradeDrop = vi.fn();
+    render(
+      <MonthlyCalendar
+        daily={daily}
+        initialMonth="2024-05-01"
+        onDateSelect={vi.fn()}
+        onTradeDrop={onTradeDrop}
+      />
+    );
+
+    const day = screen.getByRole("button", { name: /select 2024-05-03/i });
+    const dataTransfer = {
+      getData: (type: string) => (type === "application/x-trade-id" ? "trade-123" : ""),
+      dropEffect: "none",
+    };
+
+    fireEvent.dragOver(day, { dataTransfer });
+    fireEvent.drop(day, { dataTransfer });
+
+    expect(onTradeDrop).toHaveBeenCalledWith("trade-123", "2024-05-03");
+  });
 });

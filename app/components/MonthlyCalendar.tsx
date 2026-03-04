@@ -9,7 +9,15 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, type Theme } from "@mui/material/styles";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type TouchEvent,
+} from "react";
 import type { PnlBucket } from "../api/types";
 
 interface MonthlyCalendarProps {
@@ -19,6 +27,7 @@ interface MonthlyCalendarProps {
   onMonthChange?: (month: string, options?: { preserveSelection?: boolean }) => void;
   selectedDate?: string | null;
   onDateSelect?: (date: string) => void;
+  onTradeDrop?: (tradeId: string, date: string) => void;
   readOnly?: boolean;
   holidays?: string[];
   valueMode?: "pnl" | "percent";
@@ -129,6 +138,8 @@ const getUsMarketHolidays = (year: number) => {
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const SWIPE_MIN_DISTANCE_PX = 48;
+const TRADE_DRAG_MIME = "application/x-trade-id";
+const TRADE_DRAG_PREFIX = "trade:";
 
 export function MonthlyCalendar({
   daily,
@@ -137,6 +148,7 @@ export function MonthlyCalendar({
   onMonthChange,
   selectedDate,
   onDateSelect,
+  onTradeDrop,
   readOnly = false,
   holidays,
   valueMode = "pnl",
@@ -294,6 +306,18 @@ export function MonthlyCalendar({
     changeMonth(deltaX < 0 ? 1 : -1);
   };
 
+  const parseTradeIdFromDrop = (event: DragEvent<HTMLElement>) => {
+    const byMime = event.dataTransfer.getData(TRADE_DRAG_MIME);
+    if (byMime) {
+      return byMime;
+    }
+    const plain = event.dataTransfer.getData("text/plain");
+    if (!plain) {
+      return null;
+    }
+    return plain.startsWith(TRADE_DRAG_PREFIX) ? plain.slice(TRADE_DRAG_PREFIX.length) : null;
+  };
+
   return (
     <Paper
       variant="outlined"
@@ -396,6 +420,7 @@ export function MonthlyCalendar({
           };
 
           const selectable = onDateSelect && !readOnly;
+          const dropEnabled = Boolean(onTradeDrop) && !readOnly;
           const displayValue =
             showHolidayLabel
               ? "Holiday"
@@ -413,6 +438,28 @@ export function MonthlyCalendar({
               onKeyDown={
                 selectable
                   ? (event: KeyboardEvent<HTMLButtonElement>) => handleDayKeyDown(event, date)
+                  : undefined
+              }
+              onDragOver={
+                dropEnabled
+                  ? (event: DragEvent<HTMLButtonElement>) => {
+                      if (parseTradeIdFromDrop(event)) {
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = "move";
+                      }
+                    }
+                  : undefined
+              }
+              onDrop={
+                dropEnabled
+                  ? (event: DragEvent<HTMLButtonElement>) => {
+                      const tradeId = parseTradeIdFromDrop(event);
+                      if (!tradeId) {
+                        return;
+                      }
+                      event.preventDefault();
+                      onTradeDrop?.(tradeId, date);
+                    }
                   : undefined
               }
               aria-label={selectable ? `Select ${date}` : undefined}
