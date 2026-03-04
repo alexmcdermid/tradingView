@@ -35,6 +35,8 @@ interface TradesTableProps {
   loading?: boolean;
   onEdit: (trade: Trade) => void;
   onDelete: (trade: Trade) => void;
+  onTradeDragStart?: (tradeId: string) => void;
+  onTradeDragEnd?: () => void;
   page?: number;
   pageSize?: number;
   totalElements?: number;
@@ -124,6 +126,8 @@ export function TradesTable({
   loading,
   onEdit,
   onDelete,
+  onTradeDragStart,
+  onTradeDragEnd,
   page,
   pageSize,
   totalElements,
@@ -205,7 +209,9 @@ export function TradesTable({
                     event.dataTransfer.effectAllowed = "move";
                     event.dataTransfer.setData(TRADE_DRAG_MIME, trade.id);
                     event.dataTransfer.setData("text/plain", `${TRADE_DRAG_PREFIX}${trade.id}`);
+                    onTradeDragStart?.(trade.id);
                   }}
+                  onDragEnd={() => onTradeDragEnd?.()}
                   onClick={() => onEdit(trade)}
                   sx={{ cursor: "grab" }}
                 >

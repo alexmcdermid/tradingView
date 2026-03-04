@@ -578,6 +578,7 @@ export default function Home() {
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
+  const [draggingTradeId, setDraggingTradeId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tradeToDelete, setTradeToDelete] = useState<Trade | null>(null);
   const [deletingTrade, setDeletingTrade] = useState(false);
@@ -1304,6 +1305,7 @@ export default function Home() {
   };
 
   const handleDropTradeToDate = async (tradeId: string, date: string) => {
+    setDraggingTradeId(null);
     const trade = trades.find((item) => item.id === tradeId);
     if (!trade || trade.closedAt === date) {
       return;
@@ -1809,6 +1811,7 @@ export default function Home() {
                 onMonthChange={handleMonthChange}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}
+                draggingTradeId={draggingTradeId}
                 onTradeDrop={handleDropTradeToDate}
                 valueMode={calendarValueMode}
               />
@@ -1827,6 +1830,8 @@ export default function Home() {
               loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
+              onTradeDragStart={setDraggingTradeId}
+              onTradeDragEnd={() => setDraggingTradeId(null)}
               page={user && !selectedDate ? page : undefined}
               pageSize={user && !selectedDate ? pageSize : undefined}
               totalElements={user && !selectedDate ? pageMeta.totalElements : undefined}

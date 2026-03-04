@@ -27,6 +27,7 @@ interface MonthlyCalendarProps {
   onMonthChange?: (month: string, options?: { preserveSelection?: boolean }) => void;
   selectedDate?: string | null;
   onDateSelect?: (date: string) => void;
+  draggingTradeId?: string | null;
   onTradeDrop?: (tradeId: string, date: string) => void;
   readOnly?: boolean;
   holidays?: string[];
@@ -148,6 +149,7 @@ export function MonthlyCalendar({
   onMonthChange,
   selectedDate,
   onDateSelect,
+  draggingTradeId,
   onTradeDrop,
   readOnly = false,
   holidays,
@@ -157,6 +159,7 @@ export function MonthlyCalendar({
   const pendingFocusDateRef = useRef<string | null>(null);
   const keyboardFocusDateRef = useRef<string | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (month) {
@@ -184,6 +187,12 @@ export function MonthlyCalendar({
       }
     }
   }, [activeMonth, selectedDate, daily]);
+
+  useEffect(() => {
+    if (!draggingTradeId) {
+      setDropTargetDate(null);
+    }
+  }, [draggingTradeId]);
 
   const pnlByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -421,6 +430,7 @@ export function MonthlyCalendar({
 
           const selectable = onDateSelect && !readOnly;
           const dropEnabled = Boolean(onTradeDrop) && !readOnly;
+          const isDropTarget = dropEnabled && dropTargetDate === date && Boolean(draggingTradeId);
           const displayValue =
             showHolidayLabel
               ? "Holiday"
@@ -443,9 +453,19 @@ export function MonthlyCalendar({
               onDragOver={
                 dropEnabled
                   ? (event: DragEvent<HTMLButtonElement>) => {
-                      if (parseTradeIdFromDrop(event)) {
-                        event.preventDefault();
-                        event.dataTransfer.dropEffect = "move";
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (draggingTradeId && dropTargetDate !== date) {
+                        setDropTargetDate(date);
+                      }
+                    }
+                  : undefined
+              }
+              onDragLeave={
+                dropEnabled
+                  ? () => {
+                      if (dropTargetDate === date) {
+                        setDropTargetDate(null);
                       }
                     }
                   : undefined
@@ -453,11 +473,12 @@ export function MonthlyCalendar({
               onDrop={
                 dropEnabled
                   ? (event: DragEvent<HTMLButtonElement>) => {
-                      const tradeId = parseTradeIdFromDrop(event);
+                      event.preventDefault();
+                      const tradeId = parseTradeIdFromDrop(event) || draggingTradeId;
+                      setDropTargetDate(null);
                       if (!tradeId) {
                         return;
                       }
-                      event.preventDefault();
                       onTradeDrop?.(tradeId, date);
                     }
                   : undefined
@@ -465,17 +486,22 @@ export function MonthlyCalendar({
               aria-label={selectable ? `Select ${date}` : undefined}
               aria-pressed={selectable ? isSelected : undefined}
               data-calendar-date={selectable ? date : undefined}
+              data-drop-target={isDropTarget ? "true" : undefined}
               sx={{
                 borderRadius: 1,
                 p: { xs: 0.5, sm: 0.75 },
                 border: "1px solid",
-                borderColor: isSelected ? "primary.main" : "divider",
+                borderColor: isDropTarget ? "secondary.main" : isSelected ? "primary.main" : "divider",
                 textAlign: "center",
                 backgroundColor,
                 width: "100%",
                 cursor: selectable ? "pointer" : "default",
                 transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-                boxShadow: isSelected ? (theme) => `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}` : "none",
+                boxShadow: isDropTarget
+                  ? (theme) => `0 0 0 2px ${alpha(theme.palette.secondary.main, 0.25)}`
+                  : isSelected
+                    ? (theme) => `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`
+                    : "none",
                 backgroundClip: "padding-box",
                 appearance: "none",
                 outline: "none",
