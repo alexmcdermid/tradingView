@@ -1767,7 +1767,10 @@ export default function Home() {
                   </Typography>
                   <Typography variant="body2" color={monthlyColor} fontWeight={700}>
                     {summary
-                      ? `P/L ${calendarMonth}: ${summary.totalPnl.toFixed(2)} USD${
+                      ? `P/L ${calendarMonth}: ${summary.totalPnl.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })} USD${
                           summary.pnlPercent != null ? ` (${summary.pnlPercent.toFixed(2)}%)` : ""
                         }`
                       : ""}
