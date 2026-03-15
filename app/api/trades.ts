@@ -1,13 +1,34 @@
 import { request } from "./client";
-import type { PagedResult, PnlSummary, AggregateStats, Trade, TradePayload } from "./types";
+import type {
+  PagedResult,
+  PnlSummary,
+  AggregateStats,
+  Trade,
+  TradePayload,
+  TradeSortDirection,
+  TradeSortField,
+} from "./types";
 
-export async function fetchTrades(page = 0, size = 50, month?: string, date?: string) {
+export async function fetchTrades(
+  page = 0,
+  size = 50,
+  month?: string,
+  date?: string,
+  sortBy?: TradeSortField,
+  sortDirection?: TradeSortDirection
+) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   if (month) {
     params.append("month", month);
   }
   if (date) {
     params.append("date", date);
+  }
+  if (sortBy) {
+    params.append("sortBy", sortBy);
+  }
+  if (sortDirection) {
+    params.append("sortDirection", sortDirection);
   }
   return request<PagedResult<Trade>>(`/trades/paged?${params.toString()}`);
 }

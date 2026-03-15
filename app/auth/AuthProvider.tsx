@@ -197,6 +197,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const nextPreferences: UserPreferences = {
           themeMode: data.themeMode,
           pnlDisplayMode: data.pnlDisplayMode,
+          defaultTradeSortBy: data.defaultTradeSortBy,
+          defaultTradeSortDirection: data.defaultTradeSortDirection,
         };
         setPreferencesState(nextPreferences);
         if (authId) {
@@ -277,20 +279,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         themeMode: next.themeMode ?? prev.themeMode,
         pnlDisplayMode: next.pnlDisplayMode ?? prev.pnlDisplayMode,
+        defaultTradeSortBy: next.defaultTradeSortBy ?? prev.defaultTradeSortBy,
+        defaultTradeSortDirection:
+          next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
       };
     });
     setPreferencesState((prev) => ({
       themeMode: next.themeMode ?? prev?.themeMode ?? null,
       pnlDisplayMode: next.pnlDisplayMode ?? prev?.pnlDisplayMode ?? null,
+      defaultTradeSortBy: next.defaultTradeSortBy ?? prev?.defaultTradeSortBy ?? null,
+      defaultTradeSortDirection:
+        next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
     }));
     const authId = user?.sub || user?.email;
     if (authId) {
       savePreferencesCache(authId, {
         themeMode: next.themeMode ?? preferences?.themeMode ?? null,
         pnlDisplayMode: next.pnlDisplayMode ?? preferences?.pnlDisplayMode ?? null,
+        defaultTradeSortBy: next.defaultTradeSortBy ?? preferences?.defaultTradeSortBy ?? null,
+        defaultTradeSortDirection:
+          next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
       });
     }
   }, [
+    preferences?.defaultTradeSortBy,
+    preferences?.defaultTradeSortDirection,
     preferences?.pnlDisplayMode,
     preferences?.themeMode,
     savePreferencesCache,

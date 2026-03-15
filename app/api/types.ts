@@ -6,6 +6,27 @@ export type TradeDirection = "LONG" | "SHORT";
 export type OptionType = "CALL" | "PUT";
 export type ThemeMode = "LIGHT" | "DARK";
 export type PnlDisplayMode = "PNL" | "PERCENT";
+export type TradeSortField =
+  | "SYMBOL"
+  | "ASSET_TYPE"
+  | "CURRENCY"
+  | "DIRECTION"
+  | "QUANTITY"
+  | "ENTRY_PRICE"
+  | "EXIT_PRICE"
+  | "REALIZED_PNL"
+  | "FEES"
+  | "MARGIN_RATE"
+  | "OPTION_TYPE"
+  | "STRIKE_PRICE"
+  | "EXPIRY_DATE"
+  | "OPENED_AT"
+  | "CLOSED_AT"
+  | "ACCOUNT_ID"
+  | "NOTES"
+  | "CREATED_AT"
+  | "UPDATED_AT";
+export type TradeSortDirection = "ASC" | "DESC";
 
 export interface Trade {
   id: string;
@@ -102,6 +123,8 @@ export interface AdminUser {
 export interface UserPreferences {
   themeMode?: ThemeMode | null;
   pnlDisplayMode?: PnlDisplayMode | null;
+  defaultTradeSortBy?: TradeSortField | null;
+  defaultTradeSortDirection?: TradeSortDirection | null;
 }
 
 export interface UserProfile {
@@ -113,6 +136,8 @@ export interface UserProfile {
   updatedAt: string;
   themeMode?: ThemeMode | null;
   pnlDisplayMode?: PnlDisplayMode | null;
+  defaultTradeSortBy?: TradeSortField | null;
+  defaultTradeSortDirection?: TradeSortDirection | null;
 }
 
 export interface TradingAccount {

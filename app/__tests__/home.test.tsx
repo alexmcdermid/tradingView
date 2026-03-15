@@ -11,8 +11,18 @@ import { ColorModeContext } from "../theme/colorMode";
 type AuthState = {
   user: { sub: string } | null;
   profile: { id: string } | null;
-  preferences: { themeMode?: string | null; pnlDisplayMode?: string | null } | null;
-  setPreferences: (preferences: { themeMode?: string | null; pnlDisplayMode?: string | null }) => void;
+  preferences: {
+    themeMode?: string | null;
+    pnlDisplayMode?: string | null;
+    defaultTradeSortBy?: string | null;
+    defaultTradeSortDirection?: string | null;
+  } | null;
+  setPreferences: (preferences: {
+    themeMode?: string | null;
+    pnlDisplayMode?: string | null;
+    defaultTradeSortBy?: string | null;
+    defaultTradeSortDirection?: string | null;
+  }) => void;
   token: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
@@ -248,7 +258,9 @@ describe("Home (authenticated)", () => {
         0,
         expect.any(Number),
         undefined,
-        selectedDate
+        selectedDate,
+        "CLOSED_AT",
+        "DESC"
       );
     });
   });

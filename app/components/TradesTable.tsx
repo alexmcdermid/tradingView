@@ -20,10 +20,11 @@ import {
   TableFooter,
   TableHead,
   TableRow,
+  TableSortLabel,
   Tooltip,
   Typography,
 } from "@mui/material";
-import type { Trade } from "../api/types";
+import type { Trade, TradeSortDirection, TradeSortField } from "../api/types";
 import { computeMarginFee } from "../utils/tradeMath";
 
 const TRADE_DRAG_MIME = "application/x-trade-id";
@@ -42,6 +43,9 @@ interface TradesTableProps {
   totalElements?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
+  sortBy?: TradeSortField;
+  sortDirection?: TradeSortDirection;
+  onSortChange?: (sortBy: TradeSortField, sortDirection: TradeSortDirection) => void;
 }
 
 function TablePaginationActions({
@@ -120,6 +124,16 @@ function computeTradePnlPercent(trade: Trade) {
   return Number(((trade.realizedPnl / notional) * 100).toFixed(2));
 }
 
+const INITIAL_SORT_DIRECTION: Partial<Record<TradeSortField, TradeSortDirection>> = {
+  CLOSED_AT: "DESC",
+  OPENED_AT: "DESC",
+  REALIZED_PNL: "DESC",
+  ENTRY_PRICE: "DESC",
+  EXIT_PRICE: "DESC",
+  QUANTITY: "DESC",
+  FEES: "DESC",
+};
+
 export function TradesTable({
   trades,
   accountNamesById,
@@ -133,6 +147,9 @@ export function TradesTable({
   totalElements,
   onPageChange,
   onPageSizeChange,
+  sortBy,
+  sortDirection,
+  onSortChange,
 }: TradesTableProps) {
   const paginationEnabled =
     page !== undefined &&
@@ -141,26 +158,61 @@ export function TradesTable({
     onPageChange !== undefined &&
     onPageSizeChange !== undefined;
 
+  const handleSortChange = (field: TradeSortField) => {
+    if (!onSortChange) {
+      return;
+    }
+    if (sortBy === field && sortDirection) {
+      onSortChange(field, sortDirection === "ASC" ? "DESC" : "ASC");
+      return;
+    }
+    onSortChange(field, INITIAL_SORT_DIRECTION[field] ?? "ASC");
+  };
+
+  const renderSortableHeader = (
+    label: string,
+    field: TradeSortField,
+    options?: { align?: "left" | "right"; width?: number }
+  ) => (
+    <TableCell
+      align={options?.align}
+      sx={{
+        whiteSpace: "nowrap",
+        ...(options?.width ? { width: options.width } : {}),
+      }}
+    >
+      <TableSortLabel
+        active={sortBy === field}
+        direction={sortBy === field && sortDirection === "ASC" ? "asc" : "desc"}
+        onClick={() => handleSortChange(field)}
+        disabled={!onSortChange}
+        sx={{ whiteSpace: "nowrap" }}
+      >
+        {label}
+      </TableSortLabel>
+    </TableCell>
+  );
+
   return (
     <TableContainer component={Paper}>
       <Table size="small">
         <TableHead>
           <TableRow>
-            <TableCell>Symbol</TableCell>
-            <TableCell sx={{ width: 70 }}>Asset</TableCell>
-            <TableCell sx={{ width: 70 }}>Side</TableCell>
-            <TableCell align="right">Qty</TableCell>
-            <TableCell align="right">Entry</TableCell>
-            <TableCell align="right">Exit</TableCell>
-            <TableCell align="right">Realized P/L</TableCell>
-            <TableCell align="right">P/L %</TableCell>
-            <TableCell align="right">Fees</TableCell>
-            <TableCell align="right">Margin</TableCell>
-            <TableCell>Opened</TableCell>
-            <TableCell>Closed</TableCell>
-            <TableCell>Account</TableCell>
-            <TableCell>Notes</TableCell>
-            <TableCell align="right">Actions</TableCell>
+            {renderSortableHeader("Symbol", "SYMBOL")}
+            {renderSortableHeader("Asset", "ASSET_TYPE", { width: 70 })}
+            {renderSortableHeader("Side", "DIRECTION", { width: 70 })}
+            {renderSortableHeader("Qty", "QUANTITY", { align: "right" })}
+            {renderSortableHeader("Entry", "ENTRY_PRICE", { align: "right" })}
+            {renderSortableHeader("Exit", "EXIT_PRICE", { align: "right" })}
+            {renderSortableHeader("Realized P/L", "REALIZED_PNL", { align: "right" })}
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>P/L %</TableCell>
+            {renderSortableHeader("Fees", "FEES", { align: "right" })}
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>Margin</TableCell>
+            {renderSortableHeader("Opened", "OPENED_AT")}
+            {renderSortableHeader("Closed", "CLOSED_AT")}
+            {renderSortableHeader("Account", "ACCOUNT_ID")}
+            {renderSortableHeader("Notes", "NOTES")}
+            <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>

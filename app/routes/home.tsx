@@ -49,6 +49,8 @@ import type {
   PnlSummary,
   ShareLinkResponse,
   Trade,
+  TradeSortDirection,
+  TradeSortField,
   TradePayload,
   TradingAccount,
 } from "../api/types";
@@ -122,6 +124,60 @@ const parseEmailList = (value?: string) => {
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
   );
+};
+
+const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
+const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
+
+const SORTABLE_TRADE_FIELDS: TradeSortField[] = [
+  "SYMBOL",
+  "ASSET_TYPE",
+  "DIRECTION",
+  "QUANTITY",
+  "ENTRY_PRICE",
+  "EXIT_PRICE",
+  "REALIZED_PNL",
+  "FEES",
+  "OPENED_AT",
+  "CLOSED_AT",
+  "ACCOUNT_ID",
+  "NOTES",
+];
+
+const TRADE_SORT_LABELS: Record<TradeSortField, string> = {
+  SYMBOL: "Symbol",
+  ASSET_TYPE: "Asset",
+  CURRENCY: "Currency",
+  DIRECTION: "Side",
+  QUANTITY: "Quantity",
+  ENTRY_PRICE: "Entry price",
+  EXIT_PRICE: "Exit price",
+  REALIZED_PNL: "Realized P/L",
+  FEES: "Fees",
+  MARGIN_RATE: "Margin rate",
+  OPTION_TYPE: "Option type",
+  STRIKE_PRICE: "Strike price",
+  EXPIRY_DATE: "Expiry date",
+  OPENED_AT: "Opened date",
+  CLOSED_AT: "Closed date",
+  ACCOUNT_ID: "Account",
+  NOTES: "Notes",
+  CREATED_AT: "Created at",
+  UPDATED_AT: "Updated at",
+};
+
+const resolveTradeSortBy = (value?: TradeSortField | null): TradeSortField => {
+  if (!value || !SORTABLE_TRADE_FIELDS.includes(value)) {
+    return DEFAULT_TRADE_SORT_BY;
+  }
+  return value;
+};
+
+const resolveTradeSortDirection = (value?: TradeSortDirection | null): TradeSortDirection => {
+  if (value === "ASC" || value === "DESC") {
+    return value;
+  }
+  return DEFAULT_TRADE_SORT_DIRECTION;
 };
 
 const detectEnvironment = () => {
@@ -567,6 +623,13 @@ export default function Home() {
   const [loadingStats, setLoadingStats] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
+  const [tradeSort, setTradeSort] = useState<{
+    sortBy: TradeSortField;
+    sortDirection: TradeSortDirection;
+  }>({
+    sortBy: DEFAULT_TRADE_SORT_BY,
+    sortDirection: DEFAULT_TRADE_SORT_DIRECTION,
+  });
   const [pageMeta, setPageMeta] = useState<{ totalPages: number; hasNext: boolean; hasPrevious: boolean; totalElements: number }>({
     totalPages: 0,
     hasNext: false,
@@ -615,6 +678,8 @@ export default function Home() {
   const [preferencesDraft, setPreferencesDraft] = useState<{
     themeMode: "light" | "dark";
     pnlDisplayMode: "pnl" | "percent";
+    defaultTradeSortBy: TradeSortField;
+    defaultTradeSortDirection: TradeSortDirection;
   } | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const guestSeeded = useRef<boolean>(false);
@@ -686,10 +751,24 @@ export default function Home() {
   useEffect(() => {
     if (!user || !token) {
       setCalendarValueMode("pnl");
+      setTradeSort({
+        sortBy: DEFAULT_TRADE_SORT_BY,
+        sortDirection: DEFAULT_TRADE_SORT_DIRECTION,
+      });
       return;
     }
     setCalendarValueMode(preferences?.pnlDisplayMode === "PERCENT" ? "percent" : "pnl");
-  }, [preferences?.pnlDisplayMode, token, user]);
+    setTradeSort({
+      sortBy: resolveTradeSortBy(preferences?.defaultTradeSortBy),
+      sortDirection: resolveTradeSortDirection(preferences?.defaultTradeSortDirection),
+    });
+  }, [
+    preferences?.defaultTradeSortBy,
+    preferences?.defaultTradeSortDirection,
+    preferences?.pnlDisplayMode,
+    token,
+    user,
+  ]);
 
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
     const cadToUsd = rate ?? 1;
@@ -829,7 +908,14 @@ export default function Home() {
     }
     try {
       setLoadingTrades(true);
-      const tradeData = await fetchTrades(targetPage, targetSize, undefined, date);
+      const tradeData = await fetchTrades(
+        targetPage,
+        targetSize,
+        undefined,
+        date,
+        tradeSort.sortBy,
+        tradeSort.sortDirection
+      );
       setTrades(tradeData.items);
       setPage(tradeData.page);
       setPageSize(tradeData.size);
@@ -844,7 +930,7 @@ export default function Home() {
     } finally {
       setLoadingTrades(false);
     }
-  }, [token, user]);
+  }, [token, tradeSort.sortBy, tradeSort.sortDirection, user]);
 
   const loadSummary = useCallback(async (month: string) => {
     if (!user || !token) {
@@ -881,7 +967,11 @@ export default function Home() {
   }, [effectiveStatsScope.day, effectiveStatsScope.month, effectiveStatsScope.year, token, user]);
 
   useEffect(() => {
-    if (!user || !token || selectedDate) {
+    if (!user || !token) {
+      return;
+    }
+    if (selectedDate) {
+      loadTrades(0, pageSize, selectedDate);
       return;
     }
     loadTrades(page, pageSize);
@@ -1147,6 +1237,8 @@ export default function Home() {
     setPreferencesDraft({
       themeMode: mode,
       pnlDisplayMode: calendarValueMode,
+      defaultTradeSortBy: tradeSort.sortBy,
+      defaultTradeSortDirection: tradeSort.sortDirection,
     });
     setStatsScopeDraft(statsScopeFilter ?? "");
     setPreferencesDialogOpen(true);
@@ -1171,10 +1263,12 @@ export default function Home() {
     }
 
     const normalizedScope = parsedScope.normalized || null;
-    const { themeMode, pnlDisplayMode } = preferencesDraft;
+    const { themeMode, pnlDisplayMode, defaultTradeSortBy, defaultTradeSortDirection } = preferencesDraft;
     const hasPreferenceChanges =
       themeMode !== mode ||
-      pnlDisplayMode !== calendarValueMode;
+      pnlDisplayMode !== calendarValueMode ||
+      defaultTradeSortBy !== tradeSort.sortBy ||
+      defaultTradeSortDirection !== tradeSort.sortDirection;
     const hasWidgetChanges = normalizedScope !== statsScopeFilter;
 
     if (!hasPreferenceChanges && !hasWidgetChanges) {
@@ -1189,6 +1283,8 @@ export default function Home() {
         await updateUserPreferences({
           themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
           pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
+          defaultTradeSortBy,
+          defaultTradeSortDirection,
         });
       } catch (err) {
         handleRequestError(err);
@@ -1200,12 +1296,18 @@ export default function Home() {
       setPreferences({
         themeMode: themeMode === "dark" ? "DARK" : "LIGHT",
         pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
+        defaultTradeSortBy,
+        defaultTradeSortDirection,
       });
     }
 
     if (hasPreferenceChanges) {
       setMode(themeMode);
       setCalendarValueMode(pnlDisplayMode);
+      setTradeSort({
+        sortBy: defaultTradeSortBy,
+        sortDirection: defaultTradeSortDirection,
+      });
     }
     if (hasWidgetChanges) {
       setStatsScopeFilter(normalizedScope);
@@ -1571,16 +1673,8 @@ export default function Home() {
       setSelectedDate((prev) => (prev === date ? null : date));
       return;
     }
-    setSelectedDate((prev) => {
-      const next = prev === date ? null : date;
-      setPage(0);
-      if (next) {
-        void loadTrades(0, pageSize, next);
-      } else {
-        void loadTrades(0, pageSize);
-      }
-      return next;
-    });
+    setSelectedDate((prev) => (prev === date ? null : date));
+    setPage(0);
   };
 
   const handleClearSelectedDate = () => {
@@ -1589,7 +1683,11 @@ export default function Home() {
       return;
     }
     setPage(0);
-    void loadTrades(0, pageSize);
+  };
+
+  const handleTradeSortChange = (sortBy: TradeSortField, sortDirection: TradeSortDirection) => {
+    setTradeSort({ sortBy, sortDirection });
+    setPage(0);
   };
 
   const filteredTrades = useMemo(() => {
@@ -1835,6 +1933,9 @@ export default function Home() {
               onDelete={handleDeleteTrade}
               onTradeDragStart={setDraggingTradeId}
               onTradeDragEnd={() => setDraggingTradeId(null)}
+              sortBy={user && token ? tradeSort.sortBy : undefined}
+              sortDirection={user && token ? tradeSort.sortDirection : undefined}
+              onSortChange={user && token ? handleTradeSortChange : undefined}
               page={user && !selectedDate ? page : undefined}
               pageSize={user && !selectedDate ? pageSize : undefined}
               totalElements={user && !selectedDate ? pageMeta.totalElements : undefined}
@@ -2175,6 +2276,9 @@ export default function Home() {
                   setPreferencesDraft((prev) => ({
                     themeMode: next,
                     pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+                    defaultTradeSortDirection:
+                      prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
                   }));
                 }}
               >
@@ -2191,6 +2295,9 @@ export default function Home() {
                   setPreferencesDraft((prev) => ({
                     themeMode: prev?.themeMode ?? mode,
                     pnlDisplayMode: next,
+                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+                    defaultTradeSortDirection:
+                      prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
                   }));
                 }}
               >
@@ -2198,6 +2305,47 @@ export default function Home() {
                 <FormControlLabel value="percent" control={<Radio />} label="% Return" />
               </RadioGroup>
             </FormControl>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                select
+                fullWidth
+                label="Default trade sort"
+                value={preferencesDraft?.defaultTradeSortBy ?? tradeSort.sortBy}
+                onChange={(event) => {
+                  const next = event.target.value as TradeSortField;
+                  setPreferencesDraft((prev) => ({
+                    themeMode: prev?.themeMode ?? mode,
+                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                    defaultTradeSortBy: resolveTradeSortBy(next),
+                    defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+                  }));
+                }}
+              >
+                {SORTABLE_TRADE_FIELDS.map((field) => (
+                  <MenuItem key={field} value={field}>
+                    {TRADE_SORT_LABELS[field]}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                fullWidth
+                label="Direction"
+                value={preferencesDraft?.defaultTradeSortDirection ?? tradeSort.sortDirection}
+                onChange={(event) => {
+                  const next = event.target.value as TradeSortDirection;
+                  setPreferencesDraft((prev) => ({
+                    themeMode: prev?.themeMode ?? mode,
+                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+                    defaultTradeSortDirection: resolveTradeSortDirection(next),
+                  }));
+                }}
+              >
+                <MenuItem value="DESC">Descending</MenuItem>
+                <MenuItem value="ASC">Ascending</MenuItem>
+              </TextField>
+            </Stack>
             <TextField
               label="Widget scope (optional)"
               value={statsScopeDraft}
