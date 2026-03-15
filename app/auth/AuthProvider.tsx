@@ -24,6 +24,8 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const PREFERENCES_KEY_PREFIX = "user-preferences";
+
 function decodeToken(token: string): UserInfo | null {
   try {
     const payload = token.split(".")[1];
@@ -40,10 +42,39 @@ function decodeToken(token: string): UserInfo | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    const stored = getAuthToken();
+    if (!stored) return null;
+    const info = decodeToken(stored);
+    if (!info || (info.exp && Date.now() >= info.exp * 1000)) {
+      clearAuthToken();
+      return null;
+    }
+    return stored;
+  });
+  const [user, setUser] = useState<UserInfo | null>(() => {
+    const stored = getAuthToken();
+    if (!stored) return null;
+    const info = decodeToken(stored);
+    if (!info || (info.exp && Date.now() >= info.exp * 1000)) return null;
+    return info;
+  });
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
+  const [preferences, setPreferencesState] = useState<UserPreferences | null>(() => {
+    const stored = getAuthToken();
+    if (!stored) return null;
+    const info = decodeToken(stored);
+    if (!info) return null;
+    const authId = info.sub || info.email;
+    if (!authId) return null;
+    try {
+      const raw = window.localStorage.getItem(`${PREFERENCES_KEY_PREFIX}:${authId}`);
+      if (!raw) return null;
+      return JSON.parse(raw) as UserPreferences;
+    } catch {
+      return null;
+    }
+  });
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
@@ -51,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const profileRequestId = useRef(0);
   const tokenSourceRef = useRef<"login" | "storage" | null>(null);
 
-  const preferenceStorageKey = useCallback((authId: string) => `user-preferences:${authId}`, []);
+  const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
 
   const loadPreferencesCache = useCallback(
     (authId: string) => {
@@ -122,11 +153,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const info = decodeToken(stored);
       if (info && (!info.exp || Date.now() < info.exp * 1000)) {
         tokenSourceRef.current = "storage";
-        setToken(stored);
-        setUser(info);
+        // Only set token/user if not already initialized synchronously
+        if (!token) {
+          setToken(stored);
+          setUser(info);
+        }
         scheduleLogout(info.exp);
       } else {
         clearAuthToken();
+        if (token) {
+          setToken(null);
+          setUser(null);
+        }
       }
     }
     setInitializing(false);
