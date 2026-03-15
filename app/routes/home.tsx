@@ -640,6 +640,7 @@ export default function Home() {
   });
   const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [hidePastTrades, setHidePastTrades] = useState(false);
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -1693,9 +1694,16 @@ export default function Home() {
   };
 
   const filteredTrades = useMemo(() => {
-    if (!selectedDate) return trades;
-    return trades.filter((trade) => trade.closedAt.startsWith(selectedDate));
-  }, [selectedDate, trades]);
+    let result = trades;
+    if (selectedDate) {
+      result = result.filter((trade) => trade.closedAt.startsWith(selectedDate));
+    }
+    if (hidePastTrades) {
+      const today = new Date().toISOString().slice(0, 10);
+      result = result.filter((trade) => trade.closedAt >= today);
+    }
+    return result;
+  }, [hidePastTrades, selectedDate, trades]);
   const accountNamesById = useMemo(
     () => Object.fromEntries(accounts.map((account) => [account.id, account.name])),
     [accounts]
@@ -1918,11 +1926,21 @@ export default function Home() {
                 onTradeDrop={handleDropTradeToDate}
                 valueMode={calendarValueMode}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-                {fxRate
-                  ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                  : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
-              </Typography>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary">
+                  {fxRate
+                    ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                    : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
+                </Typography>
+                <Chip
+                  label="Hide closed trades from table"
+                  size="small"
+                  variant={hidePastTrades ? "filled" : "outlined"}
+                  color={hidePastTrades ? "primary" : "default"}
+                  onClick={() => setHidePastTrades((v) => !v)}
+                  onDelete={hidePastTrades ? () => setHidePastTrades(false) : undefined}
+                />
+              </Stack>
             </CardContent>
           </Card>
 
