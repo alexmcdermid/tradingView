@@ -615,6 +615,8 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
 };
 
 export default function Home() {
+  const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
+  const { mode, setMode } = useColorMode();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
   const [aggregateStats, setAggregateStats] = useState<AggregateStats | null>(null);
@@ -626,10 +628,10 @@ export default function Home() {
   const [tradeSort, setTradeSort] = useState<{
     sortBy: TradeSortField;
     sortDirection: TradeSortDirection;
-  }>({
-    sortBy: DEFAULT_TRADE_SORT_BY,
-    sortDirection: DEFAULT_TRADE_SORT_DIRECTION,
-  });
+  }>(() => ({
+    sortBy: resolveTradeSortBy(preferences?.defaultTradeSortBy),
+    sortDirection: resolveTradeSortDirection(preferences?.defaultTradeSortDirection),
+  }));
   const [pageMeta, setPageMeta] = useState<{ totalPages: number; hasNext: boolean; hasPrevious: boolean; totalElements: number }>({
     totalPages: 0,
     hasNext: false,
@@ -666,12 +668,12 @@ export default function Home() {
     defaultMarginRateCad: "0",
   });
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
-  const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">("pnl");
+  const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">(() =>
+    preferences?.pnlDisplayMode === "PERCENT" ? "percent" : "pnl"
+  );
   const [statsScopeFilter, setStatsScopeFilter] = useState<string | null>(null);
   const [statsScopeDraft, setStatsScopeDraft] = useState("");
   const authBlockedRef = useRef(false);
-  const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
-  const { mode, setMode } = useColorMode();
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [preferencesDialogOpen, setPreferencesDialogOpen] = useState(false);
@@ -902,7 +904,7 @@ export default function Home() {
     [computeSummary, pickBestBucket, resolveLatestTradeYear]
   );
 
-  const loadTrades = useCallback(async (targetPage: number, targetSize: number, date?: string) => {
+  const loadTrades = useCallback(async (targetPage: number, targetSize: number, date?: string, month?: string) => {
     if (!user || !token) {
       return;
     }
@@ -911,7 +913,7 @@ export default function Home() {
       const tradeData = await fetchTrades(
         targetPage,
         targetSize,
-        undefined,
+        month,
         date,
         tradeSort.sortBy,
         tradeSort.sortDirection
@@ -974,8 +976,8 @@ export default function Home() {
       loadTrades(0, pageSize, selectedDate);
       return;
     }
-    loadTrades(page, pageSize);
-  }, [loadTrades, page, pageSize, selectedDate, token, user]);
+    loadTrades(page, pageSize, undefined, calendarMonth);
+  }, [calendarMonth, loadTrades, page, pageSize, selectedDate, token, user]);
 
   useEffect(() => {
     if (!user || !token) {
@@ -1357,7 +1359,7 @@ export default function Home() {
         if (selectedDate) {
           await loadTrades(0, pageSize, selectedDate);
         } else {
-          await loadTrades(page, pageSize);
+          await loadTrades(page, pageSize, undefined, calendarMonth);
         }
         await loadSummary(calendarMonth);
         await loadAggregateStats();
@@ -1421,7 +1423,7 @@ export default function Home() {
         if (selectedDate) {
           await loadTrades(0, pageSize, selectedDate);
         } else {
-          await loadTrades(page, pageSize);
+          await loadTrades(page, pageSize, undefined, calendarMonth);
         }
         await loadSummary(calendarMonth);
         await loadAggregateStats();
@@ -1486,7 +1488,7 @@ export default function Home() {
         if (selectedDate) {
           await loadTrades(0, pageSize, selectedDate);
         } else {
-          await loadTrades(page, pageSize);
+          await loadTrades(page, pageSize, undefined, calendarMonth);
         }
         await loadSummary(calendarMonth);
         await loadAggregateStats();
@@ -1665,7 +1667,7 @@ export default function Home() {
       return;
     }
     setPage(0);
-    await loadTrades(0, pageSize);
+    await loadTrades(0, pageSize, undefined, month);
   };
 
   const handleDateSelect = (date: string) => {
