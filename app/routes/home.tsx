@@ -58,6 +58,7 @@ import {
   createUserAccount,
   deleteUserAccount,
   listUserAccounts,
+  updateUserAccount,
   updateUserPreferences,
 } from "../api/users";
 import { TradeDialog, type TradeFormValues } from "../components/TradeDialog";
@@ -668,6 +669,15 @@ export default function Home() {
     defaultMarginRateUsd: "0",
     defaultMarginRateCad: "0",
   });
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [savingEditAccount, setSavingEditAccount] = useState(false);
+  const [accountEditDraft, setAccountEditDraft] = useState({
+    name: "",
+    defaultStockFees: "0",
+    defaultOptionFees: "0",
+    defaultMarginRateUsd: "0",
+    defaultMarginRateCad: "0",
+  });
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
   const [calendarValueMode, setCalendarValueMode] = useState<"pnl" | "percent">(() =>
     preferences?.pnlDisplayMode === "PERCENT" ? "percent" : "pnl"
@@ -1226,6 +1236,66 @@ export default function Home() {
       handleRequestError(err);
     } finally {
       setDeletingAccountId(null);
+    }
+  };
+
+  const handleStartEditAccount = (account: TradingAccount) => {
+    setEditingAccountId(account.id);
+    setAccountEditDraft({
+      name: account.name,
+      defaultStockFees: String(account.defaultStockFees),
+      defaultOptionFees: String(account.defaultOptionFees),
+      defaultMarginRateUsd: String(account.defaultMarginRateUsd),
+      defaultMarginRateCad: String(account.defaultMarginRateCad),
+    });
+  };
+
+  const handleCancelEditAccount = () => {
+    setEditingAccountId(null);
+  };
+
+  const handleSaveEditAccount = async (accountId: string) => {
+    if (!accountEditDraft.name.trim()) {
+      setError("Account name is required.");
+      return;
+    }
+    const stockFees = Number(accountEditDraft.defaultStockFees);
+    const optionFees = Number(accountEditDraft.defaultOptionFees);
+    const marginUsd = Number(accountEditDraft.defaultMarginRateUsd);
+    const marginCad = Number(accountEditDraft.defaultMarginRateCad);
+    if (
+      !Number.isFinite(stockFees) ||
+      !Number.isFinite(optionFees) ||
+      !Number.isFinite(marginUsd) ||
+      !Number.isFinite(marginCad) ||
+      stockFees < 0 ||
+      optionFees < 0 ||
+      marginUsd < 0 ||
+      marginCad < 0
+    ) {
+      setError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
+      return;
+    }
+    try {
+      setSavingEditAccount(true);
+      const updated = await updateUserAccount(accountId, {
+        name: accountEditDraft.name.trim(),
+        defaultStockFees: Number(stockFees.toFixed(2)),
+        defaultOptionFees: Number(optionFees.toFixed(2)),
+        defaultMarginRateUsd: Number(marginUsd.toFixed(4)),
+        defaultMarginRateCad: Number(marginCad.toFixed(4)),
+      });
+      const normalizedUpdated = normalizeAccount(updated);
+      setAccounts((prev) =>
+        sortAccountsByName(
+          prev.map((account) => (account.id === accountId ? normalizedUpdated : account))
+        )
+      );
+      setEditingAccountId(null);
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setSavingEditAccount(false);
     }
   };
 
@@ -2121,8 +2191,9 @@ export default function Home() {
       <Dialog
         open={accountsDialogOpen}
         onClose={() => {
-          if (!savingAccount && !deletingAccountId) {
+          if (!savingAccount && !deletingAccountId && !savingEditAccount) {
             setAccountsDialogOpen(false);
+            setEditingAccountId(null);
           }
         }}
         aria-labelledby="accounts-dialog-title"
@@ -2220,6 +2291,7 @@ export default function Home() {
             ) : (
               <Stack spacing={1}>
                 {accounts.map((account) => {
+                  const isEditing = editingAccountId === account.id;
                   const stockFeeRaw = Number(account.defaultStockFees);
                   const optionFeeRaw = Number(account.defaultOptionFees);
                   const marginUsdRaw = Number(account.defaultMarginRateUsd);
@@ -2238,28 +2310,117 @@ export default function Home() {
                         p: 1.5,
                       }}
                     >
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={1}
-                        justifyContent="space-between"
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                      >
-                        <Typography variant="body2" fontWeight={700}>
-                          {account.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Stock fee/trade: {stockFee.toFixed(2)} | Option fee/contract: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
-                        </Typography>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          onClick={() => void handleDeleteAccount(account.id)}
-                          disabled={deletingAccountId === account.id}
+                      {isEditing ? (
+                        <Stack spacing={1.5}>
+                          <TextField
+                            label="Brokerage Name"
+                            value={accountEditDraft.name}
+                            onChange={(event) =>
+                              setAccountEditDraft((prev) => ({ ...prev, name: event.target.value }))
+                            }
+                            fullWidth
+                            size="small"
+                          />
+                          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                            <TextField
+                              label="Stock Fee"
+                              type="number"
+                              value={accountEditDraft.defaultStockFees}
+                              onChange={(event) =>
+                                setAccountEditDraft((prev) => ({ ...prev, defaultStockFees: event.target.value }))
+                              }
+                              inputProps={{ min: 0, step: 0.01 }}
+                              fullWidth
+                              size="small"
+                            />
+                            <TextField
+                              label="Option Fee / Contract"
+                              type="number"
+                              value={accountEditDraft.defaultOptionFees}
+                              onChange={(event) =>
+                                setAccountEditDraft((prev) => ({ ...prev, defaultOptionFees: event.target.value }))
+                              }
+                              inputProps={{ min: 0, step: 0.01 }}
+                              fullWidth
+                              size="small"
+                            />
+                          </Stack>
+                          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                            <TextField
+                              label="Margin USD %"
+                              type="number"
+                              value={accountEditDraft.defaultMarginRateUsd}
+                              onChange={(event) =>
+                                setAccountEditDraft((prev) => ({ ...prev, defaultMarginRateUsd: event.target.value }))
+                              }
+                              inputProps={{ min: 0, step: 0.01 }}
+                              fullWidth
+                              size="small"
+                            />
+                            <TextField
+                              label="Margin CAD %"
+                              type="number"
+                              value={accountEditDraft.defaultMarginRateCad}
+                              onChange={(event) =>
+                                setAccountEditDraft((prev) => ({ ...prev, defaultMarginRateCad: event.target.value }))
+                              }
+                              inputProps={{ min: 0, step: 0.01 }}
+                              fullWidth
+                              size="small"
+                            />
+                          </Stack>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => void handleSaveEditAccount(account.id)}
+                              disabled={savingEditAccount}
+                            >
+                              {savingEditAccount ? "Saving..." : "Save"}
+                            </Button>
+                            <Button
+                              size="small"
+                              onClick={handleCancelEditAccount}
+                              disabled={savingEditAccount}
+                            >
+                              Cancel
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      ) : (
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={1}
+                          justifyContent="space-between"
+                          alignItems={{ xs: "flex-start", sm: "center" }}
                         >
-                          {deletingAccountId === account.id ? "Deleting..." : "Delete"}
-                        </Button>
-                      </Stack>
+                          <Typography variant="body2" fontWeight={700}>
+                            {account.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            Stock fee/trade: {stockFee.toFixed(2)} | Option fee/contract: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
+                          </Typography>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => handleStartEditAccount(account)}
+                              disabled={!!deletingAccountId || !!editingAccountId}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="outlined"
+                              onClick={() => void handleDeleteAccount(account.id)}
+                              disabled={deletingAccountId === account.id || !!editingAccountId}
+                            >
+                              {deletingAccountId === account.id ? "Deleting..." : "Delete"}
+                            </Button>
+                          </Stack>
+                        </Stack>
+                      )}
                     </Box>
                   );
                 })}
@@ -2269,8 +2430,11 @@ export default function Home() {
         </DialogContent>
         <DialogActions>
           <Button
-            onClick={() => setAccountsDialogOpen(false)}
-            disabled={savingAccount || !!deletingAccountId}
+            onClick={() => {
+              setAccountsDialogOpen(false);
+              setEditingAccountId(null);
+            }}
+            disabled={savingAccount || !!deletingAccountId || savingEditAccount}
           >
             Close
           </Button>

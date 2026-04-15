@@ -37,6 +37,13 @@ export async function createUserAccount(payload: TradingAccountPayload) {
   });
 }
 
+export async function updateUserAccount(accountId: string, payload: TradingAccountPayload) {
+  return request<TradingAccount>(`/users/me/accounts/${accountId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function deleteUserAccount(accountId: string) {
   return request<void>(`/users/me/accounts/${accountId}`, {
     method: "DELETE",
