@@ -131,7 +131,7 @@ const parseEmailList = (value?: string) => {
 const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
 const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
 type CalendarMarginMode = "combined" | "pnl" | "margin";
-const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["combined", "pnl", "margin"];
+const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["pnl", "margin", "combined"];
 const getCalendarMarginModeLabel = (
   marginMode: CalendarMarginMode,
   valueMode: "pnl" | "percent"
@@ -654,7 +654,7 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hidePastTrades, setHidePastTrades] = useState(false);
-  const [calendarMarginMode, setCalendarMarginMode] = useState<CalendarMarginMode>("combined");
+  const [calendarMarginMode, setCalendarMarginMode] = useState<CalendarMarginMode>("pnl");
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -2049,7 +2049,7 @@ export default function Home() {
                 <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "block", sm: "none" } }}>
                   {fxRate ? `USD P/L. CAD @ ${fxRate.toFixed(5)}` : "USD P/L. Latest CAD rate."}
                 </Typography>
-                <Box sx={{ display: "flex", justifyContent: { xs: "flex-start", sm: "flex-end" } }}>
+                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
                   <IconButton
                     size="small"
                     aria-label="View options"
@@ -2058,6 +2058,7 @@ export default function Home() {
                     aria-expanded={calendarOptionsAnchor ? "true" : undefined}
                     onClick={(event) => setCalendarOptionsAnchor(event.currentTarget)}
                     sx={{
+                      display: { xs: "inline-flex", sm: "none" },
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1,
@@ -2090,6 +2091,34 @@ export default function Home() {
                       </Stack>
                     </MenuItem>
                   </Menu>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{
+                      display: { xs: "none", sm: "flex" },
+                      flexWrap: "wrap",
+                      rowGap: 0.75,
+                      justifyContent: "flex-end",
+                    }}
+                  >
+                    <Chip
+                      label={`Month view: ${getCalendarMarginModeLabel(calendarMarginMode, calendarValueMode)}`}
+                      size="small"
+                      variant={calendarMarginMode === "pnl" ? "outlined" : "filled"}
+                      color={calendarMarginMode === "pnl" ? "default" : "primary"}
+                      onClick={handleCalendarMarginModeToggle}
+                      onDelete={calendarMarginMode === "pnl" ? undefined : () => setCalendarMarginMode("pnl")}
+                    />
+                    <Chip
+                      label="Hide closed trades from table"
+                      size="small"
+                      variant={hidePastTrades ? "filled" : "outlined"}
+                      color={hidePastTrades ? "primary" : "default"}
+                      onClick={() => setHidePastTrades((v) => !v)}
+                      onDelete={hidePastTrades ? () => setHidePastTrades(false) : undefined}
+                    />
+                  </Stack>
                 </Box>
               </Stack>
             </CardContent>
