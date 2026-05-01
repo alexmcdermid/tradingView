@@ -62,3 +62,10 @@ declare module "@mui/icons-material/LinkOutlined" {
   const Icon: React.FC<SvgIconProps>;
   export default Icon;
 }
+
+declare module "@mui/icons-material/Tune" {
+  import * as React from "react";
+  import { SvgIconProps } from "@mui/material/SvgIcon";
+  const Icon: React.FC<SvgIconProps>;
+  export default Icon;
+}

@@ -1,0 +1,30 @@
+name: Frontend Regression
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 10 1 * *"
+
+jobs:
+  cypress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Cypress regression
+        uses: cypress-io/github-action@v6
+        with:
+          install: false
+          build: npm run build
+          command: npm run test:e2e -- --config baseUrl=http://127.0.0.1:3000
+          start: npm run start
+          wait-on: http://127.0.0.1:3000
+          browser: chrome
+        env:
+          VITE_GOOGLE_CLIENT_ID: ci-regression-client-id

@@ -2,6 +2,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ShareIcon from "@mui/icons-material/Share";
+import TuneIcon from "@mui/icons-material/Tune";
 import {
   Alert,
   AppBar,
@@ -66,7 +67,7 @@ import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
-import { computeRealizedPnl } from "../utils/tradeMath";
+import { computeMarginFee, computeRealizedPnl } from "../utils/tradeMath";
 import {
   buildSharePayload,
   buildTradesSharePayload,
@@ -129,6 +130,17 @@ const parseEmailList = (value?: string) => {
 
 const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
 const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
+type CalendarMarginMode = "combined" | "pnl" | "margin";
+const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["combined", "pnl", "margin"];
+const getCalendarMarginModeLabel = (
+  marginMode: CalendarMarginMode,
+  valueMode: "pnl" | "percent"
+) => {
+  const pnlLabel = valueMode === "percent" ? "Return" : "P/L";
+  if (marginMode === "combined") return `${pnlLabel} + margin`;
+  if (marginMode === "pnl") return `${pnlLabel} only`;
+  return "Margin only";
+};
 
 const SORTABLE_TRADE_FIELDS: TradeSortField[] = [
   "SYMBOL",
@@ -642,6 +654,7 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hidePastTrades, setHidePastTrades] = useState(false);
+  const [calendarMarginMode, setCalendarMarginMode] = useState<CalendarMarginMode>("combined");
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -687,6 +700,7 @@ export default function Home() {
   const authBlockedRef = useRef(false);
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [calendarOptionsAnchor, setCalendarOptionsAnchor] = useState<null | HTMLElement>(null);
   const [preferencesDialogOpen, setPreferencesDialogOpen] = useState(false);
   const [preferencesDraft, setPreferencesDraft] = useState<{
     themeMode: "light" | "dark";
@@ -788,6 +802,17 @@ export default function Home() {
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
     const toUsd = (trade: Trade) =>
       trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
+    const toUsdMarginFee = (trade: Trade) => {
+      const marginFee = computeMarginFee({
+        entryPrice: trade.entryPrice,
+        quantity: trade.quantity,
+        assetType: trade.assetType,
+        marginRate: trade.marginRate ?? 0,
+        openedAt: trade.openedAt,
+        closedAt: trade.closedAt,
+      });
+      return trade.currency === "CAD" ? marginFee * cadToUsd : marginFee;
+    };
     const toUsdNotional = (trade: Trade) => {
       const multiplier = trade.assetType === "OPTION" ? 100 : 1;
       const notional = trade.entryPrice * trade.quantity * multiplier;
@@ -807,22 +832,25 @@ export default function Home() {
     const pnlPercent = totalNotional > 0
       ? Number(((totalPnl / totalNotional) * 100).toFixed(2))
       : undefined;
-    const dailyMap = new Map<string, { pnl: number; trades: number; notional: number }>();
-    const monthlyMap = new Map<string, { pnl: number; trades: number; notional: number }>();
+    const dailyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
+    const monthlyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
 
     filtered.forEach((trade) => {
       const day = trade.closedAt.slice(0, 10);
       const month = trade.closedAt.slice(0, 7);
       const notional = toUsdNotional(trade);
+      const marginFee = toUsdMarginFee(trade);
       dailyMap.set(day, {
         pnl: (dailyMap.get(day)?.pnl || 0) + toUsd(trade),
         trades: (dailyMap.get(day)?.trades || 0) + 1,
         notional: (dailyMap.get(day)?.notional || 0) + notional,
+        marginFee: (dailyMap.get(day)?.marginFee || 0) + marginFee,
       });
       monthlyMap.set(month, {
         pnl: (monthlyMap.get(month)?.pnl || 0) + toUsd(trade),
         trades: (monthlyMap.get(month)?.trades || 0) + 1,
         notional: (monthlyMap.get(month)?.notional || 0) + notional,
+        marginFee: (monthlyMap.get(month)?.marginFee || 0) + marginFee,
       });
     });
 
@@ -835,6 +863,7 @@ export default function Home() {
         pnlPercent: data.notional > 0
           ? Number(((data.pnl / data.notional) * 100).toFixed(2))
           : undefined,
+        marginFee: Number(data.marginFee.toFixed(2)),
       }));
     const monthly: PnlBucket[] = Array.from(monthlyMap.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -845,6 +874,7 @@ export default function Home() {
         pnlPercent: data.notional > 0
           ? Number(((data.pnl / data.notional) * 100).toFixed(2))
           : undefined,
+        marginFee: Number(data.marginFee.toFixed(2)),
       }));
 
     return {
@@ -1758,6 +1788,13 @@ export default function Home() {
     setPage(0);
   };
 
+  const handleCalendarMarginModeToggle = () => {
+    setCalendarMarginMode((current) => {
+      const currentIndex = CALENDAR_MARGIN_MODES.indexOf(current);
+      return CALENDAR_MARGIN_MODES[(currentIndex + 1) % CALENDAR_MARGIN_MODES.length];
+    });
+  };
+
   const handleTradeSortChange = (sortBy: TradeSortField, sortDirection: TradeSortDirection) => {
     setTradeSort({ sortBy, sortDirection });
     setPage(0);
@@ -1995,21 +2032,65 @@ export default function Home() {
                 draggingTradeId={draggingTradeId}
                 onTradeDrop={handleDropTradeToDate}
                 valueMode={calendarValueMode}
+                marginMode={calendarMarginMode}
               />
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 1 }}>
-                <Typography variant="caption" color="text.secondary">
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                alignItems={{ xs: "stretch", sm: "center" }}
+                justifyContent="space-between"
+                spacing={{ xs: 0.75, sm: 1 }}
+                sx={{ mt: 1 }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
                   {fxRate
                     ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
                     : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
                 </Typography>
-                <Chip
-                  label="Hide closed trades from table"
-                  size="small"
-                  variant={hidePastTrades ? "filled" : "outlined"}
-                  color={hidePastTrades ? "primary" : "default"}
-                  onClick={() => setHidePastTrades((v) => !v)}
-                  onDelete={hidePastTrades ? () => setHidePastTrades(false) : undefined}
-                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "block", sm: "none" } }}>
+                  {fxRate ? `USD P/L. CAD @ ${fxRate.toFixed(5)}` : "USD P/L. Latest CAD rate."}
+                </Typography>
+                <Box sx={{ display: "flex", justifyContent: { xs: "flex-start", sm: "flex-end" } }}>
+                  <IconButton
+                    size="small"
+                    aria-label="View options"
+                    aria-controls={calendarOptionsAnchor ? "calendar-view-options-menu" : undefined}
+                    aria-haspopup="menu"
+                    aria-expanded={calendarOptionsAnchor ? "true" : undefined}
+                    onClick={(event) => setCalendarOptionsAnchor(event.currentTarget)}
+                    sx={{
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                    }}
+                  >
+                    <TuneIcon fontSize="small" />
+                  </IconButton>
+                  <Menu
+                    id="calendar-view-options-menu"
+                    anchorEl={calendarOptionsAnchor}
+                    open={Boolean(calendarOptionsAnchor)}
+                    onClose={() => setCalendarOptionsAnchor(null)}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                    transformOrigin={{ vertical: "top", horizontal: "right" }}
+                  >
+                    <MenuItem onClick={handleCalendarMarginModeToggle}>
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2">Toggle margin</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {getCalendarMarginModeLabel(calendarMarginMode, calendarValueMode)}
+                        </Typography>
+                      </Stack>
+                    </MenuItem>
+                    <MenuItem onClick={() => setHidePastTrades((v) => !v)} selected={hidePastTrades}>
+                      <Stack spacing={0.25}>
+                        <Typography variant="body2">Hide closed trades</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {hidePastTrades ? "On" : "Off"}
+                        </Typography>
+                      </Stack>
+                    </MenuItem>
+                  </Menu>
+                </Box>
               </Stack>
             </CardContent>
           </Card>

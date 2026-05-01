@@ -32,6 +32,7 @@ interface MonthlyCalendarProps {
   readOnly?: boolean;
   holidays?: string[];
   valueMode?: "pnl" | "percent";
+  marginMode?: "combined" | "pnl" | "margin";
 }
 
 function toDate(value?: string) {
@@ -154,6 +155,7 @@ export function MonthlyCalendar({
   readOnly = false,
   holidays,
   valueMode = "pnl",
+  marginMode = "combined",
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
   const pendingFocusDateRef = useRef<string | null>(null);
@@ -194,17 +196,14 @@ export function MonthlyCalendar({
     }
   }, [draggingTradeId]);
 
-  const pnlByDate = useMemo(() => {
-    const map = new Map<string, number>();
+  const bucketByDate = useMemo(() => {
+    const map = new Map<string, PnlBucket>();
     daily.forEach((bucket) => {
       const dayKey = bucket.period.slice(0, 10);
-      const value = valueMode === "percent" ? bucket.pnlPercent : bucket.pnl;
-      if (value !== null && value !== undefined) {
-        map.set(dayKey, value);
-      }
+      map.set(dayKey, bucket);
     });
     return map;
-  }, [daily, valueMode]);
+  }, [daily]);
 
   const holidaySet = useMemo(() => {
     if (holidays && holidays.length > 0) {
@@ -360,7 +359,13 @@ export function MonthlyCalendar({
           )}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {valueMode === "percent" ? "Return % per day" : "P/L per day"}
+          {marginMode === "margin"
+            ? "Margin per day"
+            : marginMode === "combined"
+              ? `${valueMode === "percent" ? "Return %" : "P/L"} + margin per day`
+              : valueMode === "percent"
+                ? "Return % per day"
+                : "P/L per day"}
         </Typography>
       </Stack>
 
@@ -396,17 +401,27 @@ export function MonthlyCalendar({
             return <Box key={`blank-${idx}`} />;
           }
           const dayNumber = Number(date.split("-")[2]);
-          const pnl = pnlByDate.get(date) ?? null;
+          const bucket = bucketByDate.get(date);
+          const pnl = bucket
+            ? valueMode === "percent"
+              ? bucket.pnlPercent ?? null
+              : bucket.pnl
+            : null;
+          const marginFee = bucket?.marginFee ?? 0;
           const cellDate = toDay(date);
           const today = new Date();
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-          const isPastNoTrade = pnl == null && cellDate < todayStart;
+          const hasTrade = Boolean(bucket);
+          const isPastNoTrade = !hasTrade && cellDate < todayStart;
           const isHoliday = holidaySet.has(date);
-          const hasPnl = pnl != null;
-          const showHolidayLabel = isHoliday && !hasPnl;
+          const showHolidayLabel = isHoliday && !hasTrade;
           const isSelected = selectedDate === date;
           const color =
-            !hasPnl
+            marginMode === "margin" && hasTrade
+              ? marginFee > 0
+                ? "warning.main"
+                : "text.primary"
+              : !hasTrade || pnl == null
               ? showHolidayLabel || isPastNoTrade
                 ? "text.disabled"
                 : "text.secondary"
@@ -419,9 +434,17 @@ export function MonthlyCalendar({
             if (showHolidayLabel) {
               return theme.palette.action.disabledBackground;
             }
-            if (!hasPnl) {
+            if (!hasTrade) {
               if (isPastNoTrade) return theme.palette.action.disabledBackground;
               return "transparent";
+            }
+            if (marginMode === "margin") {
+              return marginFee > 0
+                ? alpha(theme.palette.warning.main, 0.14)
+                : alpha(theme.palette.text.primary, 0.06);
+            }
+            if (pnl == null) {
+              return alpha(theme.palette.text.primary, 0.06);
             }
             if (pnl > 0) return alpha(theme.palette.success.main, 0.12);
             if (pnl < 0) return alpha(theme.palette.error.main, 0.12);
@@ -431,14 +454,17 @@ export function MonthlyCalendar({
           const selectable = onDateSelect && !readOnly;
           const dropEnabled = Boolean(onTradeDrop) && !readOnly;
           const isDropTarget = dropEnabled && dropTargetDate === date && Boolean(draggingTradeId);
-          const displayValue =
+          const pnlDisplayValue =
             showHolidayLabel
               ? "Holiday"
-              : !hasPnl
+              : !hasTrade || pnl == null
                 ? "—"
                 : valueMode === "percent"
                   ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
                   : pnl.toFixed(2);
+          const marginDisplayValue = showHolidayLabel ? "Holiday" : !hasTrade ? "—" : marginFee.toFixed(2);
+          const displayValue = marginMode === "margin" ? marginDisplayValue : pnlDisplayValue;
+          const showMarginLine = marginMode === "combined" && hasTrade && !showHolidayLabel;
 
           const content = (
             <Box
@@ -519,10 +545,20 @@ export function MonthlyCalendar({
               >
                 {displayValue}
               </Typography>
+              {showMarginLine && (
+                <Typography
+                  variant="caption"
+                  color={marginFee > 0 ? "warning.main" : "text.secondary"}
+                  fontWeight={700}
+                  sx={{ fontSize: { xs: "0.66rem", sm: "0.7rem" }, display: "block", whiteSpace: "nowrap" }}
+                >
+                  M {marginDisplayValue}
+                </Typography>
+              )}
             </Box>
           );
 
-          if (!hasPnl) {
+          if (!hasTrade) {
             return <Box key={date}>{content}</Box>;
           }
 
@@ -530,9 +566,13 @@ export function MonthlyCalendar({
             <Tooltip
               key={date}
               title={
-                valueMode === "percent"
-                  ? `Return: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
-                  : `P/L: ${pnl.toFixed(2)}`
+                marginMode === "margin"
+                  ? `Margin: ${marginDisplayValue}`
+                  : marginMode === "combined"
+                    ? `${valueMode === "percent" ? "Return" : "P/L"}: ${pnlDisplayValue} / Margin: ${marginDisplayValue}`
+                    : valueMode === "percent"
+                      ? `Return: ${pnlDisplayValue}`
+                      : `P/L: ${pnlDisplayValue}`
               }
             >
               <span>{content}</span>
