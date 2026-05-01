@@ -76,6 +76,7 @@ export interface PnlBucket {
   pnl: number;
   trades: number;
   pnlPercent?: number | null;
+  marginFee?: number | null;
 }
 
 export interface PnlSummary {
