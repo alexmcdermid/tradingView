@@ -308,10 +308,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useGoogleOneTapLogin({
     onSuccess: (response) => handleSuccess(response.credential),
     onError: () => {
-      // Ignore one-tap prompt dismissals/errors; the button remains available.
+      // Ignore prompt dismissals/errors; the explicit button remains available.
     },
     auto_select: true,
     use_fedcm_for_prompt: true,
+    use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
     disabled: !mounted || !!token,
   });
