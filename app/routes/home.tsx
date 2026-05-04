@@ -1969,7 +1969,7 @@ export default function Home() {
           </Grid>
 
           <Card variant="outlined">
-            <CardContent>
+            <CardContent sx={{ "&:last-child": { pb: 2 } }}>
               <Stack
                 direction={{ xs: "column", sm: "row" }}
                 justifyContent="space-between"
