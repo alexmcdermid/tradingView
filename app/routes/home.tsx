@@ -130,13 +130,14 @@ const parseEmailList = (value?: string) => {
 
 const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
 const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
-type CalendarMarginMode = "combined" | "pnl" | "margin";
-const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["pnl", "margin", "combined"];
+type CalendarMarginMode = "net" | "pnl" | "margin" | "combined";
+const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["net", "pnl", "margin", "combined"];
 const getCalendarMarginModeLabel = (
   marginMode: CalendarMarginMode,
   valueMode: "pnl" | "percent"
 ) => {
   const pnlLabel = valueMode === "percent" ? "Return" : "P/L";
+  if (marginMode === "net") return `${pnlLabel} - margin`;
   if (marginMode === "combined") return `${pnlLabel} + margin`;
   if (marginMode === "pnl") return `${pnlLabel} only`;
   return "Margin only";
@@ -654,7 +655,7 @@ export default function Home() {
   const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [hidePastTrades, setHidePastTrades] = useState(false);
-  const [calendarMarginMode, setCalendarMarginMode] = useState<CalendarMarginMode>("pnl");
+  const [calendarMarginMode, setCalendarMarginMode] = useState<CalendarMarginMode>("net");
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
@@ -2035,21 +2036,29 @@ export default function Home() {
                 marginMode={calendarMarginMode}
               />
               <Stack
-                direction={{ xs: "column", sm: "row" }}
-                alignItems={{ xs: "stretch", sm: "center" }}
+                direction="row"
+                alignItems="center"
                 justifyContent="space-between"
-                spacing={{ xs: 0.75, sm: 1 }}
+                spacing={1}
                 sx={{ mt: 1 }}
               >
-                <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "none", sm: "block" } }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: { xs: "none", sm: "block" }, flex: 1, minWidth: 0 }}
+                >
                   {fxRate
                     ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
                     : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
                 </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: { xs: "block", sm: "none" } }}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: { xs: "block", sm: "none" }, flex: 1, minWidth: 0 }}
+                >
                   {fxRate ? `USD P/L. CAD @ ${fxRate.toFixed(5)}` : "USD P/L. Latest CAD rate."}
                 </Typography>
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <Box sx={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
                   <IconButton
                     size="small"
                     aria-label="View options"
@@ -2105,10 +2114,10 @@ export default function Home() {
                     <Chip
                       label={`Month view: ${getCalendarMarginModeLabel(calendarMarginMode, calendarValueMode)}`}
                       size="small"
-                      variant={calendarMarginMode === "pnl" ? "outlined" : "filled"}
-                      color={calendarMarginMode === "pnl" ? "default" : "primary"}
+                      variant={calendarMarginMode === "net" ? "outlined" : "filled"}
+                      color={calendarMarginMode === "net" ? "default" : "primary"}
                       onClick={handleCalendarMarginModeToggle}
-                      onDelete={calendarMarginMode === "pnl" ? undefined : () => setCalendarMarginMode("pnl")}
+                      onDelete={calendarMarginMode === "net" ? undefined : () => setCalendarMarginMode("net")}
                     />
                     <Chip
                       label="Hide closed trades from table"

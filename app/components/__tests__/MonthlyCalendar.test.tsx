@@ -23,19 +23,19 @@ describe("MonthlyCalendar", () => {
     expect(screen.getByText("-5.00")).toBeInTheDocument();
   });
 
-  it("can show P/L with margin, P/L only, or margin only", () => {
+  it("can show net P/L, gross P/L, margin, or P/L with margin", () => {
     const marginDaily = [{ period: "2024-05-02", pnl: 10, trades: 1, marginFee: 1.25 }];
     const { rerender } = render(
       <MonthlyCalendar daily={marginDaily} initialMonth="2024-05-01" />
     );
 
     expect(screen.getByText("10.00")).toBeInTheDocument();
-    expect(screen.getByText("M 1.25")).toBeInTheDocument();
+    expect(screen.queryByText("M 1.25")).not.toBeInTheDocument();
 
     rerender(
       <MonthlyCalendar daily={marginDaily} initialMonth="2024-05-01" marginMode="pnl" />
     );
-    expect(screen.getByText("10.00")).toBeInTheDocument();
+    expect(screen.getByText("11.25")).toBeInTheDocument();
     expect(screen.queryByText("M 1.25")).not.toBeInTheDocument();
 
     rerender(
@@ -43,6 +43,12 @@ describe("MonthlyCalendar", () => {
     );
     expect(screen.getByText("1.25")).toBeInTheDocument();
     expect(screen.queryByText("10.00")).not.toBeInTheDocument();
+
+    rerender(
+      <MonthlyCalendar daily={marginDaily} initialMonth="2024-05-01" marginMode="combined" />
+    );
+    expect(screen.getByText("10.00")).toBeInTheDocument();
+    expect(screen.getByText("M 1.25")).toBeInTheDocument();
   });
 
   it("navigates between months", async () => {

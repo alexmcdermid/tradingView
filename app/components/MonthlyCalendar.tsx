@@ -32,7 +32,7 @@ interface MonthlyCalendarProps {
   readOnly?: boolean;
   holidays?: string[];
   valueMode?: "pnl" | "percent";
-  marginMode?: "combined" | "pnl" | "margin";
+  marginMode?: "net" | "combined" | "pnl" | "margin";
 }
 
 function toDate(value?: string) {
@@ -155,7 +155,7 @@ export function MonthlyCalendar({
   readOnly = false,
   holidays,
   valueMode = "pnl",
-  marginMode = "combined",
+  marginMode = "net",
 }: MonthlyCalendarProps) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => toDate(month || initialMonth));
   const pendingFocusDateRef = useRef<string | null>(null);
@@ -363,6 +363,8 @@ export function MonthlyCalendar({
             ? "Margin per day"
             : marginMode === "combined"
               ? `${valueMode === "percent" ? "Return %" : "P/L"} + margin per day`
+              : marginMode === "net"
+                ? `${valueMode === "percent" ? "Return %" : "P/L"} - margin per day`
               : valueMode === "percent"
                 ? "Return % per day"
                 : "P/L per day"}
@@ -402,12 +404,15 @@ export function MonthlyCalendar({
           }
           const dayNumber = Number(date.split("-")[2]);
           const bucket = bucketByDate.get(date);
-          const pnl = bucket
+          const netPnl = bucket
             ? valueMode === "percent"
               ? bucket.pnlPercent ?? null
               : bucket.pnl
             : null;
           const marginFee = bucket?.marginFee ?? 0;
+          const grossPnl =
+            bucket && valueMode === "pnl" ? Number((bucket.pnl + marginFee).toFixed(2)) : netPnl;
+          const activePnl = marginMode === "pnl" ? grossPnl : netPnl;
           const cellDate = toDay(date);
           const today = new Date();
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -421,13 +426,13 @@ export function MonthlyCalendar({
               ? marginFee > 0
                 ? "warning.main"
                 : "text.primary"
-              : !hasTrade || pnl == null
+              : !hasTrade || activePnl == null
               ? showHolidayLabel || isPastNoTrade
                 ? "text.disabled"
                 : "text.secondary"
-              : pnl > 0
+              : activePnl > 0
                 ? "success.main"
-                : pnl < 0
+                : activePnl < 0
                   ? "error.main"
                   : "text.primary";
           const backgroundColor = (theme: Theme) => {
@@ -443,27 +448,42 @@ export function MonthlyCalendar({
                 ? alpha(theme.palette.warning.main, 0.14)
                 : alpha(theme.palette.text.primary, 0.06);
             }
-            if (pnl == null) {
+            if (activePnl == null) {
               return alpha(theme.palette.text.primary, 0.06);
             }
-            if (pnl > 0) return alpha(theme.palette.success.main, 0.12);
-            if (pnl < 0) return alpha(theme.palette.error.main, 0.12);
+            if (activePnl > 0) return alpha(theme.palette.success.main, 0.12);
+            if (activePnl < 0) return alpha(theme.palette.error.main, 0.12);
             return alpha(theme.palette.text.primary, 0.06);
           };
 
           const selectable = onDateSelect && !readOnly;
           const dropEnabled = Boolean(onTradeDrop) && !readOnly;
           const isDropTarget = dropEnabled && dropTargetDate === date && Boolean(draggingTradeId);
-          const pnlDisplayValue =
+          const formatPnlValue = (value: number | null) =>
+            value == null
+              ? "—"
+              : valueMode === "percent"
+                ? `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`
+                : value.toFixed(2);
+          const netPnlDisplayValue =
             showHolidayLabel
               ? "Holiday"
-              : !hasTrade || pnl == null
+              : !hasTrade
                 ? "—"
-                : valueMode === "percent"
-                  ? `${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)}%`
-                  : pnl.toFixed(2);
+                : formatPnlValue(netPnl);
+          const pnlOnlyDisplayValue =
+            showHolidayLabel
+              ? "Holiday"
+              : !hasTrade
+                ? "—"
+                : formatPnlValue(grossPnl);
           const marginDisplayValue = showHolidayLabel ? "Holiday" : !hasTrade ? "—" : marginFee.toFixed(2);
-          const displayValue = marginMode === "margin" ? marginDisplayValue : pnlDisplayValue;
+          const displayValue =
+            marginMode === "margin"
+              ? marginDisplayValue
+              : marginMode === "pnl"
+                ? pnlOnlyDisplayValue
+                : netPnlDisplayValue;
           const showMarginLine = marginMode === "combined" && hasTrade && !showHolidayLabel;
 
           const content = (
@@ -569,10 +589,12 @@ export function MonthlyCalendar({
                 marginMode === "margin"
                   ? `Margin: ${marginDisplayValue}`
                   : marginMode === "combined"
-                    ? `${valueMode === "percent" ? "Return" : "P/L"}: ${pnlDisplayValue} / Margin: ${marginDisplayValue}`
+                    ? `${valueMode === "percent" ? "Return" : "P/L"}: ${netPnlDisplayValue} / Margin: ${marginDisplayValue}`
+                    : marginMode === "net"
+                      ? `${valueMode === "percent" ? "Return" : "P/L"} - margin: ${netPnlDisplayValue}`
                     : valueMode === "percent"
-                      ? `Return: ${pnlDisplayValue}`
-                      : `P/L: ${pnlDisplayValue}`
+                      ? `Return: ${pnlOnlyDisplayValue}`
+                      : `P/L: ${pnlOnlyDisplayValue}`
               }
             >
               <span>{content}</span>

@@ -25,6 +25,20 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const PREFERENCES_KEY_PREFIX = "user-preferences";
+const THEME_STORAGE_KEY = "tv-theme-mode";
+
+function readAuthThemeMode(): "light" | "dark" {
+  if (typeof window === "undefined") return "light";
+  try {
+    const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (stored === "dark" || stored === "light") {
+      return stored;
+    }
+  } catch {
+    // Fall back to media query below.
+  }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function decodeToken(token: string): UserInfo | null {
   try {
@@ -78,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
+  const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
   const logoutTimerRef = useRef<number | null>(null);
   const profileRequestId = useRef(0);
   const tokenSourceRef = useRef<"login" | "storage" | null>(null);
@@ -177,10 +192,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (w < 640) return "200";
         return "220";
       };
+      const syncLoginTheme = () => setLoginThemeMode(readAuthThemeMode());
       setLoginWidth(computeWidth());
+      syncLoginTheme();
       const handler = () => setLoginWidth(computeWidth());
+      const storageHandler = (event: StorageEvent) => {
+        if (event.key === THEME_STORAGE_KEY) {
+          syncLoginTheme();
+        }
+      };
+      const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
+      const mediaHandler = () => syncLoginTheme();
       window.addEventListener("resize", handler);
-      return () => window.removeEventListener("resize", handler);
+      window.addEventListener("storage", storageHandler);
+      mediaQuery?.addEventListener?.("change", mediaHandler);
+      return () => {
+        window.removeEventListener("resize", handler);
+        window.removeEventListener("storage", storageHandler);
+        mediaQuery?.removeEventListener?.("change", mediaHandler);
+      };
     }
   }, []);
 
@@ -299,6 +329,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         onSuccess={(response) => handleSuccess(response.credential)}
         onError={() => logout()}
         text="signin_with"
+        theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
         shape="pill"
         width={loginWidth}
         itp_support
