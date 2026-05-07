@@ -1,6 +1,7 @@
 import { request } from "./client";
 import type {
   AdminUser,
+  TradeHistory,
   TradingAccount,
   TradingAccountPayload,
   UserPreferences,
@@ -9,6 +10,10 @@ import type {
 
 export async function fetchUsers() {
   return request<AdminUser[]>("/admin/users");
+}
+
+export async function fetchUserTradeHistory(userId: string) {
+  return request<TradeHistory[]>(`/admin/users/${userId}/trade-history`);
 }
 
 export async function fetchUserProfile() {

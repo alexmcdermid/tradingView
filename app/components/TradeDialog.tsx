@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -48,10 +49,12 @@ interface TradeDialogProps {
   open: boolean;
   initialValues?: Partial<TradeFormValues>;
   isEditing?: boolean;
+  showHistoryAction?: boolean;
   accounts?: TradingAccount[];
   submitting?: boolean;
   onClose: () => void;
   onSubmit: (values: TradeFormValues) => void;
+  onHistoryClick?: () => void;
 }
 
 function buildInitialFormValues(
@@ -152,10 +155,12 @@ export function TradeDialog({
   open,
   initialValues,
   isEditing = false,
+  showHistoryAction = false,
   accounts = [],
   submitting,
   onClose,
   onSubmit,
+  onHistoryClick,
 }: TradeDialogProps) {
   const exitPriceTouched = useRef(false);
   const defaults: TradeFormValues = {
@@ -567,6 +572,12 @@ export function TradeDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
+        {isEditing && showHistoryAction && (
+          <Button onClick={onHistoryClick} disabled={submitting}>
+            History
+          </Button>
+        )}
+        <Box sx={{ flexGrow: 1 }} />
         <Button onClick={onClose}>Cancel</Button>
         <Button
           onClick={handleSubmit}
