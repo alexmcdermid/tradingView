@@ -4,6 +4,7 @@ export type Currency = "USD" | "CAD";
 export type TradeDirection = "LONG" | "SHORT";
 
 export type OptionType = "CALL" | "PUT";
+export type TradeHistoryAction = "CREATE" | "EDIT" | "DELETE";
 export type ThemeMode = "LIGHT" | "DARK";
 export type PnlDisplayMode = "PNL" | "PERCENT";
 export type TradeSortField =
@@ -71,6 +72,33 @@ export interface TradePayload {
   notes?: string;
 }
 
+export interface TradeHistory {
+  id: string;
+  tradeId: string;
+  action: TradeHistoryAction;
+  userId: string;
+  symbol: string;
+  currency: Currency;
+  assetType: AssetType;
+  direction: TradeDirection;
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  fees: number;
+  marginRate: number;
+  accountId?: string | null;
+  optionType?: OptionType | null;
+  strikePrice?: number | null;
+  expiryDate?: string | null;
+  openedAt: string;
+  closedAt: string;
+  realizedPnl: number;
+  notes?: string | null;
+  tradeCreatedAt: string;
+  tradeUpdatedAt: string;
+  actionAt: string;
+}
+
 export interface PnlBucket {
   period: string;
   pnl: number;
@@ -126,6 +154,7 @@ export interface UserPreferences {
   pnlDisplayMode?: PnlDisplayMode | null;
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
+  showTradeHistory?: boolean | null;
 }
 
 export interface UserProfile {
@@ -139,6 +168,7 @@ export interface UserProfile {
   pnlDisplayMode?: PnlDisplayMode | null;
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
+  showTradeHistory?: boolean | null;
 }
 
 export interface TradingAccount {

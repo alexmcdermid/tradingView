@@ -15,10 +15,10 @@ import {
   Toolbar,
   Typography,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router";
-import { fetchUsers } from "../api/users";
-import type { AdminUser } from "../api/types";
+import { fetchUsers, fetchUserTradeHistory } from "../api/users";
+import type { AdminUser, TradeHistory } from "../api/types";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import type { Route } from "./+types/admin";
@@ -31,10 +31,30 @@ function formatDate(value: string) {
   return value.slice(0, 10).replace(/-/g, "/");
 }
 
+function formatTimestamp(value: string) {
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 export default function Admin() {
   const { user, token, loginButton } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [historyRows, setHistoryRows] = useState<TradeHistory[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
 
@@ -81,6 +101,24 @@ export default function Admin() {
       setAuthBlockedMessage(null);
     }
   }, [user]);
+
+  const handleToggleHistory = async (adminUser: AdminUser) => {
+    if (selectedUserId === adminUser.id) {
+      setSelectedUserId(null);
+      setHistoryRows([]);
+      return;
+    }
+    setSelectedUserId(adminUser.id);
+    setHistoryRows([]);
+    setLoadingHistory(true);
+    try {
+      setHistoryRows(await fetchUserTradeHistory(adminUser.id));
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const hasUsers = users.length > 0;
   const emptyLabel = useMemo(() => {
@@ -133,22 +171,74 @@ export default function Admin() {
                   <TableCell>Premium</TableCell>
                   <TableCell>Created</TableCell>
                   <TableCell>Updated</TableCell>
+                  <TableCell align="right">History</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {hasUsers ? (
-                  users.map((user) => (
-                    <TableRow key={user.id} hover>
-                      <TableCell>{user.email || "—"}</TableCell>
-                      <TableCell>{user.authId}</TableCell>
-                      <TableCell>{user.premium ? "Yes" : "No"}</TableCell>
-                      <TableCell>{formatDate(user.createdAt)}</TableCell>
-                      <TableCell>{formatDate(user.updatedAt)}</TableCell>
-                    </TableRow>
+                  users.map((adminUser) => (
+                    <Fragment key={adminUser.id}>
+                      <TableRow hover>
+                        <TableCell>{adminUser.email || "—"}</TableCell>
+                        <TableCell>{adminUser.authId}</TableCell>
+                        <TableCell>{adminUser.premium ? "Yes" : "No"}</TableCell>
+                        <TableCell>{formatDate(adminUser.createdAt)}</TableCell>
+                        <TableCell>{formatDate(adminUser.updatedAt)}</TableCell>
+                        <TableCell align="right">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => void handleToggleHistory(adminUser)}
+                          >
+                            {selectedUserId === adminUser.id ? "Hide" : "View"}
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      {selectedUserId === adminUser.id && (
+                        <TableRow>
+                          <TableCell colSpan={6}>
+                            {loadingHistory ? (
+                              <Typography color="text.secondary">Loading history...</Typography>
+                            ) : historyRows.length === 0 ? (
+                              <Typography color="text.secondary">No trade history recorded.</Typography>
+                            ) : (
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Action</TableCell>
+                                    <TableCell>When</TableCell>
+                                    <TableCell>Trade ID</TableCell>
+                                    <TableCell>Symbol</TableCell>
+                                    <TableCell>Side</TableCell>
+                                    <TableCell align="right">Qty</TableCell>
+                                    <TableCell align="right">P/L</TableCell>
+                                    <TableCell>Closed</TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {historyRows.map((entry) => (
+                                    <TableRow key={entry.id}>
+                                      <TableCell>{entry.action}</TableCell>
+                                      <TableCell>{formatTimestamp(entry.actionAt)}</TableCell>
+                                      <TableCell>{entry.tradeId}</TableCell>
+                                      <TableCell>{entry.symbol}</TableCell>
+                                      <TableCell>{entry.direction}</TableCell>
+                                      <TableCell align="right">{entry.quantity}</TableCell>
+                                      <TableCell align="right">{formatNumber(entry.realizedPnl)}</TableCell>
+                                      <TableCell>{entry.closedAt}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <Typography color="text.secondary">{emptyLabel}</Typography>
                     </TableCell>
                   </TableRow>

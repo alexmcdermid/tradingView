@@ -267,6 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           pnlDisplayMode: data.pnlDisplayMode,
           defaultTradeSortBy: data.defaultTradeSortBy,
           defaultTradeSortDirection: data.defaultTradeSortDirection,
+          showTradeHistory: data.showTradeHistory,
         };
         setPreferencesState(nextPreferences);
         if (authId) {
@@ -352,6 +353,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortBy: next.defaultTradeSortBy ?? prev.defaultTradeSortBy,
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
+        showTradeHistory: next.showTradeHistory ?? prev.showTradeHistory,
       };
     });
     setPreferencesState((prev) => ({
@@ -360,6 +362,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       defaultTradeSortBy: next.defaultTradeSortBy ?? prev?.defaultTradeSortBy ?? null,
       defaultTradeSortDirection:
         next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
+      showTradeHistory: next.showTradeHistory ?? prev?.showTradeHistory ?? null,
     }));
     const authId = user?.sub || user?.email;
     if (authId) {
@@ -369,12 +372,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortBy: next.defaultTradeSortBy ?? preferences?.defaultTradeSortBy ?? null,
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
+        showTradeHistory: next.showTradeHistory ?? preferences?.showTradeHistory ?? null,
       });
     }
   }, [
     preferences?.defaultTradeSortBy,
     preferences?.defaultTradeSortDirection,
     preferences?.pnlDisplayMode,
+    preferences?.showTradeHistory,
     preferences?.themeMode,
     savePreferencesCache,
     user?.email,

@@ -4,6 +4,7 @@ import type {
   PnlSummary,
   AggregateStats,
   Trade,
+  TradeHistory,
   TradePayload,
   TradeSortDirection,
   TradeSortField,
@@ -51,6 +52,10 @@ export async function deleteTrade(tradeId: string) {
   return request<void>(`/trades/${tradeId}`, {
     method: "DELETE",
   });
+}
+
+export async function fetchTradeHistory(tradeId: string) {
+  return request<TradeHistory[]>(`/trades/${tradeId}/history`);
 }
 
 export async function fetchSummary(month?: string) {

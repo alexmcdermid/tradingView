@@ -50,6 +50,7 @@ const mockFetchAggregateStats = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
+const mockFetchTradeHistory = vi.fn();
 const mockUpdateUserPreferences = vi.fn();
 const mockListUserAccounts = vi.fn();
 
@@ -60,6 +61,7 @@ vi.mock("../api/trades", () => ({
   createTrade: (...args: Parameters<typeof mockCreateTrade>) => mockCreateTrade(...args),
   updateTrade: (...args: Parameters<typeof mockUpdateTrade>) => mockUpdateTrade(...args),
   deleteTrade: (...args: Parameters<typeof mockDeleteTrade>) => mockDeleteTrade(...args),
+  fetchTradeHistory: (...args: Parameters<typeof mockFetchTradeHistory>) => mockFetchTradeHistory(...args),
 }));
 
 vi.mock("../api/users", () => ({

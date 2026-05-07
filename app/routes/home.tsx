@@ -24,10 +24,18 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Checkbox,
+  Paper,
   Radio,
   RadioGroup,
   Snackbar,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Toolbar,
   Typography,
@@ -41,6 +49,7 @@ import {
   deleteTrade,
   fetchAggregateStats,
   fetchSummary,
+  fetchTradeHistory,
   fetchTrades,
   updateTrade,
 } from "../api/trades";
@@ -50,6 +59,7 @@ import type {
   PnlSummary,
   ShareLinkResponse,
   Trade,
+  TradeHistory,
   TradeSortDirection,
   TradeSortField,
   TradePayload,
@@ -305,6 +315,21 @@ const formatShareTimestamp = (value: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+const formatHistoryTimestamp = (value: string) =>
+  new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+const formatSignedNumber = (value: number) =>
+  new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
@@ -659,6 +684,10 @@ export default function Home() {
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [savingTrade, setSavingTrade] = useState(false);
+  const [tradeHistoryOpen, setTradeHistoryOpen] = useState(false);
+  const [tradeHistoryRows, setTradeHistoryRows] = useState<TradeHistory[]>([]);
+  const [tradeHistorySubject, setTradeHistorySubject] = useState<Trade | null>(null);
+  const [loadingTradeHistory, setLoadingTradeHistory] = useState(false);
   const [draggingTradeId, setDraggingTradeId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tradeToDelete, setTradeToDelete] = useState<Trade | null>(null);
@@ -708,6 +737,7 @@ export default function Home() {
     pnlDisplayMode: "pnl" | "percent";
     defaultTradeSortBy: TradeSortField;
     defaultTradeSortDirection: TradeSortDirection;
+    showTradeHistory: boolean;
   } | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const guestSeeded = useRef<boolean>(false);
@@ -724,6 +754,7 @@ export default function Home() {
     }
     return adminEmailSet.has(user.email.toLowerCase());
   }, [adminEmailSet, user?.email]);
+  const showTradeHistoryEnabled = Boolean(preferences?.showTradeHistory);
   const parsedStatsScope = useMemo(() => {
     if (!statsScopeFilter) {
       return { year: undefined, month: undefined, day: undefined };
@@ -1343,6 +1374,7 @@ export default function Home() {
       pnlDisplayMode: calendarValueMode,
       defaultTradeSortBy: tradeSort.sortBy,
       defaultTradeSortDirection: tradeSort.sortDirection,
+      showTradeHistory: showTradeHistoryEnabled,
     });
     setStatsScopeDraft(statsScopeFilter ?? "");
     setPreferencesDialogOpen(true);
@@ -1367,12 +1399,19 @@ export default function Home() {
     }
 
     const normalizedScope = parsedScope.normalized || null;
-    const { themeMode, pnlDisplayMode, defaultTradeSortBy, defaultTradeSortDirection } = preferencesDraft;
+    const {
+      themeMode,
+      pnlDisplayMode,
+      defaultTradeSortBy,
+      defaultTradeSortDirection,
+      showTradeHistory,
+    } = preferencesDraft;
     const hasPreferenceChanges =
       themeMode !== mode ||
       pnlDisplayMode !== calendarValueMode ||
       defaultTradeSortBy !== tradeSort.sortBy ||
-      defaultTradeSortDirection !== tradeSort.sortDirection;
+      defaultTradeSortDirection !== tradeSort.sortDirection ||
+      showTradeHistory !== showTradeHistoryEnabled;
     const hasWidgetChanges = normalizedScope !== statsScopeFilter;
 
     if (!hasPreferenceChanges && !hasWidgetChanges) {
@@ -1389,6 +1428,7 @@ export default function Home() {
           pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
           defaultTradeSortBy,
           defaultTradeSortDirection,
+          showTradeHistory,
         });
       } catch (err) {
         handleRequestError(err);
@@ -1402,6 +1442,7 @@ export default function Home() {
         pnlDisplayMode: pnlDisplayMode === "percent" ? "PERCENT" : "PNL",
         defaultTradeSortBy,
         defaultTradeSortDirection,
+        showTradeHistory,
       });
     }
 
@@ -1425,6 +1466,29 @@ export default function Home() {
     blurActiveElement();
     setEditingTrade(trade);
     setTradeDialogOpen(true);
+  };
+
+  const handleOpenTradeHistory = async () => {
+    if (!editingTrade || !user || !token) {
+      return;
+    }
+    setTradeHistorySubject(editingTrade);
+    setTradeHistoryRows([]);
+    setTradeHistoryOpen(true);
+    setLoadingTradeHistory(true);
+    try {
+      setTradeHistoryRows(await fetchTradeHistory(editingTrade.id));
+    } catch (err) {
+      handleRequestError(err);
+    } finally {
+      setLoadingTradeHistory(false);
+    }
+  };
+
+  const handleCloseTradeHistory = () => {
+    setTradeHistoryOpen(false);
+    setTradeHistoryRows([]);
+    setTradeHistorySubject(null);
   };
 
   const handleSaveTrade = async (values: TradeFormValues) => {
@@ -2183,6 +2247,7 @@ export default function Home() {
       <TradeDialog
         open={tradeDialogOpen}
         isEditing={!!editingTrade}
+        showHistoryAction={Boolean(editingTrade && user && token && showTradeHistoryEnabled)}
         initialValues={
           editingTrade
             ? {
@@ -2214,7 +2279,65 @@ export default function Home() {
           setEditingTrade(null);
         }}
         onSubmit={handleSaveTrade}
+        onHistoryClick={() => void handleOpenTradeHistory()}
       />
+
+      <Dialog
+        open={tradeHistoryOpen}
+        onClose={handleCloseTradeHistory}
+        aria-labelledby="trade-history-dialog-title"
+        fullWidth
+        maxWidth="lg"
+      >
+        <DialogTitle id="trade-history-dialog-title">
+          {tradeHistorySubject ? `${tradeHistorySubject.symbol} history` : "Trade history"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {loadingTradeHistory ? (
+            <Typography color="text.secondary">Loading history...</Typography>
+          ) : tradeHistoryRows.length === 0 ? (
+            <Typography color="text.secondary">No history recorded for this trade.</Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Action</TableCell>
+                    <TableCell>When</TableCell>
+                    <TableCell>Symbol</TableCell>
+                    <TableCell>Side</TableCell>
+                    <TableCell align="right">Qty</TableCell>
+                    <TableCell align="right">Entry</TableCell>
+                    <TableCell align="right">Exit</TableCell>
+                    <TableCell align="right">P/L</TableCell>
+                    <TableCell>Closed</TableCell>
+                    <TableCell>Notes</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {tradeHistoryRows.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell>{entry.action}</TableCell>
+                      <TableCell>{formatHistoryTimestamp(entry.actionAt)}</TableCell>
+                      <TableCell>{entry.symbol}</TableCell>
+                      <TableCell>{entry.direction}</TableCell>
+                      <TableCell align="right">{entry.quantity}</TableCell>
+                      <TableCell align="right">{formatSignedNumber(entry.entryPrice)}</TableCell>
+                      <TableCell align="right">{formatSignedNumber(entry.exitPrice)}</TableCell>
+                      <TableCell align="right">{formatSignedNumber(entry.realizedPnl)}</TableCell>
+                      <TableCell>{entry.closedAt}</TableCell>
+                      <TableCell>{entry.notes || "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTradeHistory}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={shareManagerOpen}
@@ -2582,6 +2705,7 @@ export default function Home() {
                     defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
                     defaultTradeSortDirection:
                       prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2601,6 +2725,7 @@ export default function Home() {
                     defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
                     defaultTradeSortDirection:
                       prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2621,6 +2746,7 @@ export default function Home() {
                     pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
                     defaultTradeSortBy: resolveTradeSortBy(next),
                     defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2642,6 +2768,7 @@ export default function Home() {
                     pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
                     defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
                     defaultTradeSortDirection: resolveTradeSortDirection(next),
+                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2649,6 +2776,25 @@ export default function Home() {
                 <MenuItem value="ASC">Ascending</MenuItem>
               </TextField>
             </Stack>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={preferencesDraft?.showTradeHistory ?? showTradeHistoryEnabled}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setPreferencesDraft((prev) => ({
+                      themeMode: prev?.themeMode ?? mode,
+                      pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                      defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+                      defaultTradeSortDirection:
+                        prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+                      showTradeHistory: next,
+                    }));
+                  }}
+                />
+              }
+              label="Show trade history in edit dialog"
+            />
             <TextField
               label="Widget scope (optional)"
               value={statsScopeDraft}
