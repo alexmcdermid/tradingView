@@ -80,6 +80,51 @@ describe("share route loader", () => {
     });
   });
 
+  it("uses forwarded https origin for App Runner preview image metadata", async () => {
+    const summary: PnlSummary = {
+      totalPnl: 1250,
+      tradeCount: 3,
+      daily: [{ period: "2024-06-12", pnl: 1250, trades: 3 }],
+      monthly: [{ period: "2024-06", pnl: 1250, trades: 3 }],
+    };
+    const shareData = buildSharePayload("2024-06", summary, {
+      origin: "http://internal-service",
+      generatedAt: "2024-06-12T00:00:00Z",
+    });
+    mockGetShareLink.mockResolvedValueOnce({
+      code: "abc12345",
+      shareType: "SUMMARY",
+      data: JSON.stringify(shareData),
+      requiresAuth: false,
+      expiresAt: "2026-01-14T00:00:00Z",
+      accessCount: 1,
+      createdAt: "2026-01-07T00:00:00Z",
+    });
+
+    const request = new Request("http://internal-app-runner/share/abc12345", {
+      headers: {
+        host: "internal-app-runner",
+        "x-forwarded-host": "dev.example.com",
+        "x-forwarded-proto": "https",
+      },
+    });
+    const data = await loader({
+      request,
+      params: { code: "abc12345" },
+      context: {},
+      unstable_pattern: "/share/:code",
+    } as any);
+    const descriptors = meta({
+      location: { search: "" },
+      data,
+    } as any);
+
+    expect(descriptors).toContainEqual({
+      property: "og:image",
+      content: "https://dev.example.com/share-image/abc12345",
+    });
+  });
+
   it("returns error when share link not found", async () => {
     mockGetShareLink.mockResolvedValueOnce(null);
 

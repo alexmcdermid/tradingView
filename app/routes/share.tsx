@@ -123,9 +123,20 @@ const buildMetaDescriptors = (
   ];
 };
 
+const firstForwardedValue = (value: string | null) => value?.split(",")[0]?.trim() || "";
+
+const getPublicOrigin = (request: Request) => {
+  const url = new URL(request.url);
+  const forwardedHost = firstForwardedValue(request.headers.get("x-forwarded-host"));
+  const host = forwardedHost || request.headers.get("host") || url.host;
+  const forwardedProto = firstForwardedValue(request.headers.get("x-forwarded-proto"));
+  const protocol = forwardedProto || "https";
+  return `${protocol}://${host}`;
+};
+
 export async function loader({ params, request }: Route.LoaderArgs) {
   const code = (params as { code?: string }).code;
-  const requestOrigin = new URL(request.url).origin;
+  const requestOrigin = getPublicOrigin(request);
   
   if (code) {
     try {
