@@ -153,12 +153,18 @@ ARG VITE_APP_ENV
 ### GitHub Secrets (Prod)
 
 - `AWS_REGION`
-- `AWS_ROLE_ARN`
-- `PROD_ECR_TRADINGVIEW_REPO`
-- `PROD_FRONTEND_SERVICE_ARN`
-- `PROD_API_BASE_URL`
+- `AWS_ROLE_ARN` — IAM role ARN assumed by GitHub Actions OIDC, e.g. `arn:aws:iam::<account-id>:role/<frontend-github-actions-role-name>`
+- `PROD_ECR_TRADINGVIEW_REPO` — ECR repository name only, e.g. `<prod-frontend-ecr-repo-name>`
+- `PROD_FRONTEND_SERVICE_ARN` — App Runner service ARN, e.g. `arn:aws:apprunner:<region>:<account-id>:service/<service-name>/<service-id>`
+- `PROD_API_BASE_URL` — production backend API base URL, e.g. `<prod-api-origin>/api/v1`
 - `PROD_GOOGLE_CLIENT_ID`
 - `PROD_ADMIN_EMAILS` (optional)
+
+The frontend App Runner service stays public and does not need a VPC connector. Private Neon and DynamoDB access are backend-only concerns.
+
+The detailed AWS/Neon private networking runbook lives in the backend repo at `transaction-api/docs/private-app-runner-neon.md`. It includes the prod VPC, App Runner, DynamoDB gateway endpoint, Neon PrivateLink endpoint, security group, and rollback debugging checklist.
+
+Production public DNS currently treats `<prod-frontend-origin>` as canonical. The DNS provider can forward `<prod-root-origin>` to `<prod-frontend-origin>` with a permanent 301. Keep both origins in Google OAuth/CORS where relevant, but point `PROD_API_BASE_URL` at `<prod-api-origin>/api/v1`.
 
 ## CI/CD Pipeline
 
