@@ -125,18 +125,19 @@ const buildMetaDescriptors = (
 
 export async function loader({ params, request }: Route.LoaderArgs) {
   const code = (params as { code?: string }).code;
+  const requestOrigin = new URL(request.url).origin;
   
   if (code) {
     try {
       const shareLink = await getShareLink(code);
       if (!shareLink) {
-        return { shareData: null, error: "Share link not found or expired" };
+        return { shareData: null, error: "Share link not found or expired", requestOrigin, shareCode: code };
       }
       const decoded = JSON.parse(shareLink.data);
-      return { shareData: decoded, error: null };
+      return { shareData: decoded, error: null, requestOrigin, shareCode: code };
     } catch (error) {
       console.error("Failed to fetch share link:", error);
-      return { shareData: null, error: "Failed to load share link" };
+      return { shareData: null, error: "Failed to load share link", requestOrigin, shareCode: code };
     }
   }
 
@@ -145,10 +146,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const encoded = url.searchParams.get(SHARE_QUERY_PARAM);
   if (encoded) {
     const decoded = decodeShareToken(encoded);
-    return { shareData: decoded, error: decoded ? null : "Invalid share data" };
+    return { shareData: decoded, error: decoded ? null : "Invalid share data", requestOrigin, shareCode: null };
   }
 
-  return { shareData: null, error: null };
+  return { shareData: null, error: null, requestOrigin, shareCode: null };
 }
 
 export function meta({ location, data }: Route.MetaArgs) {
@@ -157,6 +158,7 @@ export function meta({ location, data }: Route.MetaArgs) {
   
   const loaderData = data as Awaited<ReturnType<typeof loader>>;
   const shared = loaderData?.shareData;
+  const requestOrigin = loaderData?.requestOrigin;
   
   if (!shared) {
     const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
@@ -187,8 +189,10 @@ export function meta({ location, data }: Route.MetaArgs) {
   }
 
   const encoded = encodeShareToken(shared);
-  const imagePath = `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
-  const imageUrl = shared.origin ? `${shared.origin}${imagePath}` : imagePath;
+  const imagePath = loaderData?.shareCode
+    ? `/share-image/${encodeURIComponent(loaderData.shareCode)}`
+    : `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
+  const imageUrl = `${requestOrigin || shared.origin || ""}${imagePath}`;
 
   if ("summary" in shared) {
     const monthLabel = formatMonthLabel(shared.month);

@@ -224,53 +224,17 @@ const detectEnvironment = () => {
 
 const copyTextToClipboard = async (value: string) => {
   if (typeof document === "undefined") return false;
-  
-  const textarea = document.createElement("textarea");
-  textarea.value = value;
-  textarea.style.position = "absolute";
-  textarea.style.left = "-9999px";
-  textarea.style.top = "0";
-  textarea.style.fontSize = "12pt";
-  textarea.setAttribute("readonly", "");
-  document.body.appendChild(textarea);
-  
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  if (isIOS) {
-    const range = document.createRange();
-    range.selectNodeContents(textarea);
-    const selection = window.getSelection();
-    if (selection) {
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-    textarea.setSelectionRange(0, textarea.value.length);
-  } else {
-    textarea.focus();
-    textarea.select();
-  }
-  
-  let success = false;
-  try {
-    success = document.execCommand("copy");
-    if (!success && navigator.clipboard?.writeText) {
+
+  if (navigator.clipboard?.writeText) {
+    try {
       await navigator.clipboard.writeText(value);
-      success = true;
+      return true;
+    } catch (err) {
+      console.warn("Clipboard API failed:", err);
     }
-  } catch (err) {
-    console.warn("Copy failed:", err);
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(value);
-        success = true;
-      } catch (clipErr) {
-        console.warn("Clipboard API also failed:", clipErr);
-      }
-    }
-  } finally {
-    document.body.removeChild(textarea);
   }
-  
-  return success;
+
+  return false;
 };
 
 const normalizeAccount = (account: TradingAccount): TradingAccount => {
@@ -700,6 +664,7 @@ export default function Home() {
   const [shareLinks, setShareLinks] = useState<ShareLinkResponse[]>([]);
   const [loadingShareLinks, setLoadingShareLinks] = useState(false);
   const [deletingShareCode, setDeletingShareCode] = useState<string | null>(null);
+  const [copiedShareCode, setCopiedShareCode] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
   const [accountsDialogOpen, setAccountsDialogOpen] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
@@ -1206,10 +1171,14 @@ export default function Home() {
     const urlString = new URL(`/share/${code}`, window.location.origin).toString();
     const copied = await copyTextToClipboard(urlString);
     if (!copied) {
-      prompt("Copy this share link:", urlString);
-      setShareMessage("Share link copied to dialog.");
+      window.prompt("Copy this share link:", urlString);
+      setShareMessage("Copy the share link from the dialog.");
       return;
     }
+    setCopiedShareCode(code);
+    window.setTimeout(() => {
+      setCopiedShareCode((current) => (current === code ? null : current));
+    }, 1800);
     setShareMessage("Share link copied.");
   };
 
@@ -1733,7 +1702,7 @@ export default function Home() {
       const copied = await copyTextToClipboard(urlString);
       if (!copied) {
         prompt("Copy this share link:", urlString);
-        setShareMessage("Share link created (copied to dialog).");
+        setShareMessage("Share link created. Copy it from the dialog.");
         return;
       }
       setShareMessage("Share link copied. Send it to share this month's P/L.");
@@ -1800,7 +1769,7 @@ export default function Home() {
       const copied = await copyTextToClipboard(urlString);
       if (!copied) {
         prompt("Copy this share link:", urlString);
-        setShareMessage("Share link created (copied to dialog).");
+        setShareMessage("Share link created. Copy it from the dialog.");
         return;
       }
       setShareMessage(
@@ -2405,7 +2374,7 @@ export default function Home() {
                           startIcon={<ContentCopyIcon />}
                           onClick={() => void handleCopyManagedShareLink(link.code)}
                         >
-                          Copy Link
+                          {copiedShareCode === link.code ? "Copied" : "Copy Link"}
                         </Button>
                         <Button
                           size="small"

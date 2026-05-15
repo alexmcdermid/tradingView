@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import type { LoaderFunctionArgs } from "react-router";
 import type { PnlSummary, Trade } from "../api/types";
+import { getShareLink } from "../api/shares";
 import {
   buildSharePayload,
   buildTradesSharePayload,
   encodeShareToken,
 } from "../utils/shareLink";
+
+vi.mock("../api/shares", () => ({
+  getShareLink: vi.fn(),
+}));
 
 const buildLoaderArgs = (request: Request): LoaderFunctionArgs => ({
   request,
@@ -25,6 +30,12 @@ const runShareImageLoader = async (request: Request) => {
   return response as Response;
 };
 
+const runShareImageLoaderWithArgs = async (args: LoaderFunctionArgs) => {
+  const shareImageLoader = await loadShareImageLoader();
+  const response = await shareImageLoader(args);
+  return response as Response;
+};
+
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 const expectPngResponse = async (response: Response) => {
@@ -35,6 +46,40 @@ const expectPngResponse = async (response: Response) => {
 };
 
 describe("share image loader", () => {
+  it("returns a png for persisted share codes", async () => {
+    const summary: PnlSummary = {
+      totalPnl: 725.25,
+      tradeCount: 4,
+      daily: [{ period: "2024-05-08", pnl: 725.25, trades: 4 }],
+      monthly: [{ period: "2024-05", pnl: 725.25, trades: 4 }],
+    };
+    const payload = buildSharePayload("2024-05", summary, {
+      env: "prod",
+      origin: "https://example.com",
+      generatedAt: "2024-05-10T00:00:00Z",
+    });
+    vi.mocked(getShareLink).mockResolvedValueOnce({
+      code: "abc12345",
+      shareType: "SUMMARY",
+      data: JSON.stringify(payload),
+      requiresAuth: false,
+      expiresAt: "2026-01-14T00:00:00Z",
+      accessCount: 1,
+      createdAt: "2026-01-07T00:00:00Z",
+    });
+
+    const request = new Request("https://example.com/share-image/abc12345");
+    const response = await runShareImageLoaderWithArgs({
+      request,
+      params: { code: "abc12345" },
+      context: {},
+      unstable_pattern: "/share-image/:code",
+    } as LoaderFunctionArgs);
+
+    expect(response.status).toBe(200);
+    await expectPngResponse(response);
+  });
+
   it("returns a png for monthly shares", async () => {
     const summary: PnlSummary = {
       totalPnl: 321.5,

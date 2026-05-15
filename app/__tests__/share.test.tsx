@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { loader } from "../routes/share";
+import { loader, meta } from "../routes/share";
 import * as sharesApi from "../api/shares";
-import type { ShareLinkResponse } from "../api/types";
+import type { PnlSummary, ShareLinkResponse } from "../api/types";
+import { buildSharePayload } from "../utils/shareLink";
 
 vi.mock("../api/shares");
 
@@ -48,6 +49,34 @@ describe("share route loader", () => {
       avgWin: 300,
       avgLoss: -150,
       winRate: 65,
+    });
+  });
+
+  it("uses the short share code for generated preview image metadata", () => {
+    const summary: PnlSummary = {
+      totalPnl: 1250,
+      tradeCount: 3,
+      daily: [{ period: "2024-06-12", pnl: 1250, trades: 3 }],
+      monthly: [{ period: "2024-06", pnl: 1250, trades: 3 }],
+    };
+    const shareData = buildSharePayload("2024-06", summary, {
+      origin: "https://stale-origin.example",
+      generatedAt: "2024-06-12T00:00:00Z",
+    });
+
+    const descriptors = meta({
+      location: { search: "" },
+      data: {
+        shareData,
+        error: null,
+        requestOrigin: "https://example.com",
+        shareCode: "abc12345",
+      },
+    } as any);
+
+    expect(descriptors).toContainEqual({
+      property: "og:image",
+      content: "https://example.com/share-image/abc12345",
     });
   });
 

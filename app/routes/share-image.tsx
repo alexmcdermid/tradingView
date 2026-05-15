@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LoaderFunctionArgs } from "react-router";
-import { decodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
+import { getShareLink } from "../api/shares";
+import { decodeShareToken, SHARE_QUERY_PARAM, type SharedPayload } from "../utils/shareLink";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -193,14 +194,34 @@ const getFontFiles = () => {
   return cachedFontFiles;
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+const loadSharedPayload = async (request: Request, code?: string): Promise<SharedPayload | null> => {
+  if (code) {
+    const shareLink = await getShareLink(code);
+    if (!shareLink) return null;
+    return JSON.parse(shareLink.data) as SharedPayload;
+  }
+
   const url = new URL(request.url);
   const encoded = url.searchParams.get(SHARE_QUERY_PARAM);
-  if (!encoded) {
+  if (!encoded) return null;
+  return decodeShareToken(encoded);
+};
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const code = typeof params.code === "string" ? params.code : undefined;
+  const hasEncodedData = new URL(request.url).searchParams.has(SHARE_QUERY_PARAM);
+  if (!code && !hasEncodedData) {
     return new Response("Missing share data.", { status: 400 });
   }
 
-  const shared = decodeShareToken(encoded);
+  let shared: SharedPayload | null = null;
+  try {
+    shared = await loadSharedPayload(request, code);
+  } catch (error) {
+    console.error("Failed to load share image data:", error);
+    return new Response("Invalid share data.", { status: 400 });
+  }
+
   if (!shared) {
     return new Response("Invalid share data.", { status: 400 });
   }
