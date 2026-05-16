@@ -5,8 +5,16 @@ const DEFAULT_API_BASE_URL =
 
 const DEFAULT_USER_ID = import.meta.env.VITE_USER_ID || "demo-user";
 const USE_HEADER_AUTH = import.meta.env.VITE_USE_HEADER_AUTH === "true";
+const IS_DEV = import.meta.env.DEV;
 
 type RequestOptions = RequestInit & { skipAuthHeader?: boolean };
+
+type HeaderAuthOptions = {
+  isDev: boolean;
+  useHeaderAuth: boolean;
+  token: string | null;
+  skipAuthHeader?: boolean;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -27,8 +35,15 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  // In local/dev we can force header-based auth even when a token exists
-  if (!options.skipAuthHeader && (USE_HEADER_AUTH || !token)) {
+  // Header auth is a local/test convenience only. Production must use bearer auth.
+  if (
+    shouldSendHeaderAuth({
+      isDev: IS_DEV,
+      useHeaderAuth: USE_HEADER_AUTH,
+      token,
+      skipAuthHeader: options.skipAuthHeader,
+    })
+  ) {
     headers.set("X-User-Id", DEFAULT_USER_ID);
   }
 
@@ -50,6 +65,15 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
   }
 
   return (await response.json()) as T;
+}
+
+export function shouldSendHeaderAuth({
+  isDev,
+  useHeaderAuth,
+  token,
+  skipAuthHeader,
+}: HeaderAuthOptions) {
+  return isDev && !skipAuthHeader && (useHeaderAuth || !token);
 }
 
 async function safeParseError(response: Response) {

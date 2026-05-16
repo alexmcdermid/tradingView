@@ -14,9 +14,10 @@ vi.mock("../api/shares", () => ({
 
 const buildLoaderArgs = (request: Request): LoaderFunctionArgs => ({
   request,
+  url: new URL(request.url),
+  pattern: "",
   params: {},
   context: {},
-  unstable_pattern: "",
 });
 
 const loadShareImageLoader = async () => {
@@ -71,10 +72,11 @@ describe("share image loader", () => {
     const request = new Request("https://example.com/share-image/abc12345");
     const response = await runShareImageLoaderWithArgs({
       request,
+      url: new URL(request.url),
+      pattern: "/share-image/:code",
       params: { code: "abc12345" },
       context: {},
-      unstable_pattern: "/share-image/:code",
-    } as LoaderFunctionArgs);
+    });
 
     expect(response.status).toBe(200);
     await expectPngResponse(response);

@@ -18,16 +18,16 @@
     "@mui/icons-material": "^7.3.6",
     "@mui/material": "^7.3.6",
     "@react-oauth/google": "^0.12.2",
-    "@react-router/node": "^7.10.1",
-    "@react-router/serve": "^7.10.1",
+    "@react-router/node": "^7.15.1",
+    "@react-router/serve": "^7.15.1",
     "@resvg/resvg-js": "^2.6.0",
     "isbot": "^5.1.31",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-router": "^7.10.1"
+    "react-router": "^7.15.1"
   },
   "devDependencies": {
-    "@react-router/dev": "^7.10.1",
+    "@react-router/dev": "^7.15.1",
     "@tailwindcss/vite": "^4.1.18",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
@@ -41,6 +41,6 @@
     "typescript": "^5.9.2",
     "vite": "^7.2.7",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^2.1.4"
+    "vitest": "^4.1.6"
   }
 }
