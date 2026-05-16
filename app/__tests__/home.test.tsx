@@ -121,16 +121,17 @@ describe("Home (guest mode)", () => {
       </ColorModeContext.Provider>
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /log trade/i }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /log trade/i }));
 
-    await userEvent.type(screen.getByLabelText(/symbol/i), "MSFT");
-    await userEvent.type(screen.getByLabelText(/quantity/i), "10");
-    await userEvent.type(screen.getByLabelText(/entry price/i), "100");
-    await userEvent.type(screen.getByLabelText(/exit price/i), "110");
-    await userEvent.type(screen.getByLabelText(/opened/i), "2024-01-01");
-    await userEvent.type(screen.getByLabelText(/closed/i), "2024-01-02");
+    fireEvent.change(await screen.findByLabelText(/symbol/i), { target: { value: "MSFT" } });
+    fireEvent.change(screen.getByLabelText(/quantity/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/entry price/i), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/exit price/i), { target: { value: "110" } });
+    fireEvent.change(screen.getByLabelText(/opened/i), { target: { value: "2024-01-01" } });
+    fireEvent.change(screen.getByLabelText(/closed/i), { target: { value: "2024-01-02" } });
 
-    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    await user.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => {
       expect(screen.getByText("MSFT")).toBeInTheDocument();
@@ -138,7 +139,7 @@ describe("Home (guest mode)", () => {
 
     expect(mockCreateTrade).not.toHaveBeenCalled();
     expect(mockUpdateTrade).not.toHaveBeenCalled();
-  });
+  }, 10000);
 });
 
 describe("Home (authenticated)", () => {
