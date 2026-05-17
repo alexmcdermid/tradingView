@@ -56,6 +56,8 @@ VITE_USE_HEADER_AUTH=true
 VITE_USER_ID=local-user
 VITE_ADMIN_EMAILS=admin@example.com
 VITE_APP_ENV=local
+VITE_PUBLIC_ORIGIN=http://localhost:5173
+VITE_PUBLIC_HOST_ALLOWLIST=localhost:5173,127.0.0.1:5173
 ```
 
 ### Variable Descriptions
@@ -63,12 +65,26 @@ VITE_APP_ENV=local
 **Required:**
 - `VITE_API_BASE_URL` — Backend API base URL (e.g. `https://dev-api.tradelog.ca/api/v1`)
 - `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID for authentication
+- `VITE_PUBLIC_ORIGIN` — Canonical frontend origin used for SSR metadata and public share image URLs
 
 **Optional:**
+- `VITE_PUBLIC_HOST_ALLOWLIST` — Comma-separated hosts accepted by SSR requests, in addition to `VITE_PUBLIC_ORIGIN`
 - `VITE_ADMIN_EMAILS` — Comma-separated list of admin email addresses
 - `VITE_USE_HEADER_AUTH` — Enable header-based auth for development (set to `false` in production)
 - `VITE_USER_ID` — Default user ID for header-based auth (dev only)
 - `VITE_APP_ENV` — Environment label shown in share links (e.g. "dev", "prod")
+
+## Authentication
+
+The frontend sends the Google credential once to `POST /api/v1/auth/login`. The backend validates it, creates a first-party `HttpOnly` session cookie, and subsequent API calls use `credentials: "include"` instead of a bearer token in browser storage.
+
+Unsafe API methods first fetch `GET /api/v1/auth/csrf` and send the returned CSRF header. Local header auth is still available only when `VITE_USE_HEADER_AUTH=true`; production builds should leave it disabled.
+
+## SSR Security
+
+SSR requests are rejected unless the request host matches `VITE_PUBLIC_ORIGIN` or `VITE_PUBLIC_HOST_ALLOWLIST`. OpenGraph and Twitter image URLs are built from `VITE_PUBLIC_ORIGIN`, not from `Host` or `X-Forwarded-*` headers.
+
+The root route emits a CSP plus `Referrer-Policy` and `X-Content-Type-Options`. Keep the CSP in `app/config/security.ts` aligned with any new external script, frame, font, image, or API origins.
 
 ## Project Structure
 
@@ -76,12 +92,12 @@ VITE_APP_ENV=local
 app/
 ├── api/              # API client functions and types
 │   ├── client.ts     # Axios client setup
+│   ├── auth.ts       # Session login/logout API calls
 │   ├── trades.ts     # Trade API calls
 │   ├── users.ts      # User API calls
 │   └── types.ts      # TypeScript interfaces
 ├── auth/             # Authentication logic
 │   ├── AuthProvider.tsx
-│   └── authToken.ts
 ├── components/       # Reusable components
 │   ├── LoginCard.tsx
 │   ├── MonthlyCalendar.tsx
@@ -138,6 +154,8 @@ ARG VITE_GOOGLE_CLIENT_ID
 ARG VITE_ADMIN_EMAILS
 ARG VITE_USE_HEADER_AUTH=false
 ARG VITE_APP_ENV
+ARG VITE_PUBLIC_ORIGIN
+ARG VITE_PUBLIC_HOST_ALLOWLIST
 ```
 
 ### GitHub Secrets (Dev)
@@ -149,6 +167,8 @@ ARG VITE_APP_ENV
 - `DEV_API_BASE_URL`
 - `DEV_GOOGLE_CLIENT_ID`
 - `DEV_ADMIN_EMAILS` (optional)
+- `DEV_PUBLIC_ORIGIN`
+- `DEV_PUBLIC_HOST_ALLOWLIST` (optional)
 
 ### GitHub Secrets (Prod)
 
@@ -159,6 +179,8 @@ ARG VITE_APP_ENV
 - `PROD_API_BASE_URL` — production backend API base URL, e.g. `<prod-api-origin>/api/v1`
 - `PROD_GOOGLE_CLIENT_ID`
 - `PROD_ADMIN_EMAILS` (optional)
+- `PROD_PUBLIC_ORIGIN`
+- `PROD_PUBLIC_HOST_ALLOWLIST` (optional)
 
 The frontend App Runner service stays public and does not need a VPC connector. Private Neon and DynamoDB access are backend-only concerns.
 

@@ -11,6 +11,7 @@ const mockGetShareLink = vi.mocked(sharesApi.getShareLink);
 describe("share route loader", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("loads share data from API when code param is provided", async () => {
@@ -69,7 +70,7 @@ describe("share route loader", () => {
       data: {
         shareData,
         error: null,
-        requestOrigin: "https://example.com",
+        publicOrigin: "https://example.com",
         shareCode: "abc12345",
       },
     } as any);
@@ -80,7 +81,8 @@ describe("share route loader", () => {
     });
   });
 
-  it("uses forwarded https origin for App Runner preview image metadata", async () => {
+  it("uses configured public origin for App Runner preview image metadata", async () => {
+    vi.stubEnv("PUBLIC_ORIGIN", "https://dev.example.com");
     const summary: PnlSummary = {
       totalPnl: 1250,
       tradeCount: 3,
@@ -101,13 +103,7 @@ describe("share route loader", () => {
       createdAt: "2026-01-07T00:00:00Z",
     });
 
-    const request = new Request("http://internal-app-runner/share/abc12345", {
-      headers: {
-        host: "internal-app-runner",
-        "x-forwarded-host": "dev.example.com",
-        "x-forwarded-proto": "https",
-      },
-    });
+    const request = new Request("https://dev.example.com/share/abc12345");
     const data = await loader({
       request,
       params: { code: "abc12345" },
@@ -123,6 +119,23 @@ describe("share route loader", () => {
       property: "og:image",
       content: "https://dev.example.com/share-image/abc12345",
     });
+  });
+
+  it("rejects unallowlisted hosts", async () => {
+    vi.stubEnv("PUBLIC_ORIGIN", "https://dev.example.com");
+
+    const request = new Request("https://attacker.example/share/abc12345");
+
+    await expect(
+      loader({
+        request,
+        params: { code: "abc12345" },
+        context: {},
+        unstable_pattern: "/share/:code",
+      } as any)
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(mockGetShareLink).not.toHaveBeenCalled();
   });
 
   it("returns error when share link not found", async () => {

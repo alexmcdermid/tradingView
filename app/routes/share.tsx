@@ -26,6 +26,7 @@ import type { SharedTrade } from "../utils/shareLink";
 import { decodeShareToken, encodeShareToken, SHARE_QUERY_PARAM } from "../utils/shareLink";
 import { getShareLink } from "../api/shares";
 import { computeMarginFee } from "../utils/tradeMath";
+import { getPublicOrigin, validateRequestHost } from "../config/security";
 
 const formatMonthLabel = (value?: string) => {
   if (!value) return "Unknown month";
@@ -123,32 +124,22 @@ const buildMetaDescriptors = (
   ];
 };
 
-const firstForwardedValue = (value: string | null) => value?.split(",")[0]?.trim() || "";
-
-const getPublicOrigin = (request: Request) => {
-  const url = new URL(request.url);
-  const forwardedHost = firstForwardedValue(request.headers.get("x-forwarded-host"));
-  const host = forwardedHost || request.headers.get("host") || url.host;
-  const forwardedProto = firstForwardedValue(request.headers.get("x-forwarded-proto"));
-  const protocol = forwardedProto || "https";
-  return `${protocol}://${host}`;
-};
-
 export async function loader({ params, request }: Route.LoaderArgs) {
+  validateRequestHost(request);
   const code = (params as { code?: string }).code;
-  const requestOrigin = getPublicOrigin(request);
+  const publicOrigin = getPublicOrigin(request);
   
   if (code) {
     try {
       const shareLink = await getShareLink(code);
       if (!shareLink) {
-        return { shareData: null, error: "Share link not found or expired", requestOrigin, shareCode: code };
+        return { shareData: null, error: "Share link not found or expired", publicOrigin, shareCode: code };
       }
       const decoded = JSON.parse(shareLink.data);
-      return { shareData: decoded, error: null, requestOrigin, shareCode: code };
+      return { shareData: decoded, error: null, publicOrigin, shareCode: code };
     } catch (error) {
       console.error("Failed to fetch share link:", error);
-      return { shareData: null, error: "Failed to load share link", requestOrigin, shareCode: code };
+      return { shareData: null, error: "Failed to load share link", publicOrigin, shareCode: code };
     }
   }
 
@@ -157,10 +148,10 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   const encoded = url.searchParams.get(SHARE_QUERY_PARAM);
   if (encoded) {
     const decoded = decodeShareToken(encoded);
-    return { shareData: decoded, error: decoded ? null : "Invalid share data", requestOrigin, shareCode: null };
+    return { shareData: decoded, error: decoded ? null : "Invalid share data", publicOrigin, shareCode: null };
   }
 
-  return { shareData: null, error: null, requestOrigin, shareCode: null };
+  return { shareData: null, error: null, publicOrigin, shareCode: null };
 }
 
 export function meta({ location, data }: Route.MetaArgs) {
@@ -169,7 +160,7 @@ export function meta({ location, data }: Route.MetaArgs) {
   
   const loaderData = data as Awaited<ReturnType<typeof loader>>;
   const shared = loaderData?.shareData;
-  const requestOrigin = loaderData?.requestOrigin;
+  const publicOrigin = loaderData?.publicOrigin;
   
   if (!shared) {
     const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
@@ -177,7 +168,7 @@ export function meta({ location, data }: Route.MetaArgs) {
       const decoded = decodeShareToken(encoded);
       if (decoded) {
         const imagePath = `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
-        const imageUrl = decoded.origin ? `${decoded.origin}${imagePath}` : imagePath;
+        const imageUrl = publicOrigin ? `${publicOrigin}${imagePath}` : imagePath;
 
         if ("summary" in decoded) {
           const monthLabel = formatMonthLabel(decoded.month);
@@ -203,7 +194,7 @@ export function meta({ location, data }: Route.MetaArgs) {
   const imagePath = loaderData?.shareCode
     ? `/share-image/${encodeURIComponent(loaderData.shareCode)}`
     : `/share-image?${SHARE_QUERY_PARAM}=${encodeURIComponent(encoded)}`;
-  const imageUrl = `${requestOrigin || shared.origin || ""}${imagePath}`;
+  const imageUrl = publicOrigin ? `${publicOrigin}${imagePath}` : imagePath;
 
   if ("summary" in shared) {
     const monthLabel = formatMonthLabel(shared.month);

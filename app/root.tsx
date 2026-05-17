@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
+import { securityHeaders, validateRequestHost } from "./config/security";
 import { ColorModeContext } from "./theme/colorMode";
 import type { ThemeMode } from "./api/types";
 
@@ -32,6 +33,15 @@ export const links: Route.LinksFunction = () => [
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
 ];
+
+export function loader({ request }: Route.LoaderArgs) {
+  validateRequestHost(request);
+  return null;
+}
+
+export function headers() {
+  return securityHeaders();
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

@@ -19,7 +19,7 @@ This trading journal helps you:
 - **Trade Table** - Sortable, paginated table with all trade details
 - **Performance Formatting** - Color-coded P&L (green for profits, red for losses)
 - **Responsive Design** - Works on desktop and mobile
-- **Google Sign-In** - Secure authentication with your Google account
+- **Google Sign-In** - Secure authentication with a first-party backend session cookie
 - **Admin Panel** - View all users and their activity (admin-only)
 
 ## Tech Stack

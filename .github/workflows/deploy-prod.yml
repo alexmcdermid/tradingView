@@ -30,6 +30,8 @@ jobs:
           VITE_ADMIN_EMAILS: ${{ secrets.PROD_ADMIN_EMAILS }}
           VITE_USE_HEADER_AUTH: "false"
           VITE_USER_ID: ""
+          VITE_PUBLIC_ORIGIN: ${{ secrets.PROD_PUBLIC_ORIGIN }}
+          VITE_PUBLIC_HOST_ALLOWLIST: ${{ secrets.PROD_PUBLIC_HOST_ALLOWLIST }}
         run: |
           set -euo pipefail
           docker build \
@@ -38,6 +40,8 @@ jobs:
             --build-arg VITE_ADMIN_EMAILS="${VITE_ADMIN_EMAILS}" \
             --build-arg VITE_USE_HEADER_AUTH="${VITE_USE_HEADER_AUTH}" \
             --build-arg VITE_USER_ID="${VITE_USER_ID}" \
+            --build-arg VITE_PUBLIC_ORIGIN="${VITE_PUBLIC_ORIGIN}" \
+            --build-arg VITE_PUBLIC_HOST_ALLOWLIST="${VITE_PUBLIC_HOST_ALLOWLIST}" \
             -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
             -f Dockerfile \
             .

@@ -1,6 +1,6 @@
 import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { clearAuthToken, getAuthToken, setAuthToken } from "./authToken";
+import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
 
@@ -26,6 +26,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const PREFERENCES_KEY_PREFIX = "user-preferences";
 const THEME_STORAGE_KEY = "tv-theme-mode";
+const SESSION_TOKEN = "cookie-session";
 
 function readAuthThemeMode(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -40,82 +41,32 @@ function readAuthThemeMode(): "light" | "dark" {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function decodeToken(token: string): UserInfo | null {
-  try {
-    const payload = token.split(".")[1];
-    const decoded = JSON.parse(atob(payload));
-    return {
-      sub: decoded.sub,
-      email: decoded.email,
-      name: decoded.name || decoded.email,
-      exp: typeof decoded.exp === "number" ? decoded.exp : undefined,
-    };
-  } catch {
-    return null;
-  }
-}
+const userFromProfile = (profile: UserProfile): UserInfo => ({
+  sub: profile.authId,
+  email: profile.email || undefined,
+  name: profile.email || profile.authId,
+});
+
+const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
+  themeMode: profile.themeMode,
+  pnlDisplayMode: profile.pnlDisplayMode,
+  defaultTradeSortBy: profile.defaultTradeSortBy,
+  defaultTradeSortDirection: profile.defaultTradeSortDirection,
+  showTradeHistory: profile.showTradeHistory,
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => {
-    const stored = getAuthToken();
-    if (!stored) return null;
-    const info = decodeToken(stored);
-    if (!info || (info.exp && Date.now() >= info.exp * 1000)) {
-      clearAuthToken();
-      return null;
-    }
-    return stored;
-  });
-  const [user, setUser] = useState<UserInfo | null>(() => {
-    const stored = getAuthToken();
-    if (!stored) return null;
-    const info = decodeToken(stored);
-    if (!info || (info.exp && Date.now() >= info.exp * 1000)) return null;
-    return info;
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [preferences, setPreferencesState] = useState<UserPreferences | null>(() => {
-    const stored = getAuthToken();
-    if (!stored) return null;
-    const info = decodeToken(stored);
-    if (!info) return null;
-    const authId = info.sub || info.email;
-    if (!authId) return null;
-    try {
-      const raw = window.localStorage.getItem(`${PREFERENCES_KEY_PREFIX}:${authId}`);
-      if (!raw) return null;
-      return JSON.parse(raw) as UserPreferences;
-    } catch {
-      return null;
-    }
-  });
+  const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
   const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
-  const logoutTimerRef = useRef<number | null>(null);
   const profileRequestId = useRef(0);
-  const tokenSourceRef = useRef<"login" | "storage" | null>(null);
 
   const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
-
-  const loadPreferencesCache = useCallback(
-    (authId: string) => {
-      if (typeof window === "undefined") {
-        return null;
-      }
-      try {
-        const raw = window.localStorage.getItem(preferenceStorageKey(authId));
-        if (!raw) {
-          return null;
-        }
-        return JSON.parse(raw) as UserPreferences;
-      } catch {
-        return null;
-      }
-    },
-    [preferenceStorageKey]
-  );
 
   const savePreferencesCache = useCallback(
     (authId: string, next: UserPreferences) => {
@@ -131,58 +82,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [preferenceStorageKey]
   );
 
-  const clearLogoutTimer = useCallback(() => {
-    if (logoutTimerRef.current !== null) {
-      window.clearTimeout(logoutTimerRef.current);
-      logoutTimerRef.current = null;
-    }
-  }, []);
-
-  const logout = useCallback(() => {
-    clearAuthToken();
+  const clearSessionState = useCallback(() => {
+    profileRequestId.current += 1;
     setToken(null);
     setUser(null);
     setProfile(null);
     setPreferencesState(null);
-    clearLogoutTimer();
-  }, [clearLogoutTimer]);
+  }, []);
 
-  const scheduleLogout = useCallback(
-    (exp?: number) => {
-      clearLogoutTimer();
-      if (!exp) return;
-      const expiresAt = exp * 1000;
-      const timeoutMs = expiresAt - Date.now();
-      if (timeoutMs <= 0) {
-        logout();
-        return;
-      }
-      logoutTimerRef.current = window.setTimeout(() => logout(), timeoutMs);
+  const applyProfile = useCallback(
+    (data: UserProfile) => {
+      profileRequestId.current += 1;
+      const nextPreferences = preferencesFromProfile(data);
+      setProfile(data);
+      setUser(userFromProfile(data));
+      setToken(SESSION_TOKEN);
+      setPreferencesState(nextPreferences);
+      savePreferencesCache(data.authId, nextPreferences);
     },
-    [clearLogoutTimer, logout]
+    [savePreferencesCache]
   );
 
+  const logout = useCallback(() => {
+    void logoutSession().catch(() => {
+      // The local auth state still clears even if the server session is already gone.
+    });
+    clearSessionState();
+  }, [clearSessionState]);
+
   useEffect(() => {
-    const stored = getAuthToken();
-    if (stored) {
-      const info = decodeToken(stored);
-      if (info && (!info.exp || Date.now() < info.exp * 1000)) {
-        tokenSourceRef.current = "storage";
-        // Only set token/user if not already initialized synchronously
-        if (!token) {
-          setToken(stored);
-          setUser(info);
+    let cancelled = false;
+
+    fetchUserProfile()
+      .then((data) => {
+        if (!cancelled) {
+          applyProfile(data);
         }
-        scheduleLogout(info.exp);
-      } else {
-        clearAuthToken();
-        if (token) {
-          setToken(null);
-          setUser(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearSessionState();
         }
-      }
-    }
-    setInitializing(false);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setInitializing(false);
+        }
+      });
+
     setMounted(true);
 
     if (typeof window !== "undefined") {
@@ -207,107 +154,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.addEventListener("storage", storageHandler);
       mediaQuery?.addEventListener?.("change", mediaHandler);
       return () => {
+        cancelled = true;
         window.removeEventListener("resize", handler);
         window.removeEventListener("storage", storageHandler);
         mediaQuery?.removeEventListener?.("change", mediaHandler);
       };
     }
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [applyProfile, clearSessionState]);
 
-  const handleSuccess = (credential?: string | undefined) => {
+  const handleSuccess = async (credential?: string | undefined) => {
     if (!credential) return;
-    const info = decodeToken(credential);
-    if (info) {
-      tokenSourceRef.current = "login";
-      setAuthToken(credential);
-      setToken(credential);
-      setUser(info);
-      scheduleLogout(info.exp);
+    try {
+      const data = await loginWithGoogleCredential(credential);
+      applyProfile(data);
+    } catch {
+      clearSessionState();
     }
   };
 
-  useEffect(() => {
-    if (!token) {
-      clearLogoutTimer();
-      return;
-    }
-    const info = decodeToken(token);
-    if (info?.exp && Date.now() >= info.exp * 1000) {
-      logout();
-      return;
-    }
-    scheduleLogout(info?.exp);
-  }, [clearLogoutTimer, logout, scheduleLogout, token]);
-
-  useEffect(() => {
-    if (!token) {
-      profileRequestId.current += 1;
-      setProfile(null);
-      setPreferencesState(null);
-      return;
-    }
-    const authId = user?.sub || user?.email;
-    if (tokenSourceRef.current === "storage" && authId) {
-      const cached = loadPreferencesCache(authId);
-      if (cached) {
-        setPreferencesState(cached);
-        tokenSourceRef.current = null;
-        return;
-      }
-    }
-    const requestId = ++profileRequestId.current;
-    fetchUserProfile()
-      .then((data) => {
-        if (profileRequestId.current !== requestId) {
-          return;
-        }
-        setProfile(data);
-        const nextPreferences: UserPreferences = {
-          themeMode: data.themeMode,
-          pnlDisplayMode: data.pnlDisplayMode,
-          defaultTradeSortBy: data.defaultTradeSortBy,
-          defaultTradeSortDirection: data.defaultTradeSortDirection,
-          showTradeHistory: data.showTradeHistory,
-        };
-        setPreferencesState(nextPreferences);
-        if (authId) {
-          savePreferencesCache(authId, nextPreferences);
-        }
-      })
-      .catch(() => {
-        if (profileRequestId.current !== requestId) {
-          return;
-        }
-        setProfile(null);
-      });
-    tokenSourceRef.current = null;
-  }, [loadPreferencesCache, savePreferencesCache, token, user?.email, user?.sub]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const checkExpiry = () => {
-      const stored = getAuthToken();
-      if (!stored) return;
-      const info = decodeToken(stored);
-      if (info?.exp && Date.now() >= info.exp * 1000) {
-        logout();
-      }
-    };
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkExpiry();
-      }
-    };
-    window.addEventListener("focus", checkExpiry);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", checkExpiry);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, [logout]);
-
   useGoogleOneTapLogin({
-    onSuccess: (response) => handleSuccess(response.credential),
+    onSuccess: (response) => void handleSuccess(response.credential),
     onError: () => {
       // Ignore prompt dismissals/errors; the explicit button remains available.
     },
@@ -328,7 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       <GoogleLogin
-        onSuccess={(response) => handleSuccess(response.credential)}
+        onSuccess={(response) => void handleSuccess(response.credential)}
         onError={() => logout()}
         text="signin_with"
         theme={loginThemeMode === "dark" ? "filled_black" : "outline"}

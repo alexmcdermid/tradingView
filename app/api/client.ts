@@ -1,5 +1,3 @@
-import { getAuthToken } from "../auth/authToken";
-
 const DEFAULT_API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api/v1";
 
@@ -7,12 +5,22 @@ const DEFAULT_USER_ID = import.meta.env.VITE_USER_ID || "demo-user";
 const USE_HEADER_AUTH = import.meta.env.VITE_USE_HEADER_AUTH === "true";
 const IS_DEV = import.meta.env.DEV;
 
+type CsrfToken = {
+  headerName: string;
+  token: string;
+};
+
+let csrfToken: CsrfToken | null = null;
+
+export function clearCsrfToken() {
+  csrfToken = null;
+}
+
 type RequestOptions = RequestInit & { skipAuthHeader?: boolean };
 
 type HeaderAuthOptions = {
   isDev: boolean;
   useHeaderAuth: boolean;
-  token: string | null;
   skipAuthHeader?: boolean;
 };
 
@@ -30,17 +38,18 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
 
-  const token = getAuthToken();
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
+  if (requiresCsrfToken(options.method)) {
+    const token = await getCsrfToken();
+    if (token) {
+      headers.set(token.headerName, token.token);
+    }
   }
 
-  // Header auth is a local/test convenience only. Production must use bearer auth.
+  // Header auth is a local/test convenience only. Production uses the session cookie.
   if (
     shouldSendHeaderAuth({
       isDev: IS_DEV,
       useHeaderAuth: USE_HEADER_AUTH,
-      token,
       skipAuthHeader: options.skipAuthHeader,
     })
   ) {
@@ -50,6 +59,7 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
   const response = await fetch(`${DEFAULT_API_BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -70,10 +80,28 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
 export function shouldSendHeaderAuth({
   isDev,
   useHeaderAuth,
-  token,
   skipAuthHeader,
 }: HeaderAuthOptions) {
-  return isDev && !skipAuthHeader && (useHeaderAuth || !token);
+  return isDev && !skipAuthHeader && useHeaderAuth;
+}
+
+function requiresCsrfToken(method?: string) {
+  const normalized = (method || "GET").toUpperCase();
+  return !["GET", "HEAD", "OPTIONS", "TRACE"].includes(normalized);
+}
+
+async function getCsrfToken() {
+  if (csrfToken) {
+    return csrfToken;
+  }
+  const response = await fetch(`${DEFAULT_API_BASE_URL}/auth/csrf`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    return null;
+  }
+  csrfToken = (await response.json()) as CsrfToken;
+  return csrfToken;
 }
 
 async function safeParseError(response: Response) {

@@ -7,7 +7,6 @@ describe("API client auth headers", () => {
       shouldSendHeaderAuth({
         isDev: false,
         useHeaderAuth: false,
-        token: null,
       })
     ).toBe(false);
   });
@@ -17,19 +16,17 @@ describe("API client auth headers", () => {
       shouldSendHeaderAuth({
         isDev: true,
         useHeaderAuth: true,
-        token: "token",
       })
     ).toBe(true);
   });
 
-  it("keeps the dev fallback when no bearer token exists", () => {
+  it("does not send the dev header unless explicitly enabled", () => {
     expect(
       shouldSendHeaderAuth({
         isDev: true,
         useHeaderAuth: false,
-        token: null,
       })
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("honors skipAuthHeader", () => {
@@ -37,7 +34,6 @@ describe("API client auth headers", () => {
       shouldSendHeaderAuth({
         isDev: true,
         useHeaderAuth: true,
-        token: null,
         skipAuthHeader: true,
       })
     ).toBe(false);
