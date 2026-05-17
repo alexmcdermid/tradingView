@@ -8,12 +8,18 @@ import {
 } from "react-router";
 
 import {
+  Box,
+  Container,
   CssBaseline,
+  Link as MuiLink,
+  Stack,
   ThemeProvider,
+  Typography,
   createTheme,
   type PaletteMode,
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link as RouterLink } from "react-router";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
@@ -140,9 +146,66 @@ function AppProviders() {
     <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
         <CssBaseline enableColorScheme />
-        <Outlet />
+        <Box sx={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+          <Box component="main" sx={{ flex: 1, minWidth: 0 }}>
+            <Outlet />
+          </Box>
+          <AppFooter />
+        </Box>
       </ThemeProvider>
     </ColorModeContext.Provider>
+  );
+}
+
+function AppFooter() {
+  const year = new Date().getFullYear();
+
+  return (
+    <Box
+      component="footer"
+      sx={{
+        borderTop: 1,
+        borderColor: "divider",
+        bgcolor: "background.default",
+        py: 2,
+      }}
+    >
+      <Container maxWidth="lg">
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Typography variant="caption" color="text.secondary">
+            Copyright © {year} tradelog. All rights reserved.
+          </Typography>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <MuiLink
+              component={RouterLink}
+              to="/privacy-policy"
+              underline="hover"
+              color="text.secondary"
+              variant="caption"
+            >
+              Privacy Policy
+            </MuiLink>
+            <Typography variant="caption" color="text.secondary" aria-hidden="true">
+              |
+            </Typography>
+            <MuiLink
+              component={RouterLink}
+              to="/terms-of-service"
+              underline="hover"
+              color="text.secondary"
+              variant="caption"
+            >
+              Terms of Service
+            </MuiLink>
+          </Stack>
+        </Stack>
+      </Container>
+    </Box>
   );
 }
 
