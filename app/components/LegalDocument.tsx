@@ -53,7 +53,7 @@ export function LegalDocument({ title, updatedAt, intro, sections }: LegalDocume
                   </Typography>
                 ))}
                 {section.items && (
-                  <Box component="ul" sx={{ pl: 3, my: 0 }}>
+                  <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>
                     {section.items.map((item) => (
                       <Typography
                         key={item}

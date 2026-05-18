@@ -31,4 +31,19 @@ describe("security and theme regression", () => {
     cy.contains("footer", "Privacy Policy").should("be.visible");
     cy.contains("footer", "Terms of Service").should("be.visible");
   });
+
+  it("keeps legal list text aligned with surrounding content", () => {
+    cy.visit("/terms-of-service", {
+      onBeforeLoad(win) {
+        win.localStorage.setItem("tv-theme-mode", "dark");
+      },
+    });
+
+    cy.contains("h2", "Prohibited Conduct").then(($heading) => {
+      const headingLeft = $heading[0].getBoundingClientRect().left;
+      cy.contains("li", "Using the service for unlawful").should(($item) => {
+        expect($item[0].getBoundingClientRect().left).to.be.closeTo(headingLeft, 1);
+      });
+    });
+  });
 });
