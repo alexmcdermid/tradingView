@@ -28,3 +28,5 @@ jobs:
           browser: chrome
         env:
           VITE_GOOGLE_CLIENT_ID: ci-regression-client-id
+          VITE_PUBLIC_ORIGIN: http://127.0.0.1:3000
+          VITE_PUBLIC_HOST_ALLOWLIST: 127.0.0.1:3000

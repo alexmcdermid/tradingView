@@ -16,7 +16,8 @@ const sections: LegalSection[] = [
       "Trade journal information you enter, including trades, account labels, notes, dates, prices, quantities, fees, margin settings, preferences, and generated performance summaries.",
       "Share link information when you create a public or restricted snapshot, including the selected trade data, generated link metadata, and optional expiration settings.",
       "Technical and usage information, such as IP address, browser type, device information, pages viewed, request times, and diagnostic logs.",
-      "Local storage data, including sign-in tokens, theme settings, cached preferences, and guest-mode trade data stored in your browser.",
+      "Session cookies and CSRF tokens used to authenticate browser requests and protect unsafe actions.",
+      "Local storage data, including theme settings, cached preferences, and guest-mode trade data stored in your browser. Google sign-in tokens are not stored in local storage.",
     ],
   },
   {
@@ -72,7 +73,7 @@ const sections: LegalSection[] = [
       "You may update or delete trade journal data through the application where supported.",
       "You may request access to personal information we hold about you and ask us to correct inaccurate or incomplete personal information, subject to applicable law.",
       "You may request account deletion or data assistance by contacting us.",
-      "You may clear browser local storage to remove guest-mode data and locally cached preferences from your device.",
+      "You may sign out to clear the browser session cookie, and you may clear browser local storage to remove guest-mode data and locally cached preferences from your device.",
       "You may stop using Google sign-in or revoke access through your Google account settings.",
     ],
   },
