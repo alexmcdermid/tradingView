@@ -10,6 +10,13 @@ describe("security and theme regression", () => {
   });
 
   it("keeps the legal footer on a dark surface in dark mode", () => {
+    const assertDarkFooter = () => {
+      cy.get("footer").should(($footer) => {
+        expect(getComputedStyle($footer[0]).backgroundColor).to.eq("rgb(16, 17, 19)");
+        expect(getComputedStyle($footer[0]).borderTopColor).to.eq("rgba(255, 255, 255, 0.08)");
+      });
+    };
+
     cy.visit("/privacy-policy", {
       onBeforeLoad(win) {
         win.localStorage.setItem("tv-theme-mode", "dark");
@@ -17,10 +24,10 @@ describe("security and theme regression", () => {
     });
 
     cy.contains("h1", "Privacy Policy").should("be.visible");
-    cy.get("footer").should(($footer) => {
-      expect(getComputedStyle($footer[0]).backgroundColor).to.eq("rgb(16, 17, 19)");
-      expect(getComputedStyle($footer[0]).borderTopColor).to.eq("rgba(255, 255, 255, 0.08)");
-    });
+    assertDarkFooter();
+    cy.reload();
+    cy.contains("h1", "Privacy Policy").should("be.visible");
+    assertDarkFooter();
     cy.contains("footer", "Privacy Policy").should("be.visible");
     cy.contains("footer", "Terms of Service").should("be.visible");
   });

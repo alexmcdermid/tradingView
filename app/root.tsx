@@ -18,7 +18,7 @@ import {
   createTheme,
   type PaletteMode,
 } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router";
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -79,6 +79,8 @@ export default function App() {
 }
 
 const THEME_STORAGE_KEY = "tv-theme-mode";
+const useBrowserLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 function readStoredThemeMode(): PaletteMode | null {
   if (typeof window === "undefined") return null;
@@ -90,14 +92,33 @@ function readStoredThemeMode(): PaletteMode | null {
   }
 }
 
+function writeStoredThemeMode(mode: PaletteMode) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+  } catch {
+    // Ignore storage errors (e.g. disabled storage).
+  }
+}
+
 function AppProviders() {
   const { user, token, preferences } = useAuth();
-  const [mode, setMode] = useState<PaletteMode>(() => {
-    return readStoredThemeMode() ?? "light";
-  });
+  const [mode, setModeState] = useState<PaletteMode>("light");
 
   const mapThemeMode = useCallback((themeMode?: ThemeMode | null): PaletteMode => {
     return themeMode === "DARK" ? "dark" : "light";
+  }, []);
+
+  const setMode = useCallback((next: PaletteMode) => {
+    setModeState(next);
+    writeStoredThemeMode(next);
+  }, []);
+
+  useBrowserLayoutEffect(() => {
+    const stored = readStoredThemeMode();
+    if (stored) {
+      setModeState(stored);
+    }
   }, []);
 
   useEffect(() => {
@@ -107,18 +128,9 @@ function AppProviders() {
     }
     const stored = readStoredThemeMode();
     if (stored) {
-      setMode(stored);
+      setModeState(stored);
     }
-  }, [mapThemeMode, preferences?.themeMode, token, user]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, mode);
-    } catch {
-      // Ignore storage errors (e.g. disabled storage).
-    }
-  }, [mode]);
+  }, [mapThemeMode, preferences?.themeMode, setMode, token, user]);
 
   const theme = useMemo(
     () =>
