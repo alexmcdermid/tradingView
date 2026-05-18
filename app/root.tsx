@@ -173,12 +173,14 @@ function AppFooter() {
   return (
     <Box
       component="footer"
-      sx={{
+      sx={(theme) => ({
         borderTop: 1,
-        borderColor: "divider",
-        bgcolor: "background.default",
+        borderColor:
+          theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.08)" : theme.palette.divider,
+        bgcolor: theme.palette.mode === "dark" ? "#101113" : "#ffffff",
+        color: "text.secondary",
         py: 2,
-      }}
+      })}
     >
       <Container maxWidth="lg">
         <Stack
@@ -197,6 +199,7 @@ function AppFooter() {
               underline="hover"
               color="text.secondary"
               variant="caption"
+              sx={{ "&:hover": { color: "text.primary" } }}
             >
               Privacy Policy
             </MuiLink>
@@ -209,6 +212,7 @@ function AppFooter() {
               underline="hover"
               color="text.secondary"
               variant="caption"
+              sx={{ "&:hover": { color: "text.primary" } }}
             >
               Terms of Service
             </MuiLink>

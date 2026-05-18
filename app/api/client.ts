@@ -11,9 +11,11 @@ type CsrfToken = {
 };
 
 let csrfToken: CsrfToken | null = null;
+let csrfTokenPromise: Promise<CsrfToken | null> | null = null;
 
 export function clearCsrfToken() {
   csrfToken = null;
+  csrfTokenPromise = null;
 }
 
 type RequestOptions = RequestInit & { skipAuthHeader?: boolean };
@@ -94,14 +96,22 @@ async function getCsrfToken() {
   if (csrfToken) {
     return csrfToken;
   }
-  const response = await fetch(`${DEFAULT_API_BASE_URL}/auth/csrf`, {
-    credentials: "include",
-  });
-  if (!response.ok) {
-    return null;
+  if (!csrfTokenPromise) {
+    csrfTokenPromise = fetch(`${DEFAULT_API_BASE_URL}/auth/csrf`, {
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          return null;
+        }
+        csrfToken = (await response.json()) as CsrfToken;
+        return csrfToken;
+      })
+      .finally(() => {
+        csrfTokenPromise = null;
+      });
   }
-  csrfToken = (await response.json()) as CsrfToken;
-  return csrfToken;
+  return csrfTokenPromise;
 }
 
 async function safeParseError(response: Response) {

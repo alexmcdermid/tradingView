@@ -1,5 +1,5 @@
 import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
   const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
-  const profileRequestId = useRef(0);
 
   const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
 
@@ -83,7 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const clearSessionState = useCallback(() => {
-    profileRequestId.current += 1;
     setToken(null);
     setUser(null);
     setProfile(null);
@@ -92,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const applyProfile = useCallback(
     (data: UserProfile) => {
-      profileRequestId.current += 1;
       const nextPreferences = preferencesFromProfile(data);
       setProfile(data);
       setUser(userFromProfile(data));

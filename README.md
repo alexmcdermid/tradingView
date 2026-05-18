@@ -20,13 +20,14 @@ This trading journal helps you:
 - **Performance Formatting** - Color-coded P&L (green for profits, red for losses)
 - **Responsive Design** - Works on desktop and mobile
 - **Google Sign-In** - Secure authentication with a first-party backend session cookie
+- **SSR Security** - Configured public origin, host allowlist, CSP, referrer policy, and nosniff headers
 - **Admin Panel** - View all users and their activity (admin-only)
 
 ## Tech Stack
 
-- React 18 with TypeScript
+- React 19 with TypeScript
 - Material-UI (MUI) components
-- React Router for navigation
+- React Router Framework Mode with SSR
 - Vite for fast builds
 - Vitest for testing
 - Deployed on AWS App Runner
