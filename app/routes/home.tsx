@@ -618,7 +618,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
 };
 
 export default function Home() {
-  const { user, token, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
+  const { user, token, authError, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
   const { mode, setMode } = useColorMode();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
@@ -1968,6 +1968,11 @@ export default function Home() {
           {!user && (
             <Alert severity="info">
               You&apos;re in guest mode. Log trades to explore the desk; sign in to persist them.
+            </Alert>
+          )}
+          {!user && authError && (
+            <Alert severity="warning">
+              {authError}
             </Alert>
           )}
           {authBlockedMessage && (

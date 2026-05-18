@@ -24,6 +24,7 @@ type AuthState = {
     defaultTradeSortDirection?: string | null;
   }) => void;
   token: string | null;
+  authError: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
   logout: () => void;
@@ -35,6 +36,7 @@ const authState: AuthState = {
   preferences: null,
   setPreferences: vi.fn(),
   token: null,
+  authError: null,
   initializing: false,
   loginButton: <button>Sign in</button>,
   logout: vi.fn(),
@@ -78,6 +80,7 @@ describe("Home (guest mode)", () => {
     authState.user = null;
     authState.preferences = null;
     authState.token = null;
+    authState.authError = null;
     mockFetchTrades.mockResolvedValue({
       items: [],
       page: 0,
@@ -109,6 +112,23 @@ describe("Home (guest mode)", () => {
   afterEach(() => {
     vi.clearAllMocks();
     cleanup();
+  });
+
+  it("shows a useful message when sign-in is blocked by the allowlist", () => {
+    authState.authError =
+      "You're in dev mode, but this Google account is not on the dev allowlist. Contact the repo owner to request access.";
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    expect(screen.getByText(/not on the dev allowlist/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
   });
 
   it("lets a guest log a trade locally", async () => {

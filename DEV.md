@@ -78,6 +78,8 @@ VITE_PUBLIC_HOST_ALLOWLIST=localhost:5173,127.0.0.1:5173
 
 The frontend sends the Google credential once to `POST /api/v1/auth/login`. The backend validates it, creates a first-party `HttpOnly` session cookie, and subsequent API calls use `credentials: "include"` instead of a bearer token in browser storage.
 
+If dev login is rejected because the Google account is outside the backend dev allowlist, the frontend remains in guest mode and shows a contact-the-repo-owner message instead of silently failing. Prod leaves the backend allowlist empty, so any valid Google account can sign in to isolated per-user data.
+
 Unsafe API methods first fetch `GET /api/v1/auth/csrf` and send the returned CSRF header. The API client caches the returned token and shares one in-flight CSRF request across concurrent unsafe calls. Logout clears the cached token.
 
 Local header auth is still available only when `VITE_USE_HEADER_AUTH=true`; production builds should leave it disabled.

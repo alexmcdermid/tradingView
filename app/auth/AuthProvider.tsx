@@ -1,6 +1,7 @@
 import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
+import { ApiError } from "../api/client";
 import { fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
 
@@ -17,6 +18,7 @@ type AuthContextValue = {
   preferences: UserPreferences | null;
   setPreferences: (preferences: UserPreferences) => void;
   token: string | null;
+  authError: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
   logout: () => void;
@@ -27,6 +29,33 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const PREFERENCES_KEY_PREFIX = "user-preferences";
 const THEME_STORAGE_KEY = "tv-theme-mode";
 const SESSION_TOKEN = "cookie-session";
+
+function getEnvironmentName() {
+  const explicit = import.meta.env.VITE_APP_ENV?.toLowerCase();
+  if (explicit) {
+    return explicit;
+  }
+  if (typeof window !== "undefined" && window.location.hostname.startsWith("dev.")) {
+    return "dev";
+  }
+  return "this";
+}
+
+function getLoginErrorMessage(error: unknown) {
+  if (error instanceof ApiError) {
+    const message = error.message.toLowerCase();
+    if ((error.status === 401 || error.status === 403) && message.includes("not allowed")) {
+      const environmentName = getEnvironmentName();
+      return environmentName === "dev"
+        ? "You're in dev mode, but this Google account is not on the dev allowlist. Contact the repo owner to request access."
+        : "This environment is restricted, and this Google account is not on the allowlist. Contact the repo owner to request access.";
+    }
+    if (error.status === 401) {
+      return "Google sign-in could not be verified. Try again, or contact the repo owner if this keeps happening.";
+    }
+  }
+  return "Sign-in failed. Try again, or contact the repo owner if this keeps happening.";
+}
 
 function readAuthThemeMode(): "light" | "dark" {
   if (typeof window === "undefined") return "light";
@@ -60,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
@@ -95,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(userFromProfile(data));
       setToken(SESSION_TOKEN);
       setPreferencesState(nextPreferences);
+      setAuthError(null);
       savePreferencesCache(data.authId, nextPreferences);
     },
     [savePreferencesCache]
@@ -104,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void logoutSession().catch(() => {
       // The local auth state still clears even if the server session is already gone.
     });
+    setAuthError(null);
     clearSessionState();
   }, [clearSessionState]);
 
@@ -167,8 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await loginWithGoogleCredential(credential);
       applyProfile(data);
-    } catch {
+    } catch (error) {
       clearSessionState();
+      setAuthError(getLoginErrorMessage(error));
     }
   };
 
@@ -195,7 +228,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     >
       <GoogleLogin
         onSuccess={(response) => void handleSuccess(response.credential)}
-        onError={() => logout()}
+        onError={() => {
+          clearSessionState();
+          setAuthError("Google sign-in failed before a credential was returned. Try again.");
+        }}
         text="signin_with"
         theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
         shape="pill"
@@ -259,11 +295,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       preferences,
       setPreferences,
       token,
+      authError,
       initializing,
       loginButton,
       logout,
     }),
-    [initializing, loginButton, logout, preferences, profile, setPreferences, token, user]
+    [authError, initializing, loginButton, logout, preferences, profile, setPreferences, token, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

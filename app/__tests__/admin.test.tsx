@@ -24,6 +24,7 @@ type AuthState = {
     defaultTradeSortDirection?: string | null;
   }) => void;
   token: string | null;
+  authError: string | null;
   initializing: boolean;
   loginButton: React.ReactNode;
   logout: () => void;
@@ -35,6 +36,7 @@ const authState: AuthState = {
   preferences: null,
   setPreferences: vi.fn(),
   token: null,
+  authError: null,
   initializing: false,
   loginButton: <button>Sign in</button>,
   logout: vi.fn(),
@@ -58,6 +60,7 @@ describe("Admin", () => {
     authState.user = null;
     authState.preferences = null;
     authState.token = null;
+    authState.authError = null;
   });
 
   afterEach(() => {
