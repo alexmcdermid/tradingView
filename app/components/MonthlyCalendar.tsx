@@ -116,26 +116,38 @@ const goodFriday = (year: number) => {
   return easter;
 };
 
-const holidayCache = new Map<number, Set<string>>();
+type MarketHoliday = {
+  date: Date;
+  name: string;
+};
+
+const holidayCache = new Map<number, Map<string, string>>();
 const getUsMarketHolidays = (year: number) => {
   if (holidayCache.has(year)) return holidayCache.get(year)!;
 
-  const holidays = [
-    observedDate(year, 0, 1), // New Year's Day
-    nthWeekdayOfMonth(year, 0, 1, 3), // Martin Luther King Jr. Day (3rd Monday Jan)
-    nthWeekdayOfMonth(year, 1, 1, 3), // Presidents Day (3rd Monday Feb)
-    goodFriday(year),
-    lastWeekdayOfMonth(year, 4, 1), // Memorial Day (last Monday May)
-    observedDate(year, 5, 19), // Juneteenth
-    observedDate(year, 6, 4), // Independence Day
-    nthWeekdayOfMonth(year, 8, 1, 1), // Labor Day (1st Monday Sept)
-    nthWeekdayOfMonth(year, 10, 4, 4), // Thanksgiving (4th Thursday Nov)
-    observedDate(year, 11, 25), // Christmas Day
+  const holidays: MarketHoliday[] = [
+    { date: observedDate(year, 0, 1), name: "New Year's Day" },
+    { date: nthWeekdayOfMonth(year, 0, 1, 3), name: "Martin Luther King Jr. Day" },
+    { date: nthWeekdayOfMonth(year, 1, 1, 3), name: "Presidents Day" },
+    { date: goodFriday(year), name: "Good Friday" },
+    { date: lastWeekdayOfMonth(year, 4, 1), name: "Memorial Day" },
+    { date: observedDate(year, 5, 19), name: "Juneteenth" },
+    { date: observedDate(year, 6, 4), name: "Independence Day" },
+    { date: nthWeekdayOfMonth(year, 8, 1, 1), name: "Labor Day" },
+    { date: nthWeekdayOfMonth(year, 10, 4, 4), name: "Thanksgiving Day" },
+    { date: observedDate(year, 11, 25), name: "Christmas Day" },
   ];
 
-  const set = new Set(holidays.map(toIsoDate));
-  holidayCache.set(year, set);
-  return set;
+  const map = new Map(holidays.map((holiday) => [toIsoDate(holiday.date), holiday.name]));
+  holidayCache.set(year, map);
+  return map;
+};
+
+const parseHolidayString = (holiday: string) => {
+  const date = holiday.slice(0, 10);
+  const remainder = holiday.slice(10).trim();
+  const name = remainder.startsWith("T") ? "" : remainder.replace(/^[:\s-]+/, "").trim();
+  return [date, name || "Trading holiday"] as const;
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -205,9 +217,9 @@ export function MonthlyCalendar({
     return map;
   }, [daily]);
 
-  const holidaySet = useMemo(() => {
+  const holidayByDate = useMemo(() => {
     if (holidays && holidays.length > 0) {
-      return new Set(holidays.map((h) => h.slice(0, 10)));
+      return new Map(holidays.map(parseHolidayString));
     }
     return getUsMarketHolidays(activeMonth.getFullYear());
   }, [activeMonth, holidays]);
@@ -418,8 +430,9 @@ export function MonthlyCalendar({
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
           const hasTrade = Boolean(bucket);
           const isPastNoTrade = !hasTrade && cellDate < todayStart;
-          const isHoliday = holidaySet.has(date);
-          const showHolidayLabel = isHoliday && !hasTrade;
+          const holidayName = hasTrade ? undefined : holidayByDate.get(date);
+          const isHoliday = Boolean(holidayName);
+          const showHolidayLabel = isHoliday;
           const isSelected = selectedDate === date;
           const color =
             marginMode === "margin" && hasTrade
@@ -485,6 +498,21 @@ export function MonthlyCalendar({
                 ? pnlOnlyDisplayValue
                 : netPnlDisplayValue;
           const showMarginLine = marginMode === "combined" && hasTrade && !showHolidayLabel;
+          const tradeTooltipTitle =
+            marginMode === "margin"
+              ? `Margin: ${marginDisplayValue}`
+              : marginMode === "combined"
+                ? `${valueMode === "percent" ? "Return" : "P/L"}: ${netPnlDisplayValue} / Margin: ${marginDisplayValue}`
+                : marginMode === "net"
+                  ? `${valueMode === "percent" ? "Return" : "P/L"} - margin: ${netPnlDisplayValue}`
+                  : valueMode === "percent"
+                    ? `Return: ${pnlOnlyDisplayValue}`
+                    : `P/L: ${pnlOnlyDisplayValue}`;
+          const tooltipTitle = holidayName
+            ? holidayName
+            : hasTrade
+              ? tradeTooltipTitle
+              : "";
 
           const content = (
             <Box
@@ -529,7 +557,13 @@ export function MonthlyCalendar({
                     }
                   : undefined
               }
-              aria-label={selectable ? `Select ${date}` : undefined}
+              aria-label={
+                selectable
+                  ? holidayName
+                    ? `Select ${date} (${holidayName})`
+                    : `Select ${date}`
+                  : undefined
+              }
               aria-pressed={selectable ? isSelected : undefined}
               data-calendar-date={selectable ? date : undefined}
               data-drop-target={isDropTarget ? "true" : undefined}
@@ -578,24 +612,14 @@ export function MonthlyCalendar({
             </Box>
           );
 
-          if (!hasTrade) {
+          if (!tooltipTitle) {
             return <Box key={date}>{content}</Box>;
           }
 
           return (
             <Tooltip
               key={date}
-              title={
-                marginMode === "margin"
-                  ? `Margin: ${marginDisplayValue}`
-                  : marginMode === "combined"
-                    ? `${valueMode === "percent" ? "Return" : "P/L"}: ${netPnlDisplayValue} / Margin: ${marginDisplayValue}`
-                    : marginMode === "net"
-                      ? `${valueMode === "percent" ? "Return" : "P/L"} - margin: ${netPnlDisplayValue}`
-                    : valueMode === "percent"
-                      ? `Return: ${pnlOnlyDisplayValue}`
-                      : `P/L: ${pnlOnlyDisplayValue}`
-              }
+              title={tooltipTitle}
             >
               <span>{content}</span>
             </Tooltip>

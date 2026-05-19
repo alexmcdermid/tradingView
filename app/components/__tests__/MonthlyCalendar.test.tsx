@@ -76,6 +76,7 @@ describe("MonthlyCalendar", () => {
   });
 
   it("allows selecting holiday dates", async () => {
+    const user = userEvent.setup();
     const onDateSelect = vi.fn();
     render(
       <MonthlyCalendar
@@ -85,9 +86,40 @@ describe("MonthlyCalendar", () => {
       />
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /select 2024-05-27/i }));
+    const memorialDay = screen.getByRole("button", {
+      name: /select 2024-05-27 \(memorial day\)/i,
+    });
+    await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
     expect(screen.getByText(/holiday/i)).toBeInTheDocument();
+
+    await user.hover(memorialDay);
+    expect(await screen.findByText("Memorial Day")).toBeInTheDocument();
+  });
+
+  it("treats holiday dates with trades as normal trading days", async () => {
+    const user = userEvent.setup();
+    const onDateSelect = vi.fn();
+    render(
+      <MonthlyCalendar
+        daily={[{ period: "2024-05-27", pnl: 42, trades: 1 }]}
+        initialMonth="2024-05-01"
+        onDateSelect={onDateSelect}
+      />
+    );
+
+    const memorialDayWithTrade = screen.getByRole("button", {
+      name: "Select 2024-05-27",
+    });
+    expect(screen.getByText("42.00")).toBeInTheDocument();
+    expect(screen.queryByText("Holiday")).not.toBeInTheDocument();
+
+    await user.click(memorialDayWithTrade);
+    expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
+
+    await user.hover(memorialDayWithTrade);
+    expect(await screen.findByText("P/L - margin: 42.00")).toBeInTheDocument();
+    expect(screen.queryByText("Memorial Day")).not.toBeInTheDocument();
   });
 
   it("keeps keyboard day navigation working after crossing months and rerendering", async () => {
