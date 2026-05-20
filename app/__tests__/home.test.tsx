@@ -5,6 +5,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import React from "react";
 import Home from "../routes/home";
 import type { Trade } from "../api/types";
+import { ApiError } from "../api/client";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ColorModeContext } from "../theme/colorMode";
 
@@ -235,6 +236,26 @@ describe("Home (authenticated)", () => {
       expect(mockFetchTrades).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("TSLA")).toBeInTheDocument();
+  });
+
+  it("shows an expired session as a warning instead of an error", async () => {
+    mockFetchTrades.mockRejectedValueOnce(new ApiError("Unauthorized", 401));
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const alertText = await screen.findByText("Session expired. Please sign in again.");
+    const alert = alertText.closest(".MuiAlert-root");
+
+    expect(authState.logout).toHaveBeenCalled();
+    expect(alert?.className).toContain("MuiAlert-colorWarning");
+    expect(alert?.className).not.toContain("MuiAlert-colorError");
   });
 
   it("loads aggregate stats when authenticated", async () => {

@@ -658,7 +658,7 @@ export default function Home() {
   const [deletingTrade, setDeletingTrade] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shareMessage, setShareMessage] = useState<string | null>(null);
-  const [shareWarning, setShareWarning] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareManagerOpen, setShareManagerOpen] = useState(false);
   const [shareLinks, setShareLinks] = useState<ShareLinkResponse[]>([]);
@@ -744,6 +744,16 @@ export default function Home() {
     return parsedStatsScope;
   }, [calendarMonth, hasExplicitStatsScope, parsedStatsScope]);
 
+  const showError = (message: string) => {
+    setWarning(null);
+    setError(message);
+  };
+
+  const showWarning = (message: string) => {
+    setError(null);
+    setWarning(message);
+  };
+
   const handleRequestError = (err: unknown) => {
     const message = err instanceof Error ? err.message : "Request failed";
     if (
@@ -766,10 +776,10 @@ export default function Home() {
     }
     if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
       logout();
-      setError("Session expired. Please sign in again.");
+      showWarning("Session expired. Please sign in again.");
       return;
     }
-    setError(message);
+    showError(message);
   };
 
   useEffect(() => {
@@ -1155,7 +1165,7 @@ export default function Home() {
 
   const handleOpenShareManager = () => {
     if (!user || !token) {
-      setShareWarning("Sign in to manage share links.");
+      showWarning("Sign in to manage share links.");
       return;
     }
     setMenuAnchor(null);
@@ -1197,7 +1207,7 @@ export default function Home() {
 
   const handleOpenAccountsDialog = () => {
     if (!user || !token) {
-      setShareWarning("Sign in to manage accounts.");
+      showWarning("Sign in to manage accounts.");
       return;
     }
     blurActiveElement();
@@ -1208,7 +1218,7 @@ export default function Home() {
 
   const handleCreateAccount = async () => {
     if (!accountDraft.name.trim()) {
-      setError("Account name is required.");
+      showError("Account name is required.");
       return;
     }
     const stockFees = Number(accountDraft.defaultStockFees);
@@ -1225,7 +1235,7 @@ export default function Home() {
       marginUsd < 0 ||
       marginCad < 0
     ) {
-      setError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
+      showError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
       return;
     }
     try {
@@ -1287,7 +1297,7 @@ export default function Home() {
 
   const handleSaveEditAccount = async (accountId: string) => {
     if (!accountEditDraft.name.trim()) {
-      setError("Account name is required.");
+      showError("Account name is required.");
       return;
     }
     const stockFees = Number(accountEditDraft.defaultStockFees);
@@ -1304,7 +1314,7 @@ export default function Home() {
       marginUsd < 0 ||
       marginCad < 0
     ) {
-      setError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
+      showError("Default stock fees, option fees, and USD/CAD margin rates must be valid values greater than or equal to 0.");
       return;
     }
     try {
@@ -1363,7 +1373,7 @@ export default function Home() {
 
     const parsedScope = parseStatsScope(statsScopeDraft);
     if (!parsedScope) {
-      setError("Widget scope must be blank or use YYYY, YYYY-MM, or YYYY-MM-DD.");
+      showError("Widget scope must be blank or use YYYY, YYYY-MM, or YYYY-MM-DD.");
       return;
     }
 
@@ -1656,11 +1666,11 @@ export default function Home() {
 
   const handleShareMonth = async () => {
     if (!user || !token) {
-      setShareWarning("Sign in to share a month.");
+      showWarning("Sign in to share a month.");
       return;
     }
     if (!summary) {
-      setError("Load a month before sharing.");
+      showError("Load a month before sharing.");
       return;
     }
     if (typeof window === "undefined") return;
@@ -1708,7 +1718,7 @@ export default function Home() {
       setShareMessage("Share link copied. Send it to share this month's P/L.");
     } catch (err) {
       console.error(err);
-      setError("Could not build the share link. Try again.");
+      showError("Could not build the share link. Try again.");
     } finally {
       setSharing(false);
     }
@@ -1716,15 +1726,15 @@ export default function Home() {
 
   const handleShareDay = async () => {
     if (!user || !token) {
-      setShareWarning("Sign in to share trades.");
+      showWarning("Sign in to share trades.");
       return;
     }
     if (!selectedDate) {
-      setShareWarning("Select a day to share trades.");
+      showWarning("Select a day to share trades.");
       return;
     }
     if (filteredTrades.length === 0) {
-      setShareWarning("No trades found for that day.");
+      showWarning("No trades found for that day.");
       return;
     }
     if (typeof window === "undefined") return;
@@ -1777,7 +1787,7 @@ export default function Home() {
       );
     } catch (err) {
       console.error(err);
-      setError("Could not build the share link. Try again.");
+      showError("Could not build the share link. Try again.");
     } finally {
       setSharing(false);
     }
@@ -2842,13 +2852,13 @@ export default function Home() {
         </Alert>
       </Snackbar>
       <Snackbar
-        open={!!shareWarning}
+        open={!!warning}
         autoHideDuration={3500}
-        onClose={() => setShareWarning(null)}
+        onClose={() => setWarning(null)}
         anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <Alert onClose={() => setShareWarning(null)} severity="warning" sx={{ width: "100%" }}>
-          {shareWarning}
+        <Alert onClose={() => setWarning(null)} severity="warning" sx={{ width: "100%" }}>
+          {warning}
         </Alert>
       </Snackbar>
     </>

@@ -101,6 +101,19 @@ const formatDateTime = (value?: string) => {
   return date.toLocaleString();
 };
 
+const getShareAlertSeverity = (message: string): "warning" | "error" => {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("not found") ||
+    normalized.includes("invalid") ||
+    normalized.includes("corrupted")
+  ) {
+    return "warning";
+  }
+  return "error";
+};
+
 const buildMetaDescriptors = (
   title: string,
   description: string,
@@ -286,7 +299,7 @@ export default function Share() {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         {renderHeader()}
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity={getShareAlertSeverity(loaderData.error)} sx={{ mt: 2 }}>
           {loaderData.error}
         </Alert>
       </Container>
@@ -308,7 +321,7 @@ export default function Share() {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
         {renderHeader()}
-        <Alert severity="error" sx={{ mt: 2 }}>
+        <Alert severity="warning" sx={{ mt: 2 }}>
           This share link is invalid or has been corrupted.
         </Alert>
       </Container>
@@ -452,7 +465,7 @@ export default function Share() {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       {renderHeader()}
-      <Alert severity="error" sx={{ mt: 2 }}>
+      <Alert severity="warning" sx={{ mt: 2 }}>
         This share link is invalid or has been corrupted.
       </Alert>
     </Container>

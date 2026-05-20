@@ -49,13 +49,14 @@ function formatNumber(value: number) {
 }
 
 export default function Admin() {
-  const { user, token, loginButton } = useAuth();
+  const { user, token, loginButton, logout } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [historyRows, setHistoryRows] = useState<TradeHistory[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [authBlockedMessage, setAuthBlockedMessage] = useState<string | null>(null);
 
   const handleRequestError = (err: unknown) => {
@@ -70,6 +71,13 @@ export default function Admin() {
       );
       return;
     }
+    if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
+      logout();
+      setError(null);
+      setWarning("Session expired. Please sign in again.");
+      return;
+    }
+    setWarning(null);
     setError(message);
   };
 
@@ -150,6 +158,11 @@ export default function Admin() {
             <Alert severity="info">Sign in to view admin users.</Alert>
             <Box>{loginButton}</Box>
           </Stack>
+        )}
+        {warning && (
+          <Alert severity="warning" onClose={() => setWarning(null)}>
+            {warning}
+          </Alert>
         )}
         {user && authBlockedMessage && (
           <Alert severity="warning" onClose={() => setAuthBlockedMessage(null)}>
