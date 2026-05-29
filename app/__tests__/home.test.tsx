@@ -56,6 +56,9 @@ const mockDeleteTrade = vi.fn();
 const mockFetchTradeHistory = vi.fn();
 const mockUpdateUserPreferences = vi.fn();
 const mockListUserAccounts = vi.fn();
+const mockCreateShareLink = vi.fn();
+const mockDeleteShareLink = vi.fn();
+const mockListUserShareLinks = vi.fn();
 
 vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
@@ -74,6 +77,15 @@ vi.mock("../api/users", () => ({
     mockListUserAccounts(...args),
   createUserAccount: vi.fn(),
   deleteUserAccount: vi.fn(),
+}));
+
+vi.mock("../api/shares", () => ({
+  createShareLink: (...args: Parameters<typeof mockCreateShareLink>) =>
+    mockCreateShareLink(...args),
+  deleteShareLink: (...args: Parameters<typeof mockDeleteShareLink>) =>
+    mockDeleteShareLink(...args),
+  listUserShareLinks: (...args: Parameters<typeof mockListUserShareLinks>) =>
+    mockListUserShareLinks(...args),
 }));
 
 describe("Home (guest mode)", () => {
@@ -108,6 +120,16 @@ describe("Home (guest mode)", () => {
       fxDate: "2024-01-01",
     });
     mockListUserAccounts.mockResolvedValue([]);
+    mockCreateShareLink.mockResolvedValue({
+      code: "share123",
+      shareType: "SUMMARY",
+      data: "{}",
+      requiresAuth: false,
+      expiresAt: "2024-02-01T00:00:00Z",
+      createdAt: "2024-01-01T00:00:00Z",
+      accessCount: 0,
+    });
+    mockListUserShareLinks.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -258,6 +280,30 @@ describe("Home (authenticated)", () => {
     expect(alert?.className).not.toContain("MuiAlert-colorError");
   });
 
+  it("logs out when creating a share link after the session expires", async () => {
+    mockCreateShareLink.mockRejectedValueOnce(new ApiError("Unauthorized", 401));
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const shareButton = await screen.findByRole("button", { name: /share month/i });
+    await waitFor(() => {
+      expect(shareButton).toBeEnabled();
+    });
+
+    await userEvent.click(shareButton);
+
+    expect(await screen.findByText("Session expired. Please sign in again.")).toBeInTheDocument();
+    expect(authState.logout).toHaveBeenCalled();
+    expect(screen.queryByText("Could not build the share link. Try again.")).not.toBeInTheDocument();
+  });
+
   it("loads aggregate stats when authenticated", async () => {
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
@@ -271,6 +317,31 @@ describe("Home (authenticated)", () => {
     await waitFor(() => {
       expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("renders selected dashboard widgets including the tax estimate", async () => {
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      dashboardWidgets: ["DAILY_AVG_YTD", "TAX_OWED", "TOTAL_REALIZED"],
+      taxCapitalGainsRate: 50,
+      taxPersonalRate: 40,
+    };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    expect(await screen.findByText(/Daily P\/L Avg YTD/i)).toBeInTheDocument();
+    const taxWidget = await screen.findByText(/Tax Owing/i);
+    const totalWidget = screen.getByText(/Total Realized P\/L/i);
+    expect(taxWidget.compareDocumentPosition(totalWidget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("246.91 USD")).toBeInTheDocument();
+    expect(screen.queryByText(/Best Month/i)).not.toBeInTheDocument();
   });
 
   it("fetches trades for a selected day", async () => {

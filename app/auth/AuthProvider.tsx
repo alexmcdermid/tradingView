@@ -82,6 +82,9 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   defaultTradeSortBy: profile.defaultTradeSortBy,
   defaultTradeSortDirection: profile.defaultTradeSortDirection,
   showTradeHistory: profile.showTradeHistory,
+  dashboardWidgets: profile.dashboardWidgets,
+  taxCapitalGainsRate: profile.taxCapitalGainsRate,
+  taxPersonalRate: profile.taxPersonalRate,
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -256,6 +259,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
         showTradeHistory: next.showTradeHistory ?? prev.showTradeHistory,
+        dashboardWidgets: next.dashboardWidgets ?? prev.dashboardWidgets,
+        taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev.taxCapitalGainsRate,
+        taxPersonalRate: next.taxPersonalRate ?? prev.taxPersonalRate,
       };
     });
     setPreferencesState((prev) => ({
@@ -265,6 +271,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       defaultTradeSortDirection:
         next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
       showTradeHistory: next.showTradeHistory ?? prev?.showTradeHistory ?? null,
+      dashboardWidgets: next.dashboardWidgets ?? prev?.dashboardWidgets ?? null,
+      taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev?.taxCapitalGainsRate ?? null,
+      taxPersonalRate: next.taxPersonalRate ?? prev?.taxPersonalRate ?? null,
     }));
     const authId = user?.sub || user?.email;
     if (authId) {
@@ -275,13 +284,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
         showTradeHistory: next.showTradeHistory ?? preferences?.showTradeHistory ?? null,
+        dashboardWidgets: next.dashboardWidgets ?? preferences?.dashboardWidgets ?? null,
+        taxCapitalGainsRate: next.taxCapitalGainsRate ?? preferences?.taxCapitalGainsRate ?? null,
+        taxPersonalRate: next.taxPersonalRate ?? preferences?.taxPersonalRate ?? null,
       });
     }
   }, [
+    preferences?.dashboardWidgets,
     preferences?.defaultTradeSortBy,
     preferences?.defaultTradeSortDirection,
     preferences?.pnlDisplayMode,
     preferences?.showTradeHistory,
+    preferences?.taxCapitalGainsRate,
+    preferences?.taxPersonalRate,
     preferences?.themeMode,
     savePreferencesCache,
     user?.email,
