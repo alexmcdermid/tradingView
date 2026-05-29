@@ -87,7 +87,13 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   taxPersonalRate: profile.taxPersonalRate,
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+  disableLoginPrompts = false,
+}: {
+  children: React.ReactNode;
+  disableLoginPrompts?: boolean;
+}) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -217,10 +223,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: !mounted || !!token,
+    disabled: disableLoginPrompts || !mounted || !!token,
   });
 
-  const loginButton = mounted ? (
+  const loginButton = mounted && !disableLoginPrompts ? (
     <div
       style={{
         width: `${loginWidth}px`,
@@ -329,7 +335,13 @@ export function useAuth() {
   return ctx;
 }
 
-export function AuthWrapper({ children }: { children: React.ReactNode }) {
+export function AuthWrapper({
+  children,
+  disableLoginPrompts = false,
+}: {
+  children: React.ReactNode;
+  disableLoginPrompts?: boolean;
+}) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
     return (
@@ -345,7 +357,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
   }
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider disableLoginPrompts={disableLoginPrompts}>{children}</AuthProvider>
     </GoogleOAuthProvider>
   );
 }
