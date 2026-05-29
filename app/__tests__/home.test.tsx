@@ -60,6 +60,25 @@ const mockCreateShareLink = vi.fn();
 const mockDeleteShareLink = vi.fn();
 const mockListUserShareLinks = vi.fn();
 
+const createDataTransfer = () => {
+  const store = new Map<string, string>();
+  return {
+    dropEffect: "none",
+    effectAllowed: "all",
+    clearData: vi.fn((format?: string) => {
+      if (format) {
+        store.delete(format);
+        return;
+      }
+      store.clear();
+    }),
+    getData: vi.fn((format: string) => store.get(format) ?? ""),
+    setData: vi.fn((format: string, value: string) => {
+      store.set(format, value);
+    }),
+  };
+};
+
 vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
   fetchSummary: (...args: Parameters<typeof mockFetchSummary>) => mockFetchSummary(...args),
@@ -342,6 +361,43 @@ describe("Home (authenticated)", () => {
     expect(taxWidget.compareDocumentPosition(totalWidget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("246.91 USD")).toBeInTheDocument();
     expect(screen.queryByText(/Best Month/i)).not.toBeInTheDocument();
+  });
+
+  it("lets users drag dashboard widgets into a custom order from preferences", async () => {
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      dashboardWidgets: ["TOTAL_REALIZED", "BEST_MONTH", "BEST_DAY"],
+      taxCapitalGainsRate: 50,
+      taxPersonalRate: 40,
+    };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /preferences/i }));
+
+    const dragHandle = await screen.findByLabelText("Drag Total Realized P/L");
+    const dropTarget = screen.getByLabelText("Dashboard widget preference Best Day");
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(dragHandle, { dataTransfer });
+    fireEvent.dragOver(dropTarget, { dataTransfer });
+    fireEvent.drop(dropTarget, { dataTransfer });
+
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockUpdateUserPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dashboardWidgets: ["BEST_MONTH", "BEST_DAY", "TOTAL_REALIZED"],
+      })
+    );
   });
 
   it("fetches trades for a selected day", async () => {

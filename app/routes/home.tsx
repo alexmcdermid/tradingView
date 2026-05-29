@@ -3,6 +3,7 @@ import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShareIcon from "@mui/icons-material/Share";
 import TuneIcon from "@mui/icons-material/Tune";
 import {
@@ -40,10 +41,11 @@ import {
   TableRow,
   TextField,
   Toolbar,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { Route } from "./+types/home";
 import { Link as RouterLink } from "react-router";
 import {
@@ -273,6 +275,23 @@ const moveDashboardWidget = (
   }
   const next = [...ordered];
   [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+  return next;
+};
+
+const reorderDashboardWidget = (
+  widgets: DashboardWidgetId[],
+  sourceWidgetId: DashboardWidgetId,
+  targetWidgetId: DashboardWidgetId
+) => {
+  const ordered = normalizeDashboardWidgets(widgets);
+  const sourceIndex = ordered.indexOf(sourceWidgetId);
+  const targetIndex = ordered.indexOf(targetWidgetId);
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+    return ordered;
+  }
+  const next = [...ordered];
+  const [movedWidget] = next.splice(sourceIndex, 1);
+  next.splice(targetIndex, 0, movedWidget);
   return next;
 };
 
@@ -877,6 +896,8 @@ export default function Home() {
   const [preferencesDialogOpen, setPreferencesDialogOpen] = useState(false);
   const [preferencesDraft, setPreferencesDraft] = useState<PreferencesDraft | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [draggingDashboardWidget, setDraggingDashboardWidget] = useState<DashboardWidgetId | null>(null);
+  const [dragOverDashboardWidget, setDragOverDashboardWidget] = useState<DashboardWidgetId | null>(null);
   const guestSeeded = useRef<boolean>(false);
   const adminEmailSet = useMemo(() => {
     const adminList = import.meta.env.VITE_ADMIN_EMAILS;
@@ -929,6 +950,50 @@ export default function Home() {
   const widgetPreferenceRows = useMemo(
     () => buildDashboardWidgetPreferenceRows(preferencesDraft?.dashboardWidgets ?? selectedDashboardWidgets),
     [preferencesDraft?.dashboardWidgets, selectedDashboardWidgets]
+  );
+  const handleDashboardWidgetDragStart = useCallback(
+    (event: DragEvent<HTMLElement>, widgetId: DashboardWidgetId) => {
+      setDraggingDashboardWidget(widgetId);
+      setDragOverDashboardWidget(null);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", widgetId);
+    },
+    []
+  );
+  const handleDashboardWidgetDragEnd = useCallback(() => {
+    setDraggingDashboardWidget(null);
+    setDragOverDashboardWidget(null);
+  }, []);
+  const handleDashboardWidgetDragOver = useCallback(
+    (event: DragEvent<HTMLElement>, widgetId: DashboardWidgetId) => {
+      if (!draggingDashboardWidget || draggingDashboardWidget === widgetId) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDragOverDashboardWidget(widgetId);
+    },
+    [draggingDashboardWidget]
+  );
+  const handleDashboardWidgetDrop = useCallback(
+    (event: DragEvent<HTMLElement>, targetWidgetId: DashboardWidgetId) => {
+      event.preventDefault();
+      const transferredWidgetId = event.dataTransfer.getData("text/plain") as DashboardWidgetId;
+      const sourceWidgetId = draggingDashboardWidget ?? transferredWidgetId;
+      setDraggingDashboardWidget(null);
+      setDragOverDashboardWidget(null);
+      if (!DASHBOARD_WIDGET_IDS.includes(sourceWidgetId) || sourceWidgetId === targetWidgetId) {
+        return;
+      }
+      setPreferencesDraft((prev) => {
+        const base = buildPreferencesDraft(prev);
+        return {
+          ...base,
+          dashboardWidgets: reorderDashboardWidget(base.dashboardWidgets, sourceWidgetId, targetWidgetId),
+        };
+      });
+    },
+    [buildPreferencesDraft, draggingDashboardWidget]
   );
   const parsedStatsScope = useMemo(() => {
     if (!statsScopeFilter) {
@@ -1570,6 +1635,8 @@ export default function Home() {
     }
     setPreferencesDialogOpen(false);
     setPreferencesDraft(null);
+    setDraggingDashboardWidget(null);
+    setDragOverDashboardWidget(null);
   };
 
   const handleSavePreferences = async () => {
@@ -1676,6 +1743,8 @@ export default function Home() {
 
     setPreferencesDialogOpen(false);
     setPreferencesDraft(null);
+    setDraggingDashboardWidget(null);
+    setDragOverDashboardWidget(null);
   };
 
   const handleEditTrade = (trade: Trade) => {
@@ -3061,16 +3130,66 @@ export default function Home() {
                   const selectedWidgets = preferencesDraft?.dashboardWidgets ?? selectedDashboardWidgets;
                   const isSelected = selectedWidgets.includes(widgetId);
                   const selectedIndex = selectedWidgets.indexOf(widgetId);
+                  const widgetLabel = getDashboardWidgetLabel(widgetId);
                   return (
                     <Box
                       key={widgetId}
+                      aria-label={`Dashboard widget preference ${widgetLabel}`}
+                      onDragOver={(event) => {
+                        if (isSelected) {
+                          handleDashboardWidgetDragOver(event, widgetId);
+                        }
+                      }}
+                      onDragLeave={(event) => {
+                        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                          return;
+                        }
+                        setDragOverDashboardWidget((current) => (current === widgetId ? null : current));
+                      }}
+                      onDrop={(event) => {
+                        if (isSelected) {
+                          handleDashboardWidgetDrop(event, widgetId);
+                        }
+                      }}
                       sx={{
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
                         gap: 1,
+                        border: "1px solid",
+                        borderColor: dragOverDashboardWidget === widgetId ? "primary.main" : "divider",
+                        borderRadius: 1,
+                        bgcolor: draggingDashboardWidget === widgetId ? "action.selected" : "background.paper",
+                        px: 1,
+                        py: 0.5,
+                        opacity: isSelected ? 1 : 0.58,
+                        transition: "background-color 120ms ease, border-color 120ms ease, opacity 120ms ease",
                       }}
                     >
+                      <Tooltip describeChild title={isSelected ? "Drag to reorder" : "Select to enable reordering"}>
+                        <Box
+                          component="span"
+                          aria-label={`Drag ${widgetLabel}`}
+                          draggable={isSelected}
+                          onDragStart={(event) => {
+                            if (!isSelected) {
+                              event.preventDefault();
+                              return;
+                            }
+                            handleDashboardWidgetDragStart(event, widgetId);
+                          }}
+                          onDragEnd={handleDashboardWidgetDragEnd}
+                          sx={{
+                            alignItems: "center",
+                            color: isSelected ? "text.secondary" : "action.disabled",
+                            cursor: isSelected ? "grab" : "not-allowed",
+                            display: "inline-flex",
+                            flex: "0 0 auto",
+                          }}
+                        >
+                          <DragIndicatorIcon fontSize="small" />
+                        </Box>
+                      </Tooltip>
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -3089,13 +3208,13 @@ export default function Home() {
                             }}
                           />
                         }
-                        label={getDashboardWidgetLabel(widgetId)}
+                        label={widgetLabel}
                         sx={{ flex: 1, minWidth: 0, mr: 0 }}
                       />
                       <Stack direction="row" spacing={0.5}>
                         <IconButton
                           size="small"
-                          aria-label={`Move ${getDashboardWidgetLabel(widgetId)} up`}
+                          aria-label={`Move ${widgetLabel} up`}
                           disabled={!isSelected || selectedIndex <= 0}
                           onClick={() => {
                             setPreferencesDraft((prev) => {
@@ -3111,7 +3230,7 @@ export default function Home() {
                         </IconButton>
                         <IconButton
                           size="small"
-                          aria-label={`Move ${getDashboardWidgetLabel(widgetId)} down`}
+                          aria-label={`Move ${widgetLabel} down`}
                           disabled={!isSelected || selectedIndex < 0 || selectedIndex >= selectedWidgets.length - 1}
                           onClick={() => {
                             setPreferencesDraft((prev) => {
