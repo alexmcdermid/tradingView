@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { loader, meta } from "../routes/share";
+import { createMemoryRouter, RouterProvider } from "react-router";
+import { render, screen } from "@testing-library/react";
+import Share, { loader, meta } from "../routes/share";
 import * as sharesApi from "../api/shares";
 import type { PnlSummary, ShareLinkResponse } from "../api/types";
 import { buildSharePayload } from "../utils/shareLink";
@@ -229,5 +231,43 @@ describe("share route loader", () => {
 
     expect(result.shareData).toBeNull();
     expect(result.error).toBe("Failed to load share link");
+  });
+});
+
+describe("share route page", () => {
+  it("does not render environment or origin metadata", async () => {
+    const summary: PnlSummary = {
+      totalPnl: 1250,
+      tradeCount: 3,
+      daily: [{ period: "2024-06-12", pnl: 1250, trades: 3 }],
+      monthly: [{ period: "2024-06", pnl: 1250, trades: 3 }],
+    };
+    const shareData = buildSharePayload("2024-06", summary, {
+      env: "prod",
+      origin: "https://example.com",
+      generatedAt: "2024-06-12T00:00:00Z",
+    });
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/share/:code",
+          element: <Share />,
+          loader: () => ({
+            shareData,
+            error: null,
+            publicOrigin: "https://example.com",
+            shareCode: "abc12345",
+          }),
+        },
+      ],
+      { initialEntries: ["/share/abc12345"] }
+    );
+
+    render(<RouterProvider router={router} />);
+
+    expect(await screen.findByRole("heading", { name: "June 2024 P/L" })).toBeInTheDocument();
+    expect(screen.getByText(/3 trades \| Created/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Env:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ref:/i)).not.toBeInTheDocument();
   });
 });

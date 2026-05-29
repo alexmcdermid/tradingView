@@ -253,47 +253,44 @@ export default function Share() {
     [tradesPayload]
   );
 
-  const renderHeader = () => (
-    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
-      <Stack spacing={0.5}>
-        <Typography variant="h5" fontWeight={800}>
-          {tradesPayload ? "Shared Trades Snapshot" : "Shared P/L Snapshot"}
-        </Typography>
-        {shared && (
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" rowGap={0.5}>
-            {summaryPayload && (
-              <>
-                <Chip label={monthLabel} color="primary" variant="outlined" />
-                <Chip
-                  label={`${summaryPayload.summary.tradeCount ?? 0} trade${(summaryPayload.summary.tradeCount ?? 0) === 1 ? "" : "s"}`}
-                  variant="outlined"
-                />
-              </>
-            )}
-            {tradesPayload && (
-              <>
-                <Chip label={dayLabel} color="primary" variant="outlined" />
-                <Chip
-                  label={`${tradesPayload.trades.length} trade${tradesPayload.trades.length === 1 ? "" : "s"}`}
-                  variant="outlined"
-                />
-              </>
-            )}
-            {shared.env && <Chip label={`Env: ${shared.env}`} size="small" variant="outlined" />}
-            {shared.origin && <Chip label={`Ref: ${shared.origin}`} size="small" variant="outlined" />}
-          </Stack>
-        )}
-        {shared && (
-          <Typography variant="caption" color="text.secondary">
-            Generated {formatDateTime(shared.generatedAt)}
+  const renderHeader = () => {
+    const title = shared
+      ? tradesPayload
+        ? `${dayLabel} Trades`
+        : `${monthLabel} P/L`
+      : "Shared Snapshot";
+    const tradeCount = summaryPayload
+      ? summaryPayload.summary.tradeCount ?? 0
+      : tradesPayload
+        ? tradesPayload.trades.length
+        : null;
+    const details = shared
+      ? [
+          tradeCount !== null
+            ? `${tradeCount} trade${tradeCount === 1 ? "" : "s"}`
+            : null,
+          `Created ${formatDateTime(shared.generatedAt)}`,
+        ].filter(Boolean)
+      : [];
+
+    return (
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
+        <Stack spacing={0.5}>
+          <Typography variant="h5" fontWeight={800}>
+            {title}
           </Typography>
-        )}
+          {details.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {details.join(" | ")}
+            </Typography>
+          )}
+        </Stack>
+        <Button component={RouterLink} to="/" variant="outlined">
+          Exit shared view
+        </Button>
       </Stack>
-      <Button component={RouterLink} to="/" variant="outlined">
-        Exit shared view
-      </Button>
-    </Stack>
-  );
+    );
+  };
 
   if (loaderData.error && !encoded) {
     return (
