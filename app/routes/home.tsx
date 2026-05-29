@@ -1,4 +1,6 @@
 import AddIcon from "@mui/icons-material/Add";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import ShareIcon from "@mui/icons-material/Share";
@@ -55,6 +57,7 @@ import {
 } from "../api/trades";
 import type {
   AggregateStats,
+  DashboardWidgetId,
   PnlBucket,
   PnlSummary,
   ShareLinkResponse,
@@ -140,6 +143,21 @@ const parseEmailList = (value?: string) => {
 
 const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
 const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
+const DEFAULT_DASHBOARD_WIDGETS: DashboardWidgetId[] = [
+  "TOTAL_REALIZED",
+  "BEST_MONTH",
+  "BEST_DAY",
+];
+const DEFAULT_TAX_CAPITAL_GAINS_RATE = 50;
+const DEFAULT_TAX_PERSONAL_RATE = 50;
+const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> = [
+  { id: "TOTAL_REALIZED", label: "Total Realized P/L" },
+  { id: "BEST_MONTH", label: "Best Month" },
+  { id: "BEST_DAY", label: "Best Day" },
+  { id: "DAILY_AVG_YTD", label: "Daily P/L Avg YTD" },
+  { id: "TAX_OWED", label: "Tax Owing" },
+];
+const DASHBOARD_WIDGET_IDS = DASHBOARD_WIDGET_OPTIONS.map((option) => option.id);
 type CalendarMarginMode = "net" | "pnl" | "margin" | "combined";
 const CALENDAR_MARGIN_MODES: CalendarMarginMode[] = ["net", "pnl", "margin", "combined"];
 const getCalendarMarginModeLabel = (
@@ -204,22 +222,182 @@ const resolveTradeSortDirection = (value?: TradeSortDirection | null): TradeSort
   return DEFAULT_TRADE_SORT_DIRECTION;
 };
 
-const detectEnvironment = () => {
-  if (import.meta.env.VITE_APP_ENV) {
-    return String(import.meta.env.VITE_APP_ENV);
+type PreferencesDraft = {
+  themeMode: "light" | "dark";
+  pnlDisplayMode: "pnl" | "percent";
+  defaultTradeSortBy: TradeSortField;
+  defaultTradeSortDirection: TradeSortDirection;
+  showTradeHistory: boolean;
+  dashboardWidgets: DashboardWidgetId[];
+  taxCapitalGainsRate: string;
+  taxPersonalRate: string;
+};
+
+const normalizeDashboardWidgets = (value?: DashboardWidgetId[] | null): DashboardWidgetId[] => {
+  if (!value) {
+    return DEFAULT_DASHBOARD_WIDGETS;
   }
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname.toLowerCase();
-    if (
-      host.includes("localhost") ||
-      host.includes("127.0.0.1") ||
-      host.includes("dev") ||
-      host.includes("staging")
-    ) {
-      return "dev";
+  const selected = new Set<DashboardWidgetId>();
+  value.forEach((id) => {
+    if (DASHBOARD_WIDGET_IDS.includes(id)) {
+      selected.add(id);
     }
+  });
+  return Array.from(selected);
+};
+
+const sameDashboardWidgets = (left: DashboardWidgetId[], right: DashboardWidgetId[]) =>
+  left.length === right.length && left.every((id, index) => id === right[index]);
+
+const getDashboardWidgetLabel = (id: DashboardWidgetId) =>
+  DASHBOARD_WIDGET_OPTIONS.find((option) => option.id === id)?.label ?? id;
+
+const buildDashboardWidgetPreferenceRows = (widgets: DashboardWidgetId[]) => {
+  const selected = normalizeDashboardWidgets(widgets);
+  return [
+    ...selected,
+    ...DASHBOARD_WIDGET_IDS.filter((id) => !selected.includes(id)),
+  ];
+};
+
+const moveDashboardWidget = (
+  widgets: DashboardWidgetId[],
+  widgetId: DashboardWidgetId,
+  direction: -1 | 1
+) => {
+  const ordered = normalizeDashboardWidgets(widgets);
+  const currentIndex = ordered.indexOf(widgetId);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= ordered.length) {
+    return ordered;
   }
-  return import.meta.env.PROD ? "prod" : "dev";
+  const next = [...ordered];
+  [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+  return next;
+};
+
+const resolveTaxRate = (value: number | null | undefined, fallback: number) => {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+};
+
+const parseTaxRateDraft = (
+  value: string,
+  label: string,
+  min: number,
+  max: number
+): { value: number; error?: never } | { value?: never; error: string } => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
+    return { error: `${label} must be between ${min} and ${max}.` };
+  }
+  return { value: Number(parsed.toFixed(2)) };
+};
+
+const computeTaxOwing = (
+  yearlyPnl: number | undefined,
+  capitalGainsRate: number,
+  personalRate: number
+) => {
+  const taxableGain = Math.max(yearlyPnl ?? 0, 0) * (capitalGainsRate / 100);
+  return Number((taxableGain * (personalRate / 100)).toFixed(2));
+};
+
+const UTC_DAY_MS = 24 * 60 * 60 * 1000;
+
+const toUtcIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+const utcDate = (year: number, monthIndex: number, day: number) =>
+  new Date(Date.UTC(year, monthIndex, day));
+
+const addUtcDays = (date: Date, days: number) =>
+  new Date(date.getTime() + days * UTC_DAY_MS);
+
+const observedMarketHoliday = (year: number, monthIndex: number, day: number) => {
+  const date = utcDate(year, monthIndex, day);
+  const weekday = date.getUTCDay();
+  if (weekday === 6) return addUtcDays(date, -1);
+  if (weekday === 0) return addUtcDays(date, 1);
+  return date;
+};
+
+const nthWeekdayOfMonth = (
+  year: number,
+  monthIndex: number,
+  weekday: number,
+  occurrence: number
+) => {
+  const date = utcDate(year, monthIndex, 1);
+  const offset = (weekday - date.getUTCDay() + 7) % 7;
+  return utcDate(year, monthIndex, 1 + offset + (occurrence - 1) * 7);
+};
+
+const lastWeekdayOfMonth = (year: number, monthIndex: number, weekday: number) => {
+  const date = utcDate(year, monthIndex + 1, 0);
+  const offset = (date.getUTCDay() - weekday + 7) % 7;
+  return utcDate(year, monthIndex, date.getUTCDate() - offset);
+};
+
+const easterSunday = (year: number) => {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return utcDate(year, month - 1, day);
+};
+
+const nyseHolidaySet = (year: number) => {
+  const holidays = [
+    observedMarketHoliday(year, 0, 1),
+    nthWeekdayOfMonth(year, 0, 1, 3),
+    nthWeekdayOfMonth(year, 1, 1, 3),
+    addUtcDays(easterSunday(year), -2),
+    lastWeekdayOfMonth(year, 4, 1),
+    observedMarketHoliday(year, 6, 4),
+    nthWeekdayOfMonth(year, 8, 1, 1),
+    nthWeekdayOfMonth(year, 10, 4, 4),
+    observedMarketHoliday(year, 11, 25),
+    observedMarketHoliday(year + 1, 0, 1),
+  ];
+  if (year >= 2022) {
+    holidays.push(observedMarketHoliday(year, 5, 19));
+  }
+  return new Set(
+    holidays
+      .filter((date) => date.getUTCFullYear() === year)
+      .map(toUtcIsoDate)
+  );
+};
+
+const countTradingDaysYtd = (year: number, today = new Date()) => {
+  const currentYear = today.getFullYear();
+  if (year > currentYear) {
+    return 0;
+  }
+  const start = utcDate(year, 0, 1);
+  const end = year === currentYear
+    ? utcDate(year, today.getMonth(), today.getDate())
+    : utcDate(year, 11, 31);
+  const holidays = nyseHolidaySet(year);
+  let count = 0;
+  for (let time = start.getTime(); time <= end.getTime(); time += UTC_DAY_MS) {
+    const date = new Date(time);
+    const weekday = date.getUTCDay();
+    if (weekday === 0 || weekday === 6 || holidays.has(toUtcIsoDate(date))) {
+      continue;
+    }
+    count += 1;
+  }
+  return count;
 };
 
 const copyTextToClipboard = async (value: string) => {
@@ -697,13 +875,7 @@ export default function Home() {
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [calendarOptionsAnchor, setCalendarOptionsAnchor] = useState<null | HTMLElement>(null);
   const [preferencesDialogOpen, setPreferencesDialogOpen] = useState(false);
-  const [preferencesDraft, setPreferencesDraft] = useState<{
-    themeMode: "light" | "dark";
-    pnlDisplayMode: "pnl" | "percent";
-    defaultTradeSortBy: TradeSortField;
-    defaultTradeSortDirection: TradeSortDirection;
-    showTradeHistory: boolean;
-  } | null>(null);
+  const [preferencesDraft, setPreferencesDraft] = useState<PreferencesDraft | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const guestSeeded = useRef<boolean>(false);
   const adminEmailSet = useMemo(() => {
@@ -720,6 +892,44 @@ export default function Home() {
     return adminEmailSet.has(user.email.toLowerCase());
   }, [adminEmailSet, user?.email]);
   const showTradeHistoryEnabled = Boolean(preferences?.showTradeHistory);
+  const selectedDashboardWidgets = useMemo(
+    () => normalizeDashboardWidgets(preferences?.dashboardWidgets),
+    [preferences?.dashboardWidgets]
+  );
+  const taxCapitalGainsRate = resolveTaxRate(
+    preferences?.taxCapitalGainsRate,
+    DEFAULT_TAX_CAPITAL_GAINS_RATE
+  );
+  const taxPersonalRate = resolveTaxRate(
+    preferences?.taxPersonalRate,
+    DEFAULT_TAX_PERSONAL_RATE
+  );
+  const buildPreferencesDraft = useCallback(
+    (prev?: PreferencesDraft | null): PreferencesDraft => ({
+      themeMode: prev?.themeMode ?? mode,
+      pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+      defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+      defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
+      showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
+      dashboardWidgets: prev?.dashboardWidgets ?? selectedDashboardWidgets,
+      taxCapitalGainsRate: prev?.taxCapitalGainsRate ?? String(taxCapitalGainsRate),
+      taxPersonalRate: prev?.taxPersonalRate ?? String(taxPersonalRate),
+    }),
+    [
+      calendarValueMode,
+      mode,
+      selectedDashboardWidgets,
+      showTradeHistoryEnabled,
+      taxCapitalGainsRate,
+      taxPersonalRate,
+      tradeSort.sortBy,
+      tradeSort.sortDirection,
+    ]
+  );
+  const widgetPreferenceRows = useMemo(
+    () => buildDashboardWidgetPreferenceRows(preferencesDraft?.dashboardWidgets ?? selectedDashboardWidgets),
+    [preferencesDraft?.dashboardWidgets, selectedDashboardWidgets]
+  );
   const parsedStatsScope = useMemo(() => {
     if (!statsScopeFilter) {
       return { year: undefined, month: undefined, day: undefined };
@@ -1348,13 +1558,7 @@ export default function Home() {
 
   const handleOpenPreferencesDialog = () => {
     blurActiveElement();
-    setPreferencesDraft({
-      themeMode: mode,
-      pnlDisplayMode: calendarValueMode,
-      defaultTradeSortBy: tradeSort.sortBy,
-      defaultTradeSortDirection: tradeSort.sortDirection,
-      showTradeHistory: showTradeHistoryEnabled,
-    });
+    setPreferencesDraft(buildPreferencesDraft());
     setStatsScopeDraft(statsScopeFilter ?? "");
     setPreferencesDialogOpen(true);
     setMenuAnchor(null);
@@ -1384,13 +1588,40 @@ export default function Home() {
       defaultTradeSortBy,
       defaultTradeSortDirection,
       showTradeHistory,
+      dashboardWidgets,
+      taxCapitalGainsRate: taxCapitalGainsRateDraft,
+      taxPersonalRate: taxPersonalRateDraft,
     } = preferencesDraft;
+    const parsedCapitalGainsRate = parseTaxRateDraft(
+      taxCapitalGainsRateDraft,
+      "Capital gains rate",
+      0,
+      100
+    );
+    if (parsedCapitalGainsRate.error) {
+      showError(parsedCapitalGainsRate.error);
+      return;
+    }
+    const parsedPersonalRate = parseTaxRateDraft(
+      taxPersonalRateDraft,
+      "Personal tax rate",
+      1,
+      100
+    );
+    if (parsedPersonalRate.error) {
+      showError(parsedPersonalRate.error);
+      return;
+    }
+    const normalizedDashboardWidgets = normalizeDashboardWidgets(dashboardWidgets);
     const hasPreferenceChanges =
       themeMode !== mode ||
       pnlDisplayMode !== calendarValueMode ||
       defaultTradeSortBy !== tradeSort.sortBy ||
       defaultTradeSortDirection !== tradeSort.sortDirection ||
-      showTradeHistory !== showTradeHistoryEnabled;
+      showTradeHistory !== showTradeHistoryEnabled ||
+      !sameDashboardWidgets(normalizedDashboardWidgets, selectedDashboardWidgets) ||
+      parsedCapitalGainsRate.value !== taxCapitalGainsRate ||
+      parsedPersonalRate.value !== taxPersonalRate;
     const hasWidgetChanges = normalizedScope !== statsScopeFilter;
 
     if (!hasPreferenceChanges && !hasWidgetChanges) {
@@ -1408,6 +1639,9 @@ export default function Home() {
           defaultTradeSortBy,
           defaultTradeSortDirection,
           showTradeHistory,
+          dashboardWidgets: normalizedDashboardWidgets,
+          taxCapitalGainsRate: parsedCapitalGainsRate.value,
+          taxPersonalRate: parsedPersonalRate.value,
         });
       } catch (err) {
         handleRequestError(err);
@@ -1422,6 +1656,9 @@ export default function Home() {
         defaultTradeSortBy,
         defaultTradeSortDirection,
         showTradeHistory,
+        dashboardWidgets: normalizedDashboardWidgets,
+        taxCapitalGainsRate: parsedCapitalGainsRate.value,
+        taxPersonalRate: parsedPersonalRate.value,
       });
     }
 
@@ -1676,10 +1913,7 @@ export default function Home() {
     if (typeof window === "undefined") return;
     try {
       setSharing(true);
-      const payload = buildSharePayload(calendarMonth, summary, {
-        env: detectEnvironment(),
-        origin: window.location.origin,
-      });
+      const payload = buildSharePayload(calendarMonth, summary);
       
       const shareLink = await createShareLink({
         shareType: "SUMMARY",
@@ -1717,8 +1951,7 @@ export default function Home() {
       }
       setShareMessage("Share link copied. Send it to share this month's P/L.");
     } catch (err) {
-      console.error(err);
-      showError("Could not build the share link. Try again.");
+      handleRequestError(err);
     } finally {
       setSharing(false);
     }
@@ -1741,8 +1974,6 @@ export default function Home() {
     try {
       setSharing(true);
       const payload = buildTradesSharePayload(selectedDate, filteredTrades, {
-        env: detectEnvironment(),
-        origin: window.location.origin,
         cadToUsdRate: summary?.cadToUsdRate,
         fxDate: summary?.fxDate,
         accountNamesById,
@@ -1786,8 +2017,7 @@ export default function Home() {
         `Share link copied. Send it to share trades for ${selectedDate.replace(/-/g, "/")}.`
       );
     } catch (err) {
-      console.error(err);
-      showError("Could not build the share link. Try again.");
+      handleRequestError(err);
     } finally {
       setSharing(false);
     }
@@ -1863,6 +2093,90 @@ export default function Home() {
   const scopedStatsYear = aggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
   const scopedStatsMonth = aggregateStats?.month ?? effectiveStatsScope.month ?? aggregateStats?.bestMonth?.period ?? null;
   const scopedStatsDay = aggregateStats?.day ?? effectiveStatsScope.day ?? null;
+  const taxOwing = useMemo(
+    () => computeTaxOwing(aggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
+    [aggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
+  );
+  const ytdTradingDays = useMemo(() => countTradingDaysYtd(scopedStatsYear), [scopedStatsYear]);
+  const dailyAverageYtd = ytdTradingDays > 0
+    ? Number(((aggregateStats?.totalPnl ?? 0) / ytdTradingDays).toFixed(2))
+    : undefined;
+  const widgetGridSize = {
+    xs: 12,
+    sm: selectedDashboardWidgets.length === 1 ? 12 : 6,
+    md:
+      selectedDashboardWidgets.length >= 4
+        ? 3
+        : selectedDashboardWidgets.length === 2
+          ? 6
+          : 4,
+  };
+  const dashboardWidgetCards = selectedDashboardWidgets.map((widgetId) => {
+    if (widgetId === "TOTAL_REALIZED") {
+      return {
+        id: widgetId,
+        node: (
+          <StatCard
+            title={`Total Realized P/L (${scopedStatsYear})`}
+            value={aggregateStats?.totalPnl}
+            trades={aggregateStats?.tradeCount}
+            percent={aggregateStats?.pnlPercent}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
+    if (widgetId === "BEST_MONTH") {
+      return {
+        id: widgetId,
+        node: (
+          <BucketCard
+            title={`Best Month (${scopedStatsYear})`}
+            bucket={aggregateStats?.bestMonth || null}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
+    if (widgetId === "BEST_DAY") {
+      return {
+        id: widgetId,
+        node: (
+          <BucketCard
+            title={scopedStatsDay ? `Day (${scopedStatsDay})` : `Best Day (${scopedStatsMonth ?? "month"})`}
+            bucket={aggregateStats?.bestDay || null}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
+    if (widgetId === "DAILY_AVG_YTD") {
+      return {
+        id: widgetId,
+        node: (
+          <AveragePnlCard
+            title={`Daily P/L Avg YTD (${scopedStatsYear})`}
+            value={dailyAverageYtd}
+            tradingDays={ytdTradingDays}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
+    return {
+      id: widgetId,
+      node: (
+        <TaxCard
+          title={`Tax Owing (${scopedStatsYear})`}
+          value={taxOwing}
+          yearlyPnl={aggregateStats?.totalPnl}
+          capitalGainsRate={taxCapitalGainsRate}
+          personalRate={taxPersonalRate}
+          loading={loadingStats}
+        />
+      ),
+    };
+  });
 
   const monthlyColor = useMemo(() => {
     if (!summary) return undefined;
@@ -1990,31 +2304,19 @@ export default function Home() {
               {authBlockedMessage}
             </Alert>
           )}
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <StatCard
-                title={`Total Realized P/L (${scopedStatsYear})`}
-                value={aggregateStats?.totalPnl}
-                trades={aggregateStats?.tradeCount}
-                percent={aggregateStats?.pnlPercent}
-                loading={loadingStats}
-              />
+          {dashboardWidgetCards.length > 0 ? (
+            <Grid container spacing={2}>
+              {dashboardWidgetCards.map((widget) => (
+                <Grid key={widget.id} size={widgetGridSize}>
+                  {widget.node}
+                </Grid>
+              ))}
             </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <BucketCard
-                title={`Best Month (${scopedStatsYear})`}
-                bucket={aggregateStats?.bestMonth || null}
-                loading={loadingStats}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <BucketCard
-                title={scopedStatsDay ? `Day (${scopedStatsDay})` : `Best Day (${scopedStatsMonth ?? "month"})`}
-                bucket={aggregateStats?.bestDay || null}
-                loading={loadingStats}
-              />
-            </Grid>
-          </Grid>
+          ) : (
+            <Alert severity="info">
+              No dashboard widgets selected. Open Preferences to add widgets.
+            </Alert>
+          )}
 
           <Card variant="outlined">
             <CardContent sx={{ "&:last-child": { pb: 2 } }}>
@@ -2683,14 +2985,7 @@ export default function Home() {
                 value={preferencesDraft?.themeMode ?? mode}
                 onChange={(event) => {
                   const next = event.target.value as "light" | "dark";
-                  setPreferencesDraft((prev) => ({
-                    themeMode: next,
-                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
-                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
-                    defaultTradeSortDirection:
-                      prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
-                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
-                  }));
+                  setPreferencesDraft((prev) => ({ ...buildPreferencesDraft(prev), themeMode: next }));
                 }}
               >
                 <FormControlLabel value="light" control={<Radio />} label="Light" />
@@ -2703,14 +2998,7 @@ export default function Home() {
                 value={preferencesDraft?.pnlDisplayMode ?? calendarValueMode}
                 onChange={(event) => {
                   const next = event.target.value as "pnl" | "percent";
-                  setPreferencesDraft((prev) => ({
-                    themeMode: prev?.themeMode ?? mode,
-                    pnlDisplayMode: next,
-                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
-                    defaultTradeSortDirection:
-                      prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
-                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
-                  }));
+                  setPreferencesDraft((prev) => ({ ...buildPreferencesDraft(prev), pnlDisplayMode: next }));
                 }}
               >
                 <FormControlLabel value="pnl" control={<Radio />} label="P/L" />
@@ -2726,11 +3014,8 @@ export default function Home() {
                 onChange={(event) => {
                   const next = event.target.value as TradeSortField;
                   setPreferencesDraft((prev) => ({
-                    themeMode: prev?.themeMode ?? mode,
-                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
+                    ...buildPreferencesDraft(prev),
                     defaultTradeSortBy: resolveTradeSortBy(next),
-                    defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
-                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2748,11 +3033,8 @@ export default function Home() {
                 onChange={(event) => {
                   const next = event.target.value as TradeSortDirection;
                   setPreferencesDraft((prev) => ({
-                    themeMode: prev?.themeMode ?? mode,
-                    pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
-                    defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
+                    ...buildPreferencesDraft(prev),
                     defaultTradeSortDirection: resolveTradeSortDirection(next),
-                    showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
                   }));
                 }}
               >
@@ -2766,19 +3048,121 @@ export default function Home() {
                   checked={preferencesDraft?.showTradeHistory ?? showTradeHistoryEnabled}
                   onChange={(event) => {
                     const next = event.target.checked;
-                    setPreferencesDraft((prev) => ({
-                      themeMode: prev?.themeMode ?? mode,
-                      pnlDisplayMode: prev?.pnlDisplayMode ?? calendarValueMode,
-                      defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
-                      defaultTradeSortDirection:
-                        prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
-                      showTradeHistory: next,
-                    }));
+                    setPreferencesDraft((prev) => ({ ...buildPreferencesDraft(prev), showTradeHistory: next }));
                   }}
                 />
               }
               label="Show trade history in edit dialog"
             />
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Dashboard widgets</FormLabel>
+              <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                {widgetPreferenceRows.map((widgetId) => {
+                  const selectedWidgets = preferencesDraft?.dashboardWidgets ?? selectedDashboardWidgets;
+                  const isSelected = selectedWidgets.includes(widgetId);
+                  const selectedIndex = selectedWidgets.indexOf(widgetId);
+                  return (
+                    <Box
+                      key={widgetId}
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 1,
+                      }}
+                    >
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={isSelected}
+                            onChange={(event) => {
+                              setPreferencesDraft((prev) => {
+                                const base = buildPreferencesDraft(prev);
+                                const nextWidgets = event.target.checked
+                                  ? [...base.dashboardWidgets, widgetId]
+                                  : base.dashboardWidgets.filter((id) => id !== widgetId);
+                                return {
+                                  ...base,
+                                  dashboardWidgets: normalizeDashboardWidgets(nextWidgets),
+                                };
+                              });
+                            }}
+                          />
+                        }
+                        label={getDashboardWidgetLabel(widgetId)}
+                        sx={{ flex: 1, minWidth: 0, mr: 0 }}
+                      />
+                      <Stack direction="row" spacing={0.5}>
+                        <IconButton
+                          size="small"
+                          aria-label={`Move ${getDashboardWidgetLabel(widgetId)} up`}
+                          disabled={!isSelected || selectedIndex <= 0}
+                          onClick={() => {
+                            setPreferencesDraft((prev) => {
+                              const base = buildPreferencesDraft(prev);
+                              return {
+                                ...base,
+                                dashboardWidgets: moveDashboardWidget(base.dashboardWidgets, widgetId, -1),
+                              };
+                            });
+                          }}
+                        >
+                          <ArrowUpwardIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          aria-label={`Move ${getDashboardWidgetLabel(widgetId)} down`}
+                          disabled={!isSelected || selectedIndex < 0 || selectedIndex >= selectedWidgets.length - 1}
+                          onClick={() => {
+                            setPreferencesDraft((prev) => {
+                              const base = buildPreferencesDraft(prev);
+                              return {
+                                ...base,
+                                dashboardWidgets: moveDashboardWidget(base.dashboardWidgets, widgetId, 1),
+                              };
+                            });
+                          }}
+                        >
+                          <ArrowDownwardIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </FormControl>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+              <TextField
+                label="Capital gains rate %"
+                type="number"
+                value={preferencesDraft?.taxCapitalGainsRate ?? String(taxCapitalGainsRate)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setPreferencesDraft((prev) => ({
+                    ...buildPreferencesDraft(prev),
+                    taxCapitalGainsRate: next,
+                  }));
+                }}
+                inputProps={{ min: 0, max: 100, step: 0.01 }}
+                helperText="Defaults to 50%."
+                fullWidth
+              />
+              <TextField
+                label="Personal tax rate %"
+                type="number"
+                value={preferencesDraft?.taxPersonalRate ?? String(taxPersonalRate)}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setPreferencesDraft((prev) => ({
+                    ...buildPreferencesDraft(prev),
+                    taxPersonalRate: next,
+                  }));
+                }}
+                inputProps={{ min: 1, max: 100, step: 0.01 }}
+                helperText="Used by the tax widget."
+                fullWidth
+              />
+            </Stack>
             <TextField
               label="Widget scope (optional)"
               value={statsScopeDraft}
@@ -2908,6 +3292,92 @@ function StatCard({
               : percentLabel
                 ? `${percentLabel} return`
                 : "No trades"}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TaxCard({
+  title,
+  value,
+  yearlyPnl,
+  capitalGainsRate,
+  personalRate,
+  loading,
+}: {
+  title: string;
+  value: number;
+  yearlyPnl?: number;
+  capitalGainsRate: number;
+  personalRate: number;
+  loading?: boolean;
+}) {
+  const display = value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }) + " USD";
+  const pnlLabel = yearlyPnl != null
+    ? yearlyPnl.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + " USD P/L"
+    : "No yearly P/L";
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Typography variant="overline" color="text.secondary">
+          {title}
+        </Typography>
+        <Typography variant="h5" fontWeight={800}>
+          {loading ? "…" : display}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {loading
+            ? "Loading…"
+            : `${capitalGainsRate.toFixed(2)}% taxable • ${personalRate.toFixed(2)}% rate • ${pnlLabel}`}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AveragePnlCard({
+  title,
+  value,
+  tradingDays,
+  loading,
+}: {
+  title: string;
+  value?: number;
+  tradingDays: number;
+  loading?: boolean;
+}) {
+  const display = value != null
+    ? value.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }) + " USD"
+    : "—";
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Typography variant="overline" color="text.secondary">
+          {title}
+        </Typography>
+        <Typography
+          variant="h5"
+          fontWeight={800}
+          color={!value ? "text.primary" : value >= 0 ? "success.main" : "error.main"}
+        >
+          {loading ? "…" : display}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {loading
+            ? "Loading…"
+            : tradingDays > 0
+              ? `${tradingDays} trading day${tradingDays === 1 ? "" : "s"}`
+              : "No trading days"}
         </Typography>
       </CardContent>
     </Card>

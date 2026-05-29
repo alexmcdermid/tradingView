@@ -149,12 +149,22 @@ export interface AdminUser {
   updatedAt: string;
 }
 
+export type DashboardWidgetId =
+  | "TOTAL_REALIZED"
+  | "BEST_MONTH"
+  | "BEST_DAY"
+  | "DAILY_AVG_YTD"
+  | "TAX_OWED";
+
 export interface UserPreferences {
   themeMode?: ThemeMode | null;
   pnlDisplayMode?: PnlDisplayMode | null;
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
+  dashboardWidgets?: DashboardWidgetId[] | null;
+  taxCapitalGainsRate?: number | null;
+  taxPersonalRate?: number | null;
 }
 
 export interface UserProfile {
@@ -169,6 +179,9 @@ export interface UserProfile {
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
+  dashboardWidgets?: DashboardWidgetId[] | null;
+  taxCapitalGainsRate?: number | null;
+  taxPersonalRate?: number | null;
 }
 
 export interface TradingAccount {
