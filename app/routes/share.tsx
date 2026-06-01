@@ -49,6 +49,8 @@ const formatDayLabel = (value?: string) => {
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatMoney = (value: number, currency = "USD") => `${formatCurrency(value)} ${currency}`;
+
 const formatDate = (value: string) => value.slice(0, 10).replace(/-/g, "/");
 
 const formatNumber = (value?: number | null, digits = 2) => {
@@ -247,6 +249,11 @@ export default function Share() {
   const dailyBuckets: PnlBucket[] = summary?.daily ?? [];
   const fxRate = summary?.cadToUsdRate ?? tradesPayload?.cadToUsdRate;
   const fxDate = summary?.fxDate ?? tradesPayload?.fxDate;
+  const displayCurrency =
+    summaryPayload?.displayCurrency ??
+    summary?.displayCurrency ??
+    tradesPayload?.displayCurrency ??
+    "USD";
   const summaryPercent = summary?.pnlPercent;
   const tradesPercent = useMemo(
     () => (tradesPayload ? computeTradesPercent(tradesPayload.trades, tradesPayload.cadToUsdRate) : null),
@@ -337,7 +344,7 @@ export default function Share() {
                   Total P/L ({monthLabel})
                 </Typography>
                 <Typography variant="h4" fontWeight={800} color={summary.totalPnl >= 0 ? "success.main" : "error.main"}>
-                  {formatCurrency(summary.totalPnl)} USD
+                  {formatMoney(summary.totalPnl, displayCurrency)}
                 </Typography>
                 {summaryPercent !== undefined && summaryPercent !== null && (
                   <Typography variant="body2" color="text.secondary" fontWeight={700}>
@@ -351,7 +358,7 @@ export default function Share() {
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
                   {bestDay
-                    ? `${bestDay.period}: ${formatCurrency(bestDay.pnl)} USD${
+                    ? `${bestDay.period}: ${formatMoney(bestDay.pnl, displayCurrency)}${
                         bestDay.pnlPercent !== undefined && bestDay.pnlPercent !== null
                           ? ` (${formatPercent(bestDay.pnlPercent)})`
                           : ""
@@ -362,8 +369,8 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                : "P/L shown in USD. CAD trades converted using the latest rate."}
+                ? `P/L shown in ${displayCurrency}. CAD/USD rate ${fxRate.toFixed(5)}${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                : `P/L shown in ${displayCurrency}. CAD/USD conversion used the latest available rate.`}
             </Typography>
           </CardContent>
         </Card>
@@ -399,7 +406,7 @@ export default function Share() {
                           fontWeight={700}
                           color={bucket.pnl >= 0 ? "success.main" : "error.main"}
                         >
-                          {formatCurrency(bucket.pnl)}
+                          {formatMoney(bucket.pnl, displayCurrency)}
                         </Typography>
                       </Stack>
                     </Stack>
@@ -429,7 +436,7 @@ export default function Share() {
                   fontWeight={800}
                   color={tradesPayload.totalPnl >= 0 ? "success.main" : "error.main"}
                 >
-                  {formatCurrency(tradesPayload.totalPnl)} USD
+                  {formatMoney(tradesPayload.totalPnl, displayCurrency)}
                 </Typography>
                 {tradesPercent !== null && tradesPercent !== undefined && (
                   <Typography variant="body2" color="text.secondary" fontWeight={700}>
@@ -448,8 +455,8 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `Total P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                : "Total P/L shown in USD. CAD trades converted using the latest rate."}
+                ? `Total P/L shown in ${displayCurrency}. CAD/USD rate ${fxRate.toFixed(5)}${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                : `Total P/L shown in ${displayCurrency}. CAD/USD conversion used the latest available rate.`}
             </Typography>
           </CardContent>
         </Card>

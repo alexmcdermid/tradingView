@@ -115,6 +115,7 @@ export interface PnlSummary {
   pnlPercent?: number;
   cadToUsdRate?: number;
   fxDate?: string;
+  displayCurrency?: Currency;
 }
 
 export interface AggregateStats {
@@ -125,6 +126,7 @@ export interface AggregateStats {
   pnlPercent?: number;
   cadToUsdRate?: number;
   fxDate?: string;
+  displayCurrency?: Currency;
   year?: number | null;
   month?: string | null;
   day?: string | null;
@@ -163,6 +165,7 @@ export interface UserPreferences {
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
   dashboardWidgets?: DashboardWidgetId[] | null;
+  displayCurrency?: Currency | null;
   taxCapitalGainsRate?: number | null;
   taxPersonalRate?: number | null;
 }
@@ -180,6 +183,7 @@ export interface UserProfile {
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
   dashboardWidgets?: DashboardWidgetId[] | null;
+  displayCurrency?: Currency | null;
   taxCapitalGainsRate?: number | null;
   taxPersonalRate?: number | null;
 }

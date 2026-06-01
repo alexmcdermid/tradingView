@@ -83,6 +83,7 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   defaultTradeSortDirection: profile.defaultTradeSortDirection,
   showTradeHistory: profile.showTradeHistory,
   dashboardWidgets: profile.dashboardWidgets,
+  displayCurrency: profile.displayCurrency,
   taxCapitalGainsRate: profile.taxCapitalGainsRate,
   taxPersonalRate: profile.taxPersonalRate,
 });

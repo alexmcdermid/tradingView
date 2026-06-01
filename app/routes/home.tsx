@@ -59,6 +59,7 @@ import {
 } from "../api/trades";
 import type {
   AggregateStats,
+  Currency,
   DashboardWidgetId,
   PnlBucket,
   PnlSummary,
@@ -152,6 +153,8 @@ const DEFAULT_DASHBOARD_WIDGETS: DashboardWidgetId[] = [
 ];
 const DEFAULT_TAX_CAPITAL_GAINS_RATE = 50;
 const DEFAULT_TAX_PERSONAL_RATE = 50;
+const DEFAULT_DISPLAY_CURRENCY: Currency = "USD";
+const DEFAULT_CAD_TO_USD_RATE = 0.732;
 const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> = [
   { id: "TOTAL_REALIZED", label: "Total Realized P/L" },
   { id: "BEST_MONTH", label: "Best Month" },
@@ -231,6 +234,7 @@ type PreferencesDraft = {
   defaultTradeSortDirection: TradeSortDirection;
   showTradeHistory: boolean;
   dashboardWidgets: DashboardWidgetId[];
+  displayCurrency: Currency;
   taxCapitalGainsRate: string;
   taxPersonalRate: string;
 };
@@ -298,6 +302,82 @@ const reorderDashboardWidget = (
 const resolveTaxRate = (value: number | null | undefined, fallback: number) => {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 };
+
+const resolveDisplayCurrency = (value?: Currency | null): Currency =>
+  value === "CAD" || value === "USD" ? value : DEFAULT_DISPLAY_CURRENCY;
+
+const resolveCadToUsdRate = (value?: number | null) =>
+  typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : DEFAULT_CAD_TO_USD_RATE;
+
+const convertUsdAmount = (value: number | null | undefined, displayCurrency: Currency, cadToUsdRate?: number | null) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  if (displayCurrency === "USD") {
+    return value;
+  }
+  return Number((value / resolveCadToUsdRate(cadToUsdRate)).toFixed(2));
+};
+
+const convertUsdBucket = (
+  bucket: PnlBucket | null | undefined,
+  displayCurrency: Currency,
+  cadToUsdRate?: number | null
+): PnlBucket | null => {
+  if (!bucket) {
+    return null;
+  }
+  return {
+    ...bucket,
+    pnl: convertUsdAmount(bucket.pnl, displayCurrency, cadToUsdRate) ?? bucket.pnl,
+    marginFee:
+      bucket.marginFee === null || bucket.marginFee === undefined
+        ? bucket.marginFee
+        : convertUsdAmount(bucket.marginFee, displayCurrency, cadToUsdRate),
+  };
+};
+
+const convertUsdSummary = (
+  summary: PnlSummary | null,
+  displayCurrency: Currency
+): PnlSummary | null => {
+  if (!summary) {
+    return null;
+  }
+  const rate = summary.cadToUsdRate;
+  return {
+    ...summary,
+    totalPnl: convertUsdAmount(summary.totalPnl, displayCurrency, rate) ?? summary.totalPnl,
+    daily: summary.daily.map((bucket) => convertUsdBucket(bucket, displayCurrency, rate)!),
+    monthly: summary.monthly.map((bucket) => convertUsdBucket(bucket, displayCurrency, rate)!),
+    displayCurrency,
+  };
+};
+
+const convertUsdStats = (
+  stats: AggregateStats | null,
+  displayCurrency: Currency
+): AggregateStats | null => {
+  if (!stats) {
+    return null;
+  }
+  const rate = stats.cadToUsdRate;
+  return {
+    ...stats,
+    totalPnl: convertUsdAmount(stats.totalPnl, displayCurrency, rate) ?? stats.totalPnl,
+    bestDay: convertUsdBucket(stats.bestDay, displayCurrency, rate),
+    bestMonth: convertUsdBucket(stats.bestMonth, displayCurrency, rate),
+    displayCurrency,
+  };
+};
+
+const formatMoney = (value: number, currency: Currency) =>
+  `${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} ${currency}`;
 
 const parseTaxRateDraft = (
   value: string,
@@ -917,6 +997,7 @@ export default function Home() {
     () => normalizeDashboardWidgets(preferences?.dashboardWidgets),
     [preferences?.dashboardWidgets]
   );
+  const displayCurrency = resolveDisplayCurrency(preferences?.displayCurrency);
   const taxCapitalGainsRate = resolveTaxRate(
     preferences?.taxCapitalGainsRate,
     DEFAULT_TAX_CAPITAL_GAINS_RATE
@@ -933,11 +1014,13 @@ export default function Home() {
       defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
       showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
       dashboardWidgets: prev?.dashboardWidgets ?? selectedDashboardWidgets,
+      displayCurrency: prev?.displayCurrency ?? displayCurrency,
       taxCapitalGainsRate: prev?.taxCapitalGainsRate ?? String(taxCapitalGainsRate),
       taxPersonalRate: prev?.taxPersonalRate ?? String(taxPersonalRate),
     }),
     [
       calendarValueMode,
+      displayCurrency,
       mode,
       selectedDashboardWidgets,
       showTradeHistoryEnabled,
@@ -1080,7 +1163,7 @@ export default function Home() {
   ]);
 
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
-    const cadToUsd = rate ?? 1;
+    const cadToUsd = resolveCadToUsdRate(rate);
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
     const toUsd = (trade: Trade) =>
       trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
@@ -1656,6 +1739,7 @@ export default function Home() {
       defaultTradeSortDirection,
       showTradeHistory,
       dashboardWidgets,
+      displayCurrency: nextDisplayCurrency,
       taxCapitalGainsRate: taxCapitalGainsRateDraft,
       taxPersonalRate: taxPersonalRateDraft,
     } = preferencesDraft;
@@ -1687,6 +1771,7 @@ export default function Home() {
       defaultTradeSortDirection !== tradeSort.sortDirection ||
       showTradeHistory !== showTradeHistoryEnabled ||
       !sameDashboardWidgets(normalizedDashboardWidgets, selectedDashboardWidgets) ||
+      nextDisplayCurrency !== displayCurrency ||
       parsedCapitalGainsRate.value !== taxCapitalGainsRate ||
       parsedPersonalRate.value !== taxPersonalRate;
     const hasWidgetChanges = normalizedScope !== statsScopeFilter;
@@ -1707,6 +1792,7 @@ export default function Home() {
           defaultTradeSortDirection,
           showTradeHistory,
           dashboardWidgets: normalizedDashboardWidgets,
+          displayCurrency: nextDisplayCurrency,
           taxCapitalGainsRate: parsedCapitalGainsRate.value,
           taxPersonalRate: parsedPersonalRate.value,
         });
@@ -1724,6 +1810,7 @@ export default function Home() {
         defaultTradeSortDirection,
         showTradeHistory,
         dashboardWidgets: normalizedDashboardWidgets,
+        displayCurrency: nextDisplayCurrency,
         taxCapitalGainsRate: parsedCapitalGainsRate.value,
         taxPersonalRate: parsedPersonalRate.value,
       });
@@ -1975,14 +2062,14 @@ export default function Home() {
       showWarning("Sign in to share a month.");
       return;
     }
-    if (!summary) {
+    if (!displaySummary) {
       showError("Load a month before sharing.");
       return;
     }
     if (typeof window === "undefined") return;
     try {
       setSharing(true);
-      const payload = buildSharePayload(calendarMonth, summary);
+      const payload = buildSharePayload(calendarMonth, displaySummary, { displayCurrency });
       
       const shareLink = await createShareLink({
         shareType: "SUMMARY",
@@ -2045,6 +2132,7 @@ export default function Home() {
       const payload = buildTradesSharePayload(selectedDate, filteredTrades, {
         cadToUsdRate: summary?.cadToUsdRate,
         fxDate: summary?.fxDate,
+        displayCurrency,
         accountNamesById,
       });
       
@@ -2158,17 +2246,25 @@ export default function Home() {
     () => Object.fromEntries(accounts.map((account) => [account.id, account.name])),
     [accounts]
   );
+  const displaySummary = useMemo(
+    () => convertUsdSummary(summary, displayCurrency),
+    [displayCurrency, summary]
+  );
+  const displayAggregateStats = useMemo(
+    () => convertUsdStats(aggregateStats, displayCurrency),
+    [aggregateStats, displayCurrency]
+  );
 
-  const scopedStatsYear = aggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
-  const scopedStatsMonth = aggregateStats?.month ?? effectiveStatsScope.month ?? aggregateStats?.bestMonth?.period ?? null;
-  const scopedStatsDay = aggregateStats?.day ?? effectiveStatsScope.day ?? null;
+  const scopedStatsYear = displayAggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
+  const scopedStatsMonth = displayAggregateStats?.month ?? effectiveStatsScope.month ?? displayAggregateStats?.bestMonth?.period ?? null;
+  const scopedStatsDay = displayAggregateStats?.day ?? effectiveStatsScope.day ?? null;
   const taxOwing = useMemo(
-    () => computeTaxOwing(aggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
-    [aggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
+    () => computeTaxOwing(displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
+    [displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
   );
   const ytdTradingDays = useMemo(() => countTradingDaysYtd(scopedStatsYear), [scopedStatsYear]);
   const dailyAverageYtd = ytdTradingDays > 0
-    ? Number(((aggregateStats?.totalPnl ?? 0) / ytdTradingDays).toFixed(2))
+    ? Number(((displayAggregateStats?.totalPnl ?? 0) / ytdTradingDays).toFixed(2))
     : undefined;
   const widgetGridSize = {
     xs: 12,
@@ -2187,9 +2283,10 @@ export default function Home() {
         node: (
           <StatCard
             title={`Total Realized P/L (${scopedStatsYear})`}
-            value={aggregateStats?.totalPnl}
-            trades={aggregateStats?.tradeCount}
-            percent={aggregateStats?.pnlPercent}
+            value={displayAggregateStats?.totalPnl}
+            trades={displayAggregateStats?.tradeCount}
+            percent={displayAggregateStats?.pnlPercent}
+            currency={displayCurrency}
             loading={loadingStats}
           />
         ),
@@ -2201,7 +2298,8 @@ export default function Home() {
         node: (
           <BucketCard
             title={`Best Month (${scopedStatsYear})`}
-            bucket={aggregateStats?.bestMonth || null}
+            bucket={displayAggregateStats?.bestMonth || null}
+            currency={displayCurrency}
             loading={loadingStats}
           />
         ),
@@ -2213,7 +2311,8 @@ export default function Home() {
         node: (
           <BucketCard
             title={scopedStatsDay ? `Day (${scopedStatsDay})` : `Best Day (${scopedStatsMonth ?? "month"})`}
-            bucket={aggregateStats?.bestDay || null}
+            bucket={displayAggregateStats?.bestDay || null}
+            currency={displayCurrency}
             loading={loadingStats}
           />
         ),
@@ -2226,6 +2325,7 @@ export default function Home() {
           <AveragePnlCard
             title={`Daily P/L Avg YTD (${scopedStatsYear})`}
             value={dailyAverageYtd}
+            currency={displayCurrency}
             tradingDays={ytdTradingDays}
             loading={loadingStats}
           />
@@ -2238,7 +2338,8 @@ export default function Home() {
         <TaxCard
           title={`Tax Owing (${scopedStatsYear})`}
           value={taxOwing}
-          yearlyPnl={aggregateStats?.totalPnl}
+          yearlyPnl={displayAggregateStats?.totalPnl}
+          currency={displayCurrency}
           capitalGainsRate={taxCapitalGainsRate}
           personalRate={taxPersonalRate}
           loading={loadingStats}
@@ -2248,11 +2349,11 @@ export default function Home() {
   });
 
   const monthlyColor = useMemo(() => {
-    if (!summary) return undefined;
-    if (summary.totalPnl > 0) return "success.main";
-    if (summary.totalPnl < 0) return "error.main";
+    if (!displaySummary) return undefined;
+    if (displaySummary.totalPnl > 0) return "success.main";
+    if (displaySummary.totalPnl < 0) return "error.main";
     return "text.primary";
-  }, [summary]);
+  }, [displaySummary]);
   const fxRate = summary?.cadToUsdRate;
   const fxDate = summary?.fxDate;
 
@@ -2401,12 +2502,9 @@ export default function Home() {
                     Monthly P/L Calendar
                   </Typography>
                   <Typography variant="body2" color={monthlyColor} fontWeight={700}>
-                    {summary
-                      ? `P/L ${calendarMonth}: ${summary.totalPnl.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })} USD${
-                          summary.pnlPercent != null ? ` (${summary.pnlPercent.toFixed(2)}%)` : ""
+                    {displaySummary
+                      ? `P/L ${calendarMonth}: ${formatMoney(displaySummary.totalPnl, displayCurrency)}${
+                          displaySummary.pnlPercent != null ? ` (${displaySummary.pnlPercent.toFixed(2)}%)` : ""
                         }`
                       : ""}
                   </Typography>
@@ -2428,7 +2526,7 @@ export default function Home() {
                     startIcon={<ShareIcon />}
                     onClick={handleShareMonth}
                     size="small"
-                    disabled={!summary || sharing || loadingSummary}
+                    disabled={!displaySummary || sharing || loadingSummary}
                   >
                     Share Month
                   </Button>
@@ -2443,8 +2541,8 @@ export default function Home() {
                 </Stack>
               </Stack>
               <MonthlyCalendar
-                daily={summary?.daily || []}
-                initialMonth={summary?.daily?.[0]?.period}
+                daily={displaySummary?.daily || []}
+                initialMonth={displaySummary?.daily?.[0]?.period}
                 month={calendarMonth}
                 onMonthChange={handleMonthChange}
                 selectedDate={selectedDate}
@@ -2467,15 +2565,15 @@ export default function Home() {
                   sx={{ display: { xs: "none", sm: "block" }, flex: 1, minWidth: 0 }}
                 >
                   {fxRate
-                    ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                    : "P/L shown in USD. CAD trades converted using the latest rate from the API."}
+                    ? `P/L shown in ${displayCurrency}. CAD/USD rate ${fxRate.toFixed(5)}${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                    : `P/L shown in ${displayCurrency}. CAD/USD conversion used the latest available rate.`}
                 </Typography>
                 <Typography
                   variant="caption"
                   color="text.secondary"
                   sx={{ display: { xs: "block", sm: "none" }, flex: 1, minWidth: 0 }}
                 >
-                  {fxRate ? `USD P/L. CAD @ ${fxRate.toFixed(5)}` : "USD P/L. Latest CAD rate."}
+                  {fxRate ? `${displayCurrency} P/L. CAD/USD ${fxRate.toFixed(5)}` : `${displayCurrency} P/L. Latest FX.`}
                 </Typography>
                 <Box sx={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
                   <IconButton
@@ -2624,8 +2722,8 @@ export default function Home() {
                 accountId: editingTrade.accountId || undefined,
               }
             : selectedDate
-              ? { closedAt: selectedDate, expiryDate: selectedDate }
-              : undefined
+              ? { currency: displayCurrency, closedAt: selectedDate, expiryDate: selectedDate }
+              : { currency: displayCurrency }
         }
         accounts={accounts}
         submitting={savingTrade}
@@ -3074,6 +3172,19 @@ export default function Home() {
                 <FormControlLabel value="percent" control={<Radio />} label="% Return" />
               </RadioGroup>
             </FormControl>
+            <FormControl component="fieldset">
+              <FormLabel component="legend">Display currency</FormLabel>
+              <RadioGroup
+                value={preferencesDraft?.displayCurrency ?? displayCurrency}
+                onChange={(event) => {
+                  const next = resolveDisplayCurrency(event.target.value as Currency);
+                  setPreferencesDraft((prev) => ({ ...buildPreferencesDraft(prev), displayCurrency: next }));
+                }}
+              >
+                <FormControlLabel value="USD" control={<Radio />} label="USD" />
+                <FormControlLabel value="CAD" control={<Radio />} label="CAD" />
+              </RadioGroup>
+            </FormControl>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 select
@@ -3373,19 +3484,18 @@ function StatCard({
   value,
   trades,
   percent,
+  currency,
   loading,
 }: {
   title: string;
   value?: number;
   trades?: number;
   percent?: number;
+  currency: Currency;
   loading?: boolean;
 }) {
   const display = value != null
-    ? value.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + " USD"
+    ? formatMoney(value, currency)
     : "—";
   const percentLabel = percent != null
     ? `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`
@@ -3423,6 +3533,7 @@ function TaxCard({
   yearlyPnl,
   capitalGainsRate,
   personalRate,
+  currency,
   loading,
 }: {
   title: string;
@@ -3430,17 +3541,12 @@ function TaxCard({
   yearlyPnl?: number;
   capitalGainsRate: number;
   personalRate: number;
+  currency: Currency;
   loading?: boolean;
 }) {
-  const display = value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " USD";
+  const display = formatMoney(value, currency);
   const pnlLabel = yearlyPnl != null
-    ? yearlyPnl.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + " USD P/L"
+    ? `${formatMoney(yearlyPnl, currency)} P/L`
     : "No yearly P/L";
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
@@ -3464,19 +3570,18 @@ function TaxCard({
 function AveragePnlCard({
   title,
   value,
+  currency,
   tradingDays,
   loading,
 }: {
   title: string;
   value?: number;
+  currency: Currency;
   tradingDays: number;
   loading?: boolean;
 }) {
   const display = value != null
-    ? value.toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }) + " USD"
+    ? formatMoney(value, currency)
     : "—";
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
@@ -3508,17 +3613,16 @@ function BucketCard({
   bucket,
   loading,
   icon,
+  currency,
 }: {
   title: string;
   bucket: PnlBucket | null;
   loading?: boolean;
   icon?: ReactNode;
+  currency: Currency;
 }) {
   const value = bucket?.pnl ?? 0;
-  const formattedValue = value.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }) + " USD";
+  const formattedValue = formatMoney(value, currency);
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
