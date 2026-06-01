@@ -267,6 +267,7 @@ export function AuthProvider({
           next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
         showTradeHistory: next.showTradeHistory ?? prev.showTradeHistory,
         dashboardWidgets: next.dashboardWidgets ?? prev.dashboardWidgets,
+        displayCurrency: next.displayCurrency ?? prev.displayCurrency,
         taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev.taxCapitalGainsRate,
         taxPersonalRate: next.taxPersonalRate ?? prev.taxPersonalRate,
       };
@@ -279,6 +280,7 @@ export function AuthProvider({
         next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
       showTradeHistory: next.showTradeHistory ?? prev?.showTradeHistory ?? null,
       dashboardWidgets: next.dashboardWidgets ?? prev?.dashboardWidgets ?? null,
+      displayCurrency: next.displayCurrency ?? prev?.displayCurrency ?? null,
       taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev?.taxCapitalGainsRate ?? null,
       taxPersonalRate: next.taxPersonalRate ?? prev?.taxPersonalRate ?? null,
     }));
@@ -292,6 +294,7 @@ export function AuthProvider({
           next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
         showTradeHistory: next.showTradeHistory ?? preferences?.showTradeHistory ?? null,
         dashboardWidgets: next.dashboardWidgets ?? preferences?.dashboardWidgets ?? null,
+        displayCurrency: next.displayCurrency ?? preferences?.displayCurrency ?? null,
         taxCapitalGainsRate: next.taxCapitalGainsRate ?? preferences?.taxCapitalGainsRate ?? null,
         taxPersonalRate: next.taxPersonalRate ?? preferences?.taxPersonalRate ?? null,
       });
@@ -300,6 +303,7 @@ export function AuthProvider({
     preferences?.dashboardWidgets,
     preferences?.defaultTradeSortBy,
     preferences?.defaultTradeSortDirection,
+    preferences?.displayCurrency,
     preferences?.pnlDisplayMode,
     preferences?.showTradeHistory,
     preferences?.taxCapitalGainsRate,
