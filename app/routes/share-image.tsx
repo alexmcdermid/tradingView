@@ -21,8 +21,8 @@ const formatCurrency = (value: number) => numberFormatter.format(value);
 const formatPercent = (value: number) =>
   `${value >= 0 ? "+" : ""}${numberFormatter.format(value)}%`;
 
-const formatPnl = (value: number) =>
-  `${value >= 0 ? "+" : ""}${formatCurrency(value)} USD`;
+const formatPnl = (value: number, currency = "USD") =>
+  `${value >= 0 ? "+" : ""}${formatCurrency(value)} ${currency}`;
 
 const formatMonthLabel = (value?: string) => {
   if (!value) return "Unknown month";
@@ -82,12 +82,13 @@ const buildShareImage = (options: {
   title: string;
   subtitle: string;
   pnl: number;
+  currency?: string;
   percent?: number;
   tradeCount: number;
 }) => {
-  const { title, subtitle, pnl, percent, tradeCount } = options;
+  const { title, subtitle, pnl, currency = "USD", percent, tradeCount } = options;
   const accent = pnl >= 0 ? "#16a34a" : "#dc2626";
-  const pnlText = escapeXml(formatPnl(pnl));
+  const pnlText = escapeXml(formatPnl(pnl, currency));
   const safeTitle = escapeXml(title);
   const safeSubtitle = escapeXml(subtitle);
   const tradesValue = escapeXml(tradeCount.toLocaleString("en-US"));
@@ -137,7 +138,7 @@ const buildShareImage = (options: {
     ${pnlText}
   </text>
   <text x="120" y="370" font-family="${FONT_FAMILY}" font-size="22" fill="#64748b">
-    Total P/L (USD)
+    Total P/L (${escapeXml(currency)})
   </text>
 
   <rect x="120" y="405" width="408" height="120" rx="24" fill="#f1f5f9" />
@@ -231,6 +232,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: "Monthly P/L",
         subtitle: formatMonthLabel(shared.month),
         pnl: shared.summary.totalPnl,
+        currency: shared.displayCurrency ?? shared.summary.displayCurrency ?? "USD",
         percent: shared.summary.pnlPercent,
         tradeCount: shared.summary.tradeCount ?? 0,
       }
@@ -238,6 +240,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
         title: "Daily P/L",
         subtitle: formatDayLabel(shared.date),
         pnl: shared.totalPnl,
+        currency: shared.displayCurrency ?? "USD",
         percent: computeTradesPercent(shared.trades, shared.cadToUsdRate),
         tradeCount: shared.trades.length,
       };

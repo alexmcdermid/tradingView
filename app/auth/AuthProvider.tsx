@@ -82,9 +82,19 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   defaultTradeSortBy: profile.defaultTradeSortBy,
   defaultTradeSortDirection: profile.defaultTradeSortDirection,
   showTradeHistory: profile.showTradeHistory,
+  dashboardWidgets: profile.dashboardWidgets,
+  displayCurrency: profile.displayCurrency,
+  taxCapitalGainsRate: profile.taxCapitalGainsRate,
+  taxPersonalRate: profile.taxPersonalRate,
 });
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({
+  children,
+  disableLoginPrompts = false,
+}: {
+  children: React.ReactNode;
+  disableLoginPrompts?: boolean;
+}) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -214,10 +224,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: !mounted || !!token,
+    disabled: disableLoginPrompts || !mounted || !!token,
   });
 
-  const loginButton = mounted ? (
+  const loginButton = mounted && !disableLoginPrompts ? (
     <div
       style={{
         width: `${loginWidth}px`,
@@ -256,6 +266,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
         showTradeHistory: next.showTradeHistory ?? prev.showTradeHistory,
+        dashboardWidgets: next.dashboardWidgets ?? prev.dashboardWidgets,
+        taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev.taxCapitalGainsRate,
+        taxPersonalRate: next.taxPersonalRate ?? prev.taxPersonalRate,
       };
     });
     setPreferencesState((prev) => ({
@@ -265,6 +278,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       defaultTradeSortDirection:
         next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
       showTradeHistory: next.showTradeHistory ?? prev?.showTradeHistory ?? null,
+      dashboardWidgets: next.dashboardWidgets ?? prev?.dashboardWidgets ?? null,
+      taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev?.taxCapitalGainsRate ?? null,
+      taxPersonalRate: next.taxPersonalRate ?? prev?.taxPersonalRate ?? null,
     }));
     const authId = user?.sub || user?.email;
     if (authId) {
@@ -275,13 +291,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
         showTradeHistory: next.showTradeHistory ?? preferences?.showTradeHistory ?? null,
+        dashboardWidgets: next.dashboardWidgets ?? preferences?.dashboardWidgets ?? null,
+        taxCapitalGainsRate: next.taxCapitalGainsRate ?? preferences?.taxCapitalGainsRate ?? null,
+        taxPersonalRate: next.taxPersonalRate ?? preferences?.taxPersonalRate ?? null,
       });
     }
   }, [
+    preferences?.dashboardWidgets,
     preferences?.defaultTradeSortBy,
     preferences?.defaultTradeSortDirection,
     preferences?.pnlDisplayMode,
     preferences?.showTradeHistory,
+    preferences?.taxCapitalGainsRate,
+    preferences?.taxPersonalRate,
     preferences?.themeMode,
     savePreferencesCache,
     user?.email,
@@ -314,7 +336,13 @@ export function useAuth() {
   return ctx;
 }
 
-export function AuthWrapper({ children }: { children: React.ReactNode }) {
+export function AuthWrapper({
+  children,
+  disableLoginPrompts = false,
+}: {
+  children: React.ReactNode;
+  disableLoginPrompts?: boolean;
+}) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
     return (
@@ -330,7 +358,7 @@ export function AuthWrapper({ children }: { children: React.ReactNode }) {
   }
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      <AuthProvider>{children}</AuthProvider>
+      <AuthProvider disableLoginPrompts={disableLoginPrompts}>{children}</AuthProvider>
     </GoogleOAuthProvider>
   );
 }

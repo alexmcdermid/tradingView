@@ -19,7 +19,7 @@ import {
   type PaletteMode,
 } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { Link as RouterLink } from "react-router";
+import { Link as RouterLink, useLocation } from "react-router";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
@@ -71,8 +71,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const location = useLocation();
+  const disableLoginPrompts = isPublicSharePath(location.pathname);
+
   return (
-    <AuthWrapper>
+    <AuthWrapper disableLoginPrompts={disableLoginPrompts}>
       <AppProviders />
     </AuthWrapper>
   );
@@ -81,6 +84,15 @@ export default function App() {
 const THEME_STORAGE_KEY = "tv-theme-mode";
 const useBrowserLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+export function isPublicSharePath(pathname: string) {
+  return (
+    pathname === "/share" ||
+    pathname.startsWith("/share/") ||
+    pathname === "/share-image" ||
+    pathname.startsWith("/share-image/")
+  );
+}
 
 function readStoredThemeMode(): PaletteMode | null {
   if (typeof window === "undefined") return null;

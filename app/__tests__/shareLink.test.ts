@@ -32,6 +32,7 @@ describe("share link helpers", () => {
       env: "dev",
       origin: "http://localhost:5173",
       generatedAt: "2024-02-10T00:00:00Z",
+      displayCurrency: "CAD",
     });
     const token = encodeShareToken(payload);
     const decoded = decodeShareToken(token);
@@ -42,6 +43,8 @@ describe("share link helpers", () => {
     expect(decoded?.month).toBe("2024-02");
     expect(decoded?.env).toBe("dev");
     expect(decoded?.origin).toBe("http://localhost:5173");
+    expect(decoded?.displayCurrency).toBe("CAD");
+    expect(decoded?.summary.displayCurrency).toBe("CAD");
     expect(decoded?.generatedAt).toBe("2024-02-10T00:00:00Z");
     expect(decoded?.summary.daily).toEqual([{ period: "2024-02-02", pnl: 200, trades: 2 }]);
     expect(decoded?.summary.monthly).toEqual([
@@ -161,6 +164,7 @@ describe("share link helpers", () => {
       generatedAt: "2024-02-10T12:00:00Z",
       cadToUsdRate: 0.75,
       fxDate: "2024-02-10",
+      displayCurrency: "CAD",
       accountNamesById: {
         "acc-1": "Wealthsimple",
         "acc-2": "Questrade",
@@ -180,6 +184,7 @@ describe("share link helpers", () => {
     expect(decoded.trades[1].accountName).toBe("Questrade");
     expect(decoded.cadToUsdRate).toBe(0.75);
     expect(decoded.fxDate).toBe("2024-02-10");
-    expect(decoded.totalPnl).toBeCloseTo(107.63, 2);
+    expect(decoded.displayCurrency).toBe("CAD");
+    expect(decoded.totalPnl).toBeCloseTo(143.5, 2);
   });
 });

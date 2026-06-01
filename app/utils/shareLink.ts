@@ -14,6 +14,7 @@ export type SharedSummaryPayload = {
   generatedAt: string;
   env?: string;
   origin?: string;
+  displayCurrency?: Currency;
 };
 
 export type SharedTrade = Pick<
@@ -47,6 +48,7 @@ export type SharedTradesPayload = {
   origin?: string;
   cadToUsdRate?: number;
   fxDate?: string;
+  displayCurrency?: Currency;
 };
 
 export type SharedPayload = SharedSummaryPayload | SharedTradesPayload;
@@ -60,6 +62,7 @@ type CompactSummaryToken = {
   g: string;
   e?: string;
   o?: string;
+  c?: Currency;
   s: CompactSummaryTuple;
 };
 
@@ -88,6 +91,7 @@ type CompactTradesToken = {
   g: string;
   e?: string;
   o?: string;
+  c?: Currency;
   t: CompactTradeTuple[];
   p: number;
   r?: number;
@@ -182,6 +186,7 @@ const buildCompactSummaryToken = (payload: SharedSummaryPayload): CompactSummary
     g: payload.generatedAt,
     e: payload.env,
     o: payload.origin,
+    c: payload.displayCurrency ?? payload.summary.displayCurrency,
     s: summary,
   };
 };
@@ -244,6 +249,7 @@ const decodeCompactSummaryToken = (payload: CompactSummaryToken): SharedSummaryP
     monthly,
     cadToUsdRate,
     fxDate: fxDateRaw ? String(fxDateRaw) : undefined,
+    displayCurrency: isCurrency(payload.c) ? payload.c : undefined,
   };
   if (pnlPercent !== undefined) {
     summary.pnlPercent = pnlPercent;
@@ -255,6 +261,7 @@ const decodeCompactSummaryToken = (payload: CompactSummaryToken): SharedSummaryP
     generatedAt: payload.g || new Date().toISOString(),
     env: payload.e,
     origin: payload.o,
+    displayCurrency: isCurrency(payload.c) ? payload.c : undefined,
   };
 };
 
@@ -381,10 +388,19 @@ const decodeTradeTuple = (tuple: CompactTradeTuple): SharedTrade | null => {
   };
 };
 
-const computeTradesTotal = (trades: SharedTrade[], cadToUsdRate?: number) => {
-  const rate = cadToUsdRate ?? 1;
+const computeTradesTotal = (
+  trades: SharedTrade[],
+  cadToUsdRate?: number,
+  displayCurrency: Currency = "USD"
+) => {
+  const rate = cadToUsdRate && Number.isFinite(cadToUsdRate) && cadToUsdRate > 0 ? cadToUsdRate : 1;
   const total = trades.reduce(
-    (sum, trade) => sum + (trade.currency === "CAD" ? trade.realizedPnl * rate : trade.realizedPnl),
+    (sum, trade) => {
+      if (displayCurrency === "CAD") {
+        return sum + (trade.currency === "USD" ? trade.realizedPnl / rate : trade.realizedPnl);
+      }
+      return sum + (trade.currency === "CAD" ? trade.realizedPnl * rate : trade.realizedPnl);
+    },
     0
   );
   return Number(total.toFixed(2));
@@ -395,6 +411,7 @@ const buildCompactTradesToken = (payload: SharedTradesPayload): CompactTradesTok
   g: payload.generatedAt,
   e: payload.env,
   o: payload.origin,
+  c: payload.displayCurrency,
   t: payload.trades.map(buildTradeTuple),
   p: Number(payload.totalPnl.toFixed(2)),
   r: payload.cadToUsdRate === undefined ? undefined : Number(payload.cadToUsdRate),
@@ -411,7 +428,8 @@ const decodeCompactTradesToken = (payload: CompactTradesToken): SharedTradesPayl
   const trades = decodedTrades as SharedTrade[];
   const cadToUsdRate =
     payload.r === undefined || payload.r === null ? undefined : toNumber(payload.r);
-  const computedTotal = computeTradesTotal(trades, cadToUsdRate);
+  const displayCurrency = isCurrency(payload.c) ? payload.c : "USD";
+  const computedTotal = computeTradesTotal(trades, cadToUsdRate, displayCurrency);
   const totalPnl = toNumber(payload.p, computedTotal);
 
   return {
@@ -423,13 +441,14 @@ const decodeCompactTradesToken = (payload: CompactTradesToken): SharedTradesPayl
     origin: payload.o,
     cadToUsdRate,
     fxDate: payload.f ? String(payload.f) : undefined,
+    displayCurrency,
   };
 };
 
 export function buildSharePayload(
   month: string,
   summary: PnlSummary,
-  options: { env?: string; origin?: string; generatedAt?: string } = {}
+  options: { env?: string; origin?: string; generatedAt?: string; displayCurrency?: Currency } = {}
 ): SharedSummaryPayload {
   const monthKey = month.slice(0, 7);
   const daily = filterBucketsForMonth(summary.daily, monthKey);
@@ -454,6 +473,7 @@ export function buildSharePayload(
     generatedAt: options.generatedAt || new Date().toISOString(),
     env: options.env,
     origin: options.origin,
+    displayCurrency: options.displayCurrency ?? summary.displayCurrency,
   };
 }
 
@@ -466,6 +486,7 @@ export function buildTradesSharePayload(
     generatedAt?: string;
     cadToUsdRate?: number;
     fxDate?: string;
+    displayCurrency?: Currency;
     accountNamesById?: Record<string, string>;
   } = {}
 ): SharedTradesPayload {
@@ -474,7 +495,8 @@ export function buildTradesSharePayload(
   const sharedTrades = filteredTrades.map((trade) =>
     normalizeTradeForShare(trade, options.accountNamesById)
   );
-  const totalPnl = computeTradesTotal(sharedTrades, options.cadToUsdRate);
+  const displayCurrency = options.displayCurrency ?? "USD";
+  const totalPnl = computeTradesTotal(sharedTrades, options.cadToUsdRate, displayCurrency);
 
   return {
     date: dateKey,
@@ -485,6 +507,7 @@ export function buildTradesSharePayload(
     origin: options.origin,
     cadToUsdRate: options.cadToUsdRate,
     fxDate: options.fxDate,
+    displayCurrency,
   };
 }
 

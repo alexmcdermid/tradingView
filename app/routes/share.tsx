@@ -49,6 +49,8 @@ const formatDayLabel = (value?: string) => {
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatMoney = (value: number, currency = "USD") => `${formatCurrency(value)} ${currency}`;
+
 const formatDate = (value: string) => value.slice(0, 10).replace(/-/g, "/");
 
 const formatNumber = (value?: number | null, digits = 2) => {
@@ -247,53 +249,55 @@ export default function Share() {
   const dailyBuckets: PnlBucket[] = summary?.daily ?? [];
   const fxRate = summary?.cadToUsdRate ?? tradesPayload?.cadToUsdRate;
   const fxDate = summary?.fxDate ?? tradesPayload?.fxDate;
+  const displayCurrency =
+    summaryPayload?.displayCurrency ??
+    summary?.displayCurrency ??
+    tradesPayload?.displayCurrency ??
+    "USD";
   const summaryPercent = summary?.pnlPercent;
   const tradesPercent = useMemo(
     () => (tradesPayload ? computeTradesPercent(tradesPayload.trades, tradesPayload.cadToUsdRate) : null),
     [tradesPayload]
   );
 
-  const renderHeader = () => (
-    <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
-      <Stack spacing={0.5}>
-        <Typography variant="h5" fontWeight={800}>
-          {tradesPayload ? "Shared Trades Snapshot" : "Shared P/L Snapshot"}
-        </Typography>
-        {shared && (
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" rowGap={0.5}>
-            {summaryPayload && (
-              <>
-                <Chip label={monthLabel} color="primary" variant="outlined" />
-                <Chip
-                  label={`${summaryPayload.summary.tradeCount ?? 0} trade${(summaryPayload.summary.tradeCount ?? 0) === 1 ? "" : "s"}`}
-                  variant="outlined"
-                />
-              </>
-            )}
-            {tradesPayload && (
-              <>
-                <Chip label={dayLabel} color="primary" variant="outlined" />
-                <Chip
-                  label={`${tradesPayload.trades.length} trade${tradesPayload.trades.length === 1 ? "" : "s"}`}
-                  variant="outlined"
-                />
-              </>
-            )}
-            {shared.env && <Chip label={`Env: ${shared.env}`} size="small" variant="outlined" />}
-            {shared.origin && <Chip label={`Ref: ${shared.origin}`} size="small" variant="outlined" />}
-          </Stack>
-        )}
-        {shared && (
-          <Typography variant="caption" color="text.secondary">
-            Generated {formatDateTime(shared.generatedAt)}
+  const renderHeader = () => {
+    const title = shared
+      ? tradesPayload
+        ? `${dayLabel} Trades`
+        : `${monthLabel} P/L`
+      : "Shared Snapshot";
+    const tradeCount = summaryPayload
+      ? summaryPayload.summary.tradeCount ?? 0
+      : tradesPayload
+        ? tradesPayload.trades.length
+        : null;
+    const details = shared
+      ? [
+          tradeCount !== null
+            ? `${tradeCount} trade${tradeCount === 1 ? "" : "s"}`
+            : null,
+          `Created ${formatDateTime(shared.generatedAt)}`,
+        ].filter(Boolean)
+      : [];
+
+    return (
+      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={1}>
+        <Stack spacing={0.5}>
+          <Typography variant="h5" fontWeight={800}>
+            {title}
           </Typography>
-        )}
+          {details.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {details.join(" | ")}
+            </Typography>
+          )}
+        </Stack>
+        <Button component={RouterLink} to="/" variant="outlined">
+          Exit shared view
+        </Button>
       </Stack>
-      <Button component={RouterLink} to="/" variant="outlined">
-        Exit shared view
-      </Button>
-    </Stack>
-  );
+    );
+  };
 
   if (loaderData.error && !encoded) {
     return (
@@ -340,7 +344,7 @@ export default function Share() {
                   Total P/L ({monthLabel})
                 </Typography>
                 <Typography variant="h4" fontWeight={800} color={summary.totalPnl >= 0 ? "success.main" : "error.main"}>
-                  {formatCurrency(summary.totalPnl)} USD
+                  {formatMoney(summary.totalPnl, displayCurrency)}
                 </Typography>
                 {summaryPercent !== undefined && summaryPercent !== null && (
                   <Typography variant="body2" color="text.secondary" fontWeight={700}>
@@ -354,7 +358,7 @@ export default function Share() {
                 </Typography>
                 <Typography variant="h6" fontWeight={800}>
                   {bestDay
-                    ? `${bestDay.period}: ${formatCurrency(bestDay.pnl)} USD${
+                    ? `${bestDay.period}: ${formatMoney(bestDay.pnl, displayCurrency)}${
                         bestDay.pnlPercent !== undefined && bestDay.pnlPercent !== null
                           ? ` (${formatPercent(bestDay.pnlPercent)})`
                           : ""
@@ -365,8 +369,8 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                : "P/L shown in USD. CAD trades converted using the latest rate."}
+                ? `P/L shown in ${displayCurrency}. CAD/USD rate ${fxRate.toFixed(5)}${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                : `P/L shown in ${displayCurrency}. CAD/USD conversion used the latest available rate.`}
             </Typography>
           </CardContent>
         </Card>
@@ -402,7 +406,7 @@ export default function Share() {
                           fontWeight={700}
                           color={bucket.pnl >= 0 ? "success.main" : "error.main"}
                         >
-                          {formatCurrency(bucket.pnl)}
+                          {formatMoney(bucket.pnl, displayCurrency)}
                         </Typography>
                       </Stack>
                     </Stack>
@@ -432,7 +436,7 @@ export default function Share() {
                   fontWeight={800}
                   color={tradesPayload.totalPnl >= 0 ? "success.main" : "error.main"}
                 >
-                  {formatCurrency(tradesPayload.totalPnl)} USD
+                  {formatMoney(tradesPayload.totalPnl, displayCurrency)}
                 </Typography>
                 {tradesPercent !== null && tradesPercent !== undefined && (
                   <Typography variant="body2" color="text.secondary" fontWeight={700}>
@@ -451,8 +455,8 @@ export default function Share() {
             </Stack>
             <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
               {fxRate
-                ? `Total P/L shown in USD. CAD trades converted at ${fxRate.toFixed(5)} CAD/USD${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
-                : "Total P/L shown in USD. CAD trades converted using the latest rate."}
+                ? `Total P/L shown in ${displayCurrency}. CAD/USD rate ${fxRate.toFixed(5)}${fxDate ? ` (BOC effective date: ${fxDate})` : ""}.`
+                : `Total P/L shown in ${displayCurrency}. CAD/USD conversion used the latest available rate.`}
             </Typography>
           </CardContent>
         </Card>

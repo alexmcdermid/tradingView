@@ -73,7 +73,11 @@ export function getAllowedHosts() {
 }
 
 export function validateRequestHost(request: Request) {
-  const requestHost = new URL(request.url).host.toLowerCase();
+  const requestUrl = new URL(request.url);
+  if (import.meta.env.DEV && LOCAL_HOSTS.has(requestUrl.hostname.toLowerCase())) {
+    return;
+  }
+  const requestHost = requestUrl.host.toLowerCase();
   const allowedHosts = getAllowedHosts();
   if (!allowedHosts.has(requestHost)) {
     throw new Response("Invalid host", { status: 400 });
