@@ -133,6 +133,7 @@ describe("Home (guest mode)", () => {
     mockFetchAggregateStats.mockResolvedValue({
       totalPnl: 0,
       tradeCount: 0,
+      tradedDays: 0,
       bestDay: null,
       bestMonth: null,
       cadToUsdRate: 0.732,
@@ -250,6 +251,7 @@ describe("Home (authenticated)", () => {
     mockFetchAggregateStats.mockResolvedValue({
       totalPnl: 1234.56,
       tradeCount: 1,
+      tradedDays: 1,
       bestDay: { period: "2024-01-02", pnl: 100.5, trades: 1 },
       bestMonth: { period: "2024-01", pnl: 1234.56, trades: 1 },
       cadToUsdRate: 0.732,
@@ -356,6 +358,8 @@ describe("Home (authenticated)", () => {
     );
 
     expect(await screen.findByText(/Daily P\/L Avg YTD/i)).toBeInTheDocument();
+    expect(screen.getByText(/total trading days/)).toBeInTheDocument();
+    expect(screen.getByText("1,234.56 USD avg on 1 day traded")).toBeInTheDocument();
     const taxWidget = await screen.findByText(/Tax Owing/i);
     const totalWidget = screen.getByText(/Total Realized P\/L/i);
     expect(taxWidget.compareDocumentPosition(totalWidget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
