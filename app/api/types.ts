@@ -121,6 +121,7 @@ export interface PnlSummary {
 export interface AggregateStats {
   totalPnl: number;
   tradeCount: number;
+  tradedDays?: number;
   bestDay: PnlBucket | null;
   bestMonth: PnlBucket | null;
   pnlPercent?: number;

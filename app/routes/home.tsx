@@ -1297,6 +1297,7 @@ export default function Home() {
       return {
         totalPnl: scoped.totalPnl,
         tradeCount: scoped.tradeCount,
+        tradedDays: scoped.daily.length,
         bestDay,
         bestMonth,
         pnlPercent: scoped.pnlPercent,
@@ -2263,8 +2264,13 @@ export default function Home() {
     [displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
   );
   const ytdTradingDays = useMemo(() => countTradingDaysYtd(scopedStatsYear), [scopedStatsYear]);
+  const totalPnlYtd = displayAggregateStats?.totalPnl ?? 0;
+  const tradedDaysYtd = displayAggregateStats?.tradedDays ?? 0;
   const dailyAverageYtd = ytdTradingDays > 0
-    ? Number(((displayAggregateStats?.totalPnl ?? 0) / ytdTradingDays).toFixed(2))
+    ? Number((totalPnlYtd / ytdTradingDays).toFixed(2))
+    : undefined;
+  const tradedDayAverageYtd = tradedDaysYtd > 0
+    ? Number((totalPnlYtd / tradedDaysYtd).toFixed(2))
     : undefined;
   const widgetGridSize = {
     xs: 12,
@@ -2325,8 +2331,10 @@ export default function Home() {
           <AveragePnlCard
             title={`Daily P/L Avg YTD (${scopedStatsYear})`}
             value={dailyAverageYtd}
+            tradedDayValue={tradedDayAverageYtd}
             currency={displayCurrency}
             tradingDays={ytdTradingDays}
+            tradedDays={tradedDaysYtd}
             loading={loadingStats}
           />
         ),
@@ -3570,18 +3578,25 @@ function TaxCard({
 function AveragePnlCard({
   title,
   value,
+  tradedDayValue,
   currency,
   tradingDays,
+  tradedDays,
   loading,
 }: {
   title: string;
   value?: number;
+  tradedDayValue?: number;
   currency: Currency;
   tradingDays: number;
+  tradedDays: number;
   loading?: boolean;
 }) {
   const display = value != null
     ? formatMoney(value, currency)
+    : "—";
+  const tradedDayDisplay = tradedDayValue != null
+    ? formatMoney(tradedDayValue, currency)
     : "—";
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
@@ -3600,8 +3615,15 @@ function AveragePnlCard({
           {loading
             ? "Loading…"
             : tradingDays > 0
-              ? `${tradingDays} trading day${tradingDays === 1 ? "" : "s"}`
+              ? `${tradingDays} total trading day${tradingDays === 1 ? "" : "s"}`
               : "No trading days"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {loading
+            ? "Loading…"
+            : tradedDays > 0
+              ? `${tradedDayDisplay} avg on ${tradedDays} day${tradedDays === 1 ? "" : "s"} traded`
+              : "No traded days"}
         </Typography>
       </CardContent>
     </Card>
