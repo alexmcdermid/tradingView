@@ -104,6 +104,7 @@ export function AuthProvider({
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
   const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
+  const [loginRenderNonce, setLoginRenderNonce] = useState(0);
 
   const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
 
@@ -204,6 +205,34 @@ export function AuthProvider({
     };
   }, [applyProfile, clearSessionState]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || disableLoginPrompts || token) {
+      return;
+    }
+
+    const refreshLoginButton = () => {
+      setLoginRenderNonce((current) => current + 1);
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        refreshLoginButton();
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshLoginButton();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [disableLoginPrompts, token]);
+
   const handleSuccess = async (credential?: string | undefined) => {
     if (!credential) return;
     try {
@@ -237,6 +266,7 @@ export function AuthProvider({
       }}
     >
       <GoogleLogin
+        key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
         onSuccess={(response) => void handleSuccess(response.credential)}
         onError={() => {
           clearSessionState();
