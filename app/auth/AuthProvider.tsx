@@ -88,6 +88,27 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   taxPersonalRate: profile.taxPersonalRate,
 });
 
+type GoogleIdentityWindow = Window & {
+  google?: {
+    accounts?: {
+      id?: {
+        cancel?: () => void;
+      };
+    };
+  };
+};
+
+function cancelGoogleIdentityPrompt() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    (window as GoogleIdentityWindow).google?.accounts?.id?.cancel?.();
+  } catch {
+    // Ignore Google Identity cleanup failures; the next render will reinitialize it.
+  }
+}
+
 export function AuthProvider({
   children,
   disableLoginPrompts = false,
@@ -211,23 +232,31 @@ export function AuthProvider({
     }
 
     const refreshLoginButton = () => {
+      cancelGoogleIdentityPrompt();
       setLoginRenderNonce((current) => current + 1);
     };
 
+    const handlePageHide = () => {
+      cancelGoogleIdentityPrompt();
+    };
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         refreshLoginButton();
       }
     };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
+      if (document.visibilityState === "hidden") {
+        cancelGoogleIdentityPrompt();
+      } else if (document.visibilityState === "visible") {
         refreshLoginButton();
       }
     };
 
+    window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
+      window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
@@ -279,6 +308,7 @@ export function AuthProvider({
         itp_support
         use_fedcm_for_button
         cancel_on_tap_outside={false}
+        click_listener={cancelGoogleIdentityPrompt}
       />
     </div>
   ) : null;

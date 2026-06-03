@@ -47,6 +47,7 @@ describe("AuthProvider", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    Reflect.deleteProperty(window, "google");
     cleanup();
   });
 
@@ -93,6 +94,12 @@ describe("AuthProvider", () => {
   });
 
   it("remounts the Google button after a cached page is restored", async () => {
+    const cancel = vi.fn();
+    Object.defineProperty(window, "google", {
+      configurable: true,
+      value: { accounts: { id: { cancel } } },
+    });
+
     render(
       <AuthProvider>
         <AuthProbe />
@@ -111,6 +118,35 @@ describe("AuthProvider", () => {
     await waitFor(() => {
       expect(googleMocks.GoogleLogin.mock.calls.length).toBeGreaterThan(initialRenderCount);
     });
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it("cancels stale FedCM prompts before explicit button login", async () => {
+    const cancel = vi.fn();
+    Object.defineProperty(window, "google", {
+      configurable: true,
+      value: { accounts: { id: { cancel } } },
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+
+    const props = (googleMocks.GoogleLogin.mock.calls.at(-1) as
+      | [{ click_listener?: () => void }]
+      | undefined)?.[0];
+    if (!props?.click_listener) {
+      throw new Error("Expected GoogleLogin to receive a click_listener");
+    }
+    props.click_listener?.();
+
+    expect(cancel).toHaveBeenCalled();
   });
 
   it("applies display currency preference updates without waiting for a profile reload", async () => {
