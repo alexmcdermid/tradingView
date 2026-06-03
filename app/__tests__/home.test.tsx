@@ -358,8 +358,8 @@ describe("Home (authenticated)", () => {
     );
 
     expect(await screen.findByText(/Daily P\/L Avg YTD/i)).toBeInTheDocument();
-    expect(screen.getByText(/total trading days/)).toBeInTheDocument();
-    expect(screen.getByText("1,234.56 USD avg on 1 day traded")).toBeInTheDocument();
+    expect(await screen.findByText(/total trading days/)).toBeInTheDocument();
+    expect(await screen.findByText("1,234.56 USD avg on 1 day traded")).toBeInTheDocument();
     const taxWidget = await screen.findByText(/Tax Owing/i);
     const totalWidget = screen.getByText(/Total Realized P\/L/i);
     expect(taxWidget.compareDocumentPosition(totalWidget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
