@@ -68,6 +68,51 @@ describe("AuthProvider", () => {
     );
   });
 
+  it("keeps FedCM enabled for low-click Google sign-in", async () => {
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+
+    expect(googleMocks.GoogleLogin).toHaveBeenLastCalledWith(
+      expect.objectContaining({ use_fedcm_for_button: true }),
+      undefined
+    );
+    expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        auto_select: true,
+        use_fedcm_for_button: true,
+        use_fedcm_for_prompt: true,
+      })
+    );
+  });
+
+  it("remounts the Google button after a cached page is restored", async () => {
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+    const initialRenderCount = googleMocks.GoogleLogin.mock.calls.length;
+    const pageShow = new Event("pageshow");
+    Object.defineProperty(pageShow, "persisted", { value: true });
+
+    window.dispatchEvent(pageShow);
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin.mock.calls.length).toBeGreaterThan(initialRenderCount);
+    });
+  });
+
   it("applies display currency preference updates without waiting for a profile reload", async () => {
     vi.mocked(fetchUserProfile).mockResolvedValue({
       id: "user-id",
