@@ -113,7 +113,17 @@ export async function fetchTradeCountStats(
   return request<TradeCountStats>(`/trades/stats/counts${search ? `?${search}` : ""}`);
 }
 
-export async function fetchInferredAccountTradeCounts(year?: number) {
-  const search = typeof year === "number" ? `?year=${encodeURIComponent(String(year))}` : "";
-  return request<InferredAccountTradeCounts[]>(`/trades/stats/inferred-account-counts${search}`);
+export async function fetchInferredAccountTradeCounts(year?: number, month?: string, day?: string) {
+  const params = new URLSearchParams();
+  if (typeof year === "number") {
+    params.append("year", String(year));
+  }
+  if (month) {
+    params.append("month", month);
+  }
+  if (day) {
+    params.append("day", day);
+  }
+  const search = params.toString();
+  return request<InferredAccountTradeCounts[]>(`/trades/stats/inferred-account-counts${search ? `?${search}` : ""}`);
 }

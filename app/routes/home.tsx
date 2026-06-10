@@ -1488,14 +1488,18 @@ export default function Home() {
     }
     try {
       setLoadingInferredAccountTradeCounts(true);
-      const counts = await fetchInferredAccountTradeCounts(effectiveStatsScope.year);
+      const counts = await fetchInferredAccountTradeCounts(
+        effectiveStatsScope.year,
+        effectiveStatsScope.month,
+        effectiveStatsScope.day
+      );
       setInferredAccountTradeCounts(counts);
     } catch (err) {
       handleRequestError(err);
     } finally {
       setLoadingInferredAccountTradeCounts(false);
     }
-  }, [effectiveStatsScope.year, token, user]);
+  }, [effectiveStatsScope.day, effectiveStatsScope.month, effectiveStatsScope.year, token, user]);
 
   const loadSelectedExtendedWidgetData = useCallback(async () => {
     const selected = new Set(selectedDashboardWidgets);
@@ -2478,13 +2482,23 @@ export default function Home() {
       inferredBuyCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredBuyCount, 0),
       inferredSellCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredSellCount, 0),
       inferredTotalCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredTotalCount, 0),
+      monthInferredTotalCount: inferredAccountTradeCounts.reduce(
+        (sum, account) => sum + account.monthInferredTotalCount,
+        0
+      ),
+      dayInferredTotalCount: inferredAccountTradeCounts.reduce(
+        (sum, account) => sum + account.dayInferredTotalCount,
+        0
+      ),
       inferredAddCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredAddCount, 0),
       inferredAddedQuantity,
       averageInferredAddPrice:
         inferredAddedQuantity > 0 ? Number((inferredAddedNotional / inferredAddedQuantity).toFixed(4)) : 0,
       year: scopedStatsYear,
+      month: scopedStatsMonth,
+      day: scopedStatsDay,
     };
-  }, [inferredAccountTradeCounts, scopedStatsYear, selectedDashboardAccount]);
+  }, [inferredAccountTradeCounts, scopedStatsDay, scopedStatsMonth, scopedStatsYear, selectedDashboardAccount]);
   const taxOwing = useMemo(
     () => computeTaxOwing(displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
     [displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
@@ -4103,8 +4117,16 @@ function InferredAccountTradeCountsCard({
         </Typography>
         <Stack spacing={0.5} sx={{ mt: 1 }}>
           <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Recorded closes</Typography>
-            <Typography variant="body2" fontWeight={700}>{loading || !account ? "…" : account.recordedTradeCount}</Typography>
+            <Typography variant="body2" color="text.secondary">Month</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : account.monthInferredTotalCount}
+            </Typography>
+          </Stack>
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Day</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : account.dayInferredTotalCount}
+            </Typography>
           </Stack>
           <Stack direction="row" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Add edits</Typography>
@@ -4114,12 +4136,6 @@ function InferredAccountTradeCountsCard({
             <Typography variant="body2" color="text.secondary">Added shares</Typography>
             <Typography variant="body2" fontWeight={700}>
               {loading || !account ? "…" : account.inferredAddedQuantity.toLocaleString()}
-            </Typography>
-          </Stack>
-          <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Avg add price</Typography>
-            <Typography variant="body2" fontWeight={700}>
-              {loading || !account ? "…" : formatSignedNumber(account.averageInferredAddPrice)}
             </Typography>
           </Stack>
         </Stack>

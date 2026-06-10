@@ -169,10 +169,14 @@ export interface InferredAccountTradeCounts {
   inferredBuyCount: number;
   inferredSellCount: number;
   inferredTotalCount: number;
+  monthInferredTotalCount: number;
+  dayInferredTotalCount: number;
   inferredAddCount: number;
   inferredAddedQuantity: number;
   averageInferredAddPrice: number;
   year?: number | null;
+  month?: string | null;
+  day?: string | null;
 }
 
 export interface PagedResult<T> {
