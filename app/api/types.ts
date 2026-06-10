@@ -172,6 +172,8 @@ export interface InferredAccountTradeCounts {
   monthInferredTotalCount: number;
   dayInferredTotalCount: number;
   inferredAddCount: number;
+  monthInferredAddCount: number;
+  dayInferredAddCount: number;
   inferredAddedQuantity: number;
   averageInferredAddPrice: number;
   year?: number | null;

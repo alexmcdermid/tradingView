@@ -2491,6 +2491,14 @@ export default function Home() {
         0
       ),
       inferredAddCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredAddCount, 0),
+      monthInferredAddCount: inferredAccountTradeCounts.reduce(
+        (sum, account) => sum + account.monthInferredAddCount,
+        0
+      ),
+      dayInferredAddCount: inferredAccountTradeCounts.reduce(
+        (sum, account) => sum + account.dayInferredAddCount,
+        0
+      ),
       inferredAddedQuantity,
       averageInferredAddPrice:
         inferredAddedQuantity > 0 ? Number((inferredAddedNotional / inferredAddedQuantity).toFixed(4)) : 0,
@@ -2632,12 +2640,13 @@ export default function Home() {
         id: widgetId,
         node: (
           <InferredAccountTradeCountsCard
-            title={`Inferred Account Counts (${scopedStatsYear})`}
+            title={`Inferred Counts (${scopedStatsYear})`}
             account={selectedInferredAccountCounts}
+            normalStats={tradeCountStats}
             accountOptions={dashboardAccountOptions}
             accountFilter={dashboardAccountFilter}
             onAccountFilterChange={setDashboardAccountFilter}
-            loading={loadingInferredAccountTradeCounts}
+            loading={loadingInferredAccountTradeCounts || loadingTradeCountStats}
           />
         ),
       };
@@ -4077,6 +4086,7 @@ function TradeCountsCard({
 function InferredAccountTradeCountsCard({
   title,
   account,
+  normalStats,
   accountOptions,
   accountFilter,
   onAccountFilterChange,
@@ -4084,11 +4094,21 @@ function InferredAccountTradeCountsCard({
 }: {
   title: string;
   account: InferredAccountTradeCounts | null;
+  normalStats: TradeCountStats | null;
   accountOptions: DashboardAccountOption[];
   accountFilter: string;
   onAccountFilterChange: (value: string) => void;
   loading?: boolean;
 }) {
+  const normalYearCount = normalStats?.yearTradeCount ?? 0;
+  const normalMonthCount = normalStats?.monthTradeCount ?? 0;
+  const normalDayCount = normalStats?.dayTradeCount ?? 0;
+  const inferredYearCount = account?.inferredAddCount ?? 0;
+  const inferredMonthCount = account?.monthInferredAddCount ?? 0;
+  const inferredDayCount = account?.dayInferredAddCount ?? 0;
+  const adjustedYearCount = normalYearCount + inferredYearCount;
+  const adjustedMonthCount = normalMonthCount + inferredMonthCount;
+  const adjustedDayCount = normalDayCount + inferredDayCount;
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
@@ -4106,36 +4126,36 @@ function InferredAccountTradeCountsCard({
           />
         </Stack>
         <Typography variant="h5" fontWeight={800}>
-          {loading ? "…" : account ? account.inferredTotalCount.toLocaleString() : "—"}
+          {loading ? "…" : adjustedYearCount.toLocaleString()}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {loading
             ? "Loading…"
-            : account
-              ? `${account.inferredBuyCount} buy / ${account.inferredSellCount} sell`
-              : "No inferred executions"}
+            : `${normalYearCount.toLocaleString()} normal / ${inferredYearCount.toLocaleString()} inferred`}
         </Typography>
         <Stack spacing={0.5} sx={{ mt: 1 }}>
           <Stack direction="row" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Month</Typography>
             <Typography variant="body2" fontWeight={700}>
-              {loading || !account ? "…" : account.monthInferredTotalCount}
+              {loading ? "…" : `${adjustedMonthCount} (${normalMonthCount}+${inferredMonthCount})`}
             </Typography>
           </Stack>
           <Stack direction="row" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Day</Typography>
             <Typography variant="body2" fontWeight={700}>
-              {loading || !account ? "…" : account.dayInferredTotalCount}
+              {loading ? "…" : `${adjustedDayCount} (${normalDayCount}+${inferredDayCount})`}
             </Typography>
           </Stack>
           <Stack direction="row" justifyContent="space-between">
-            <Typography variant="body2" color="text.secondary">Add edits</Typography>
-            <Typography variant="body2" fontWeight={700}>{loading || !account ? "…" : account.inferredAddCount}</Typography>
+            <Typography variant="body2" color="text.secondary">Inferred adds</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading ? "…" : inferredYearCount.toLocaleString()}
+            </Typography>
           </Stack>
           <Stack direction="row" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Added shares</Typography>
             <Typography variant="body2" fontWeight={700}>
-              {loading || !account ? "…" : account.inferredAddedQuantity.toLocaleString()}
+              {loading ? "…" : (account?.inferredAddedQuantity ?? 0).toLocaleString()}
             </Typography>
           </Stack>
         </Stack>
