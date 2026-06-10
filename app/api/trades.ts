@@ -5,7 +5,6 @@ import type {
   PagedResult,
   PnlSummary,
   AggregateStats,
-  PositionUpdateSignal,
   Trade,
   TradeCountStats,
   TradeHistory,
@@ -87,7 +86,13 @@ export async function fetchAccountStats(year?: number) {
   return request<AccountStats[]>(`/trades/stats/accounts${search}`);
 }
 
-export async function fetchTradeCountStats(year?: number, month?: string, day?: string) {
+export async function fetchTradeCountStats(
+  year?: number,
+  month?: string,
+  day?: string,
+  accountId?: string | null,
+  unassigned = false
+) {
   const params = new URLSearchParams();
   if (typeof year === "number") {
     params.append("year", String(year));
@@ -98,14 +103,14 @@ export async function fetchTradeCountStats(year?: number, month?: string, day?: 
   if (day) {
     params.append("day", day);
   }
+  if (accountId) {
+    params.append("accountId", accountId);
+  }
+  if (unassigned) {
+    params.append("unassigned", "true");
+  }
   const search = params.toString();
   return request<TradeCountStats>(`/trades/stats/counts${search ? `?${search}` : ""}`);
-}
-
-export async function fetchPositionUpdateSignals(limit = 5) {
-  return request<PositionUpdateSignal[]>(
-    `/trades/history/position-update-signals?limit=${encodeURIComponent(String(limit))}`
-  );
 }
 
 export async function fetchInferredAccountTradeCounts(year?: number) {
