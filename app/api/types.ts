@@ -133,6 +133,62 @@ export interface AggregateStats {
   day?: string | null;
 }
 
+export interface AccountStats {
+  accountId?: string | null;
+  accountName: string;
+  totalPnl: number;
+  monthlyAveragePnl: number;
+  tradedDayAveragePnl: number;
+  averageTradePnl: number;
+  totalNotional: number;
+  pnlPercent?: number | null;
+  tradeCount: number;
+  tradedDays: number;
+  activeMonths: number;
+  year?: number | null;
+}
+
+export interface TradeCountStats {
+  yearTradeCount: number;
+  monthTradeCount: number;
+  dayTradeCount: number;
+  yearTradedDays: number;
+  averageTradesPerTradedDay: number;
+  averageTradesPerTradingDay: number;
+  year?: number | null;
+  month?: string | null;
+  day?: string | null;
+}
+
+export interface PositionUpdateSignal {
+  tradeId: string;
+  symbol: string;
+  accountId?: string | null;
+  accountName: string;
+  closedAt: string;
+  editCount: number;
+  initialQuantity: number;
+  latestQuantity: number;
+  quantityDelta: number;
+  initialEntryPrice: number;
+  latestEntryPrice: number;
+  createdAt: string;
+  latestEditAt: string;
+}
+
+export interface InferredAccountTradeCounts {
+  accountId?: string | null;
+  accountName: string;
+  recordedTradeCount: number;
+  inferredBuyCount: number;
+  inferredSellCount: number;
+  inferredTotalCount: number;
+  inferredAddCount: number;
+  inferredAddedQuantity: number;
+  averageInferredAddPrice: number;
+  year?: number | null;
+}
+
 export interface PagedResult<T> {
   items: T[];
   page: number;
@@ -157,7 +213,11 @@ export type DashboardWidgetId =
   | "BEST_MONTH"
   | "BEST_DAY"
   | "DAILY_AVG_YTD"
-  | "TAX_OWED";
+  | "TAX_OWED"
+  | "ACCOUNT_STATS"
+  | "TRADE_COUNTS"
+  | "POSITION_UPDATE_SIGNALS"
+  | "INFERRED_ACCOUNT_TRADE_COUNTS";
 
 export interface UserPreferences {
   themeMode?: ThemeMode | null;
