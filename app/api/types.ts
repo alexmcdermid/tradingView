@@ -149,6 +149,8 @@ export interface AccountStats {
 }
 
 export interface TradeCountStats {
+  accountId?: string | null;
+  accountName: string;
   yearTradeCount: number;
   monthTradeCount: number;
   dayTradeCount: number;
@@ -158,22 +160,6 @@ export interface TradeCountStats {
   year?: number | null;
   month?: string | null;
   day?: string | null;
-}
-
-export interface PositionUpdateSignal {
-  tradeId: string;
-  symbol: string;
-  accountId?: string | null;
-  accountName: string;
-  closedAt: string;
-  editCount: number;
-  initialQuantity: number;
-  latestQuantity: number;
-  quantityDelta: number;
-  initialEntryPrice: number;
-  latestEntryPrice: number;
-  createdAt: string;
-  latestEditAt: string;
 }
 
 export interface InferredAccountTradeCounts {
@@ -216,7 +202,6 @@ export type DashboardWidgetId =
   | "TAX_OWED"
   | "ACCOUNT_STATS"
   | "TRADE_COUNTS"
-  | "POSITION_UPDATE_SIGNALS"
   | "INFERRED_ACCOUNT_TRADE_COUNTS";
 
 export interface UserPreferences {

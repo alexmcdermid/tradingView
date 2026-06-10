@@ -54,7 +54,6 @@ import {
   fetchAccountStats,
   fetchAggregateStats,
   fetchInferredAccountTradeCounts,
-  fetchPositionUpdateSignals,
   fetchSummary,
   fetchTradeCountStats,
   fetchTradeHistory,
@@ -69,7 +68,6 @@ import type {
   InferredAccountTradeCounts,
   PnlBucket,
   PnlSummary,
-  PositionUpdateSignal,
   ShareLinkResponse,
   Trade,
   TradeCountStats,
@@ -163,6 +161,8 @@ const DEFAULT_TAX_CAPITAL_GAINS_RATE = 50;
 const DEFAULT_TAX_PERSONAL_RATE = 50;
 const DEFAULT_DISPLAY_CURRENCY: Currency = "USD";
 const DEFAULT_CAD_TO_USD_RATE = 0.732;
+const DASHBOARD_ACCOUNT_ALL = "__ALL_ACCOUNTS__";
+const DASHBOARD_ACCOUNT_UNASSIGNED = "__UNASSIGNED__";
 const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> = [
   { id: "TOTAL_REALIZED", label: "Total Realized P/L" },
   { id: "BEST_MONTH", label: "Best Month" },
@@ -171,7 +171,6 @@ const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> 
   { id: "TAX_OWED", label: "Tax Owing" },
   { id: "ACCOUNT_STATS", label: "Account Stats" },
   { id: "TRADE_COUNTS", label: "Trade Counts" },
-  { id: "POSITION_UPDATE_SIGNALS", label: "Position Edit Signals" },
   { id: "INFERRED_ACCOUNT_TRADE_COUNTS", label: "Inferred Account Trade Counts" },
 ];
 const DASHBOARD_WIDGET_IDS = DASHBOARD_WIDGET_OPTIONS.map((option) => option.id);
@@ -249,6 +248,11 @@ type PreferencesDraft = {
   displayCurrency: Currency;
   taxCapitalGainsRate: string;
   taxPersonalRate: string;
+};
+
+type DashboardAccountOption = {
+  value: string;
+  label: string;
 };
 
 const normalizeDashboardWidgets = (value?: DashboardWidgetId[] | null): DashboardWidgetId[] => {
@@ -932,14 +936,12 @@ export default function Home() {
   const [aggregateStats, setAggregateStats] = useState<AggregateStats | null>(null);
   const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
   const [tradeCountStats, setTradeCountStats] = useState<TradeCountStats | null>(null);
-  const [positionUpdateSignals, setPositionUpdateSignals] = useState<PositionUpdateSignal[]>([]);
   const [inferredAccountTradeCounts, setInferredAccountTradeCounts] = useState<InferredAccountTradeCounts[]>([]);
   const [loadingTrades, setLoadingTrades] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [loadingStats, setLoadingStats] = useState(false);
   const [loadingAccountStats, setLoadingAccountStats] = useState(false);
   const [loadingTradeCountStats, setLoadingTradeCountStats] = useState(false);
-  const [loadingPositionSignals, setLoadingPositionSignals] = useState(false);
   const [loadingInferredAccountTradeCounts, setLoadingInferredAccountTradeCounts] = useState(false);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -981,6 +983,7 @@ export default function Home() {
   const [deletingShareCode, setDeletingShareCode] = useState<string | null>(null);
   const [copiedShareCode, setCopiedShareCode] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [dashboardAccountFilter, setDashboardAccountFilter] = useState(DASHBOARD_ACCOUNT_ALL);
   const [accountsDialogOpen, setAccountsDialogOpen] = useState(false);
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [savingAccount, setSavingAccount] = useState(false);
@@ -1035,6 +1038,28 @@ export default function Home() {
     () => normalizeDashboardWidgets(preferences?.dashboardWidgets),
     [preferences?.dashboardWidgets]
   );
+  const accountNamesById = useMemo(
+    () => Object.fromEntries(accounts.map((account) => [account.id, account.name])),
+    [accounts]
+  );
+  const dashboardAccountOptions = useMemo(
+    () => [
+      { value: DASHBOARD_ACCOUNT_ALL, label: "All accounts" },
+      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      { value: DASHBOARD_ACCOUNT_UNASSIGNED, label: "Unassigned" },
+    ],
+    [accounts]
+  );
+  const selectedDashboardAccount = useMemo(() => {
+    if (dashboardAccountFilter === DASHBOARD_ACCOUNT_UNASSIGNED) {
+      return { accountId: null, accountName: "Unassigned", unassigned: true };
+    }
+    if (dashboardAccountFilter === DASHBOARD_ACCOUNT_ALL) {
+      return { accountId: null, accountName: "All accounts", unassigned: false };
+    }
+    const accountName = accountNamesById[dashboardAccountFilter] ?? "Deleted account";
+    return { accountId: dashboardAccountFilter, accountName, unassigned: false };
+  }, [accountNamesById, dashboardAccountFilter]);
   const displayCurrency = resolveDisplayCurrency(preferences?.displayCurrency);
   const taxCapitalGainsRate = resolveTaxRate(
     preferences?.taxCapitalGainsRate,
@@ -1437,7 +1462,9 @@ export default function Home() {
       const stats = await fetchTradeCountStats(
         effectiveStatsScope.year,
         effectiveStatsScope.month,
-        effectiveStatsScope.day
+        effectiveStatsScope.day,
+        selectedDashboardAccount.accountId,
+        selectedDashboardAccount.unassigned
       );
       setTradeCountStats(stats);
     } catch (err) {
@@ -1445,22 +1472,15 @@ export default function Home() {
     } finally {
       setLoadingTradeCountStats(false);
     }
-  }, [effectiveStatsScope.day, effectiveStatsScope.month, effectiveStatsScope.year, token, user]);
-
-  const loadPositionUpdateSignals = useCallback(async () => {
-    if (!user || !token) {
-      return;
-    }
-    try {
-      setLoadingPositionSignals(true);
-      const signals = await fetchPositionUpdateSignals(5);
-      setPositionUpdateSignals(signals);
-    } catch (err) {
-      handleRequestError(err);
-    } finally {
-      setLoadingPositionSignals(false);
-    }
-  }, [token, user]);
+  }, [
+    effectiveStatsScope.day,
+    effectiveStatsScope.month,
+    effectiveStatsScope.year,
+    selectedDashboardAccount.accountId,
+    selectedDashboardAccount.unassigned,
+    token,
+    user,
+  ]);
 
   const loadInferredAccountTradeCounts = useCallback(async () => {
     if (!user || !token) {
@@ -1486,9 +1506,6 @@ export default function Home() {
     if (selected.has("TRADE_COUNTS")) {
       requests.push(loadTradeCountStats());
     }
-    if (selected.has("POSITION_UPDATE_SIGNALS")) {
-      requests.push(loadPositionUpdateSignals());
-    }
     if (selected.has("INFERRED_ACCOUNT_TRADE_COUNTS")) {
       requests.push(loadInferredAccountTradeCounts());
     }
@@ -1496,7 +1513,6 @@ export default function Home() {
   }, [
     loadAccountStats,
     loadInferredAccountTradeCounts,
-    loadPositionUpdateSignals,
     loadTradeCountStats,
     selectedDashboardWidgets,
   ]);
@@ -1592,7 +1608,6 @@ export default function Home() {
       setAggregateStats(null);
       setAccountStats([]);
       setTradeCountStats(null);
-      setPositionUpdateSignals([]);
       setInferredAccountTradeCounts([]);
       setSelectedDate(null);
       setPage(0);
@@ -1609,13 +1624,11 @@ export default function Home() {
       setAggregateStats(null);
       setAccountStats([]);
       setTradeCountStats(null);
-      setPositionUpdateSignals([]);
       setInferredAccountTradeCounts([]);
       setLoadingTrades(false);
       setLoadingSummary(false);
       setLoadingAccountStats(false);
       setLoadingTradeCountStats(false);
-      setLoadingPositionSignals(false);
       setLoadingInferredAccountTradeCounts(false);
       setAccounts([]);
       guestSeeded.current = false;
@@ -2391,10 +2404,6 @@ export default function Home() {
     }
     return result;
   }, [hidePastTrades, selectedDate, trades]);
-  const accountNamesById = useMemo(
-    () => Object.fromEntries(accounts.map((account) => [account.id, account.name])),
-    [accounts]
-  );
   const displaySummary = useMemo(
     () => convertUsdSummary(summary, displayCurrency),
     [displayCurrency, summary]
@@ -2411,6 +2420,71 @@ export default function Home() {
   const scopedStatsYear = displayAggregateStats?.year ?? effectiveStatsScope.year ?? new Date().getUTCFullYear();
   const scopedStatsMonth = displayAggregateStats?.month ?? effectiveStatsScope.month ?? displayAggregateStats?.bestMonth?.period ?? null;
   const scopedStatsDay = displayAggregateStats?.day ?? effectiveStatsScope.day ?? null;
+  const selectedAccountStats = useMemo(() => {
+    if (selectedDashboardAccount.unassigned) {
+      return displayAccountStats.find((account) => !account.accountId) ?? null;
+    }
+    if (selectedDashboardAccount.accountId) {
+      return displayAccountStats.find((account) => account.accountId === selectedDashboardAccount.accountId) ?? null;
+    }
+    const tradeCount =
+      displayAggregateStats?.tradeCount ?? displayAccountStats.reduce((sum, account) => sum + account.tradeCount, 0);
+    const tradedDays =
+      displayAggregateStats?.tradedDays ?? displayAccountStats.reduce((sum, account) => sum + account.tradedDays, 0);
+    const totalPnl =
+      displayAggregateStats?.totalPnl ?? displayAccountStats.reduce((sum, account) => sum + account.totalPnl, 0);
+    const totalNotional = displayAccountStats.reduce((sum, account) => sum + account.totalNotional, 0);
+    const activeMonths = Math.max(...displayAccountStats.map((account) => account.activeMonths), 0);
+    if (!displayAggregateStats && displayAccountStats.length === 0) {
+      return null;
+    }
+    return {
+      accountId: null,
+      accountName: "All accounts",
+      totalPnl,
+      monthlyAveragePnl: activeMonths > 0 ? Number((totalPnl / activeMonths).toFixed(2)) : 0,
+      tradedDayAveragePnl: tradedDays > 0 ? Number((totalPnl / tradedDays).toFixed(2)) : 0,
+      averageTradePnl: tradeCount > 0 ? Number((totalPnl / tradeCount).toFixed(2)) : 0,
+      totalNotional,
+      pnlPercent: displayAggregateStats?.pnlPercent,
+      tradeCount,
+      tradedDays,
+      activeMonths,
+      year: scopedStatsYear,
+    };
+  }, [displayAccountStats, displayAggregateStats, scopedStatsYear, selectedDashboardAccount]);
+  const selectedInferredAccountCounts = useMemo(() => {
+    if (selectedDashboardAccount.unassigned) {
+      return inferredAccountTradeCounts.find((account) => !account.accountId) ?? null;
+    }
+    if (selectedDashboardAccount.accountId) {
+      return inferredAccountTradeCounts.find((account) => account.accountId === selectedDashboardAccount.accountId) ?? null;
+    }
+    if (inferredAccountTradeCounts.length === 0) {
+      return null;
+    }
+    const inferredAddedQuantity = inferredAccountTradeCounts.reduce(
+      (sum, account) => sum + account.inferredAddedQuantity,
+      0
+    );
+    const inferredAddedNotional = inferredAccountTradeCounts.reduce(
+      (sum, account) => sum + account.averageInferredAddPrice * account.inferredAddedQuantity,
+      0
+    );
+    return {
+      accountId: null,
+      accountName: "All accounts",
+      recordedTradeCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.recordedTradeCount, 0),
+      inferredBuyCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredBuyCount, 0),
+      inferredSellCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredSellCount, 0),
+      inferredTotalCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredTotalCount, 0),
+      inferredAddCount: inferredAccountTradeCounts.reduce((sum, account) => sum + account.inferredAddCount, 0),
+      inferredAddedQuantity,
+      averageInferredAddPrice:
+        inferredAddedQuantity > 0 ? Number((inferredAddedNotional / inferredAddedQuantity).toFixed(4)) : 0,
+      year: scopedStatsYear,
+    };
+  }, [inferredAccountTradeCounts, scopedStatsYear, selectedDashboardAccount]);
   const taxOwing = useMemo(
     () => computeTaxOwing(displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
     [displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
@@ -2514,7 +2588,10 @@ export default function Home() {
         node: (
           <AccountStatsCard
             title={`Account Stats (${scopedStatsYear})`}
-            accounts={displayAccountStats}
+            account={selectedAccountStats}
+            accountOptions={dashboardAccountOptions}
+            accountFilter={dashboardAccountFilter}
+            onAccountFilterChange={setDashboardAccountFilter}
             currency={displayCurrency}
             loading={loadingAccountStats}
           />
@@ -2528,6 +2605,9 @@ export default function Home() {
           <TradeCountsCard
             title={`Trade Counts (${tradeCountStats?.year ?? scopedStatsYear})`}
             stats={tradeCountStats}
+            accountOptions={dashboardAccountOptions}
+            accountFilter={dashboardAccountFilter}
+            onAccountFilterChange={setDashboardAccountFilter}
             loading={loadingTradeCountStats}
           />
         ),
@@ -2539,22 +2619,16 @@ export default function Home() {
         node: (
           <InferredAccountTradeCountsCard
             title={`Inferred Account Counts (${scopedStatsYear})`}
-            accounts={inferredAccountTradeCounts}
+            account={selectedInferredAccountCounts}
+            accountOptions={dashboardAccountOptions}
+            accountFilter={dashboardAccountFilter}
+            onAccountFilterChange={setDashboardAccountFilter}
             loading={loadingInferredAccountTradeCounts}
           />
         ),
       };
     }
-    return {
-      id: widgetId,
-      node: (
-        <PositionUpdateSignalsCard
-          title="Position Edit Signals"
-          signals={positionUpdateSignals}
-          loading={loadingPositionSignals}
-        />
-      ),
-    };
+    return { id: widgetId, node: null };
   });
 
   const monthlyColor = useMemo(() => {
@@ -3831,67 +3905,92 @@ function AveragePnlCard({
   );
 }
 
+function AccountFilterSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: DashboardAccountOption[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <TextField
+      select
+      size="small"
+      variant="standard"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      sx={{ minWidth: 130 }}
+    >
+      {options.map((option) => (
+        <MenuItem key={option.value} value={option.value}>
+          {option.label}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
 function AccountStatsCard({
   title,
-  accounts,
+  account,
+  accountOptions,
+  accountFilter,
+  onAccountFilterChange,
   currency,
   loading,
 }: {
   title: string;
-  accounts: AccountStats[];
+  account: AccountStats | null;
+  accountOptions: DashboardAccountOption[];
+  accountFilter: string;
+  onAccountFilterChange: (value: string) => void;
   currency: Currency;
   loading?: boolean;
 }) {
-  const topAccount = accounts[0];
+  const value = account?.totalPnl ?? 0;
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
-        <Typography variant="overline" color="text.secondary">
-          {title}
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+          <Typography variant="overline" color="text.secondary">
+            {title}
+          </Typography>
+          <AccountFilterSelect
+            value={accountFilter}
+            options={accountOptions}
+            onChange={onAccountFilterChange}
+          />
+        </Stack>
         <Typography
           variant="h5"
           fontWeight={800}
-          color={!topAccount?.totalPnl ? "text.primary" : topAccount.totalPnl >= 0 ? "success.main" : "error.main"}
+          color={!value ? "text.primary" : value >= 0 ? "success.main" : "error.main"}
         >
-          {loading ? "…" : topAccount ? formatMoney(topAccount.totalPnl, currency) : "—"}
+          {loading ? "…" : account ? formatMoney(account.totalPnl, currency) : "—"}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {loading
             ? "Loading…"
-            : topAccount
-              ? `${topAccount.accountName} • ${topAccount.tradeCount} trade${topAccount.tradeCount === 1 ? "" : "s"}`
+            : account
+              ? `${account.tradeCount} trade${account.tradeCount === 1 ? "" : "s"} • ${account.pnlPercent ?? "—"}% return`
               : "No account trades"}
         </Typography>
-        {!loading && accounts.length > 0 ? (
-          <Stack spacing={1} sx={{ mt: 1.5 }}>
-            {accounts.slice(0, 3).map((account) => (
-              <Box
-                key={account.accountId ?? "unassigned"}
-                sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}
-              >
-                <Stack direction="row" justifyContent="space-between" spacing={1}>
-                  <Typography variant="body2" fontWeight={700} noWrap>
-                    {account.accountName}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={700}
-                    color={!account.totalPnl ? "text.primary" : account.totalPnl >= 0 ? "success.main" : "error.main"}
-                  >
-                    {formatMoney(account.totalPnl, currency)}
-                  </Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  {formatMoney(account.monthlyAveragePnl, currency)}/month • {formatMoney(account.tradedDayAveragePnl, currency)}/day
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {formatMoney(account.totalNotional, currency)} notional • {account.pnlPercent ?? "—"}% return
-                </Typography>
-              </Box>
-            ))}
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Avg / month</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : formatMoney(account.monthlyAveragePnl, currency)}
+            </Typography>
           </Stack>
-        ) : null}
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Avg / traded day</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : formatMoney(account.tradedDayAveragePnl, currency)}
+            </Typography>
+          </Stack>
+        </Stack>
       </CardContent>
     </Card>
   );
@@ -3900,19 +3999,32 @@ function AccountStatsCard({
 function TradeCountsCard({
   title,
   stats,
+  accountOptions,
+  accountFilter,
+  onAccountFilterChange,
   loading,
 }: {
   title: string;
   stats: TradeCountStats | null;
+  accountOptions: DashboardAccountOption[];
+  accountFilter: string;
+  onAccountFilterChange: (value: string) => void;
   loading?: boolean;
 }) {
   const yearlyCount = stats?.yearTradeCount ?? 0;
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
-        <Typography variant="overline" color="text.secondary">
-          {title}
-        </Typography>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+          <Typography variant="overline" color="text.secondary">
+            {title}
+          </Typography>
+          <AccountFilterSelect
+            value={accountFilter}
+            options={accountOptions}
+            onChange={onAccountFilterChange}
+          />
+        </Stack>
         <Typography variant="h5" fontWeight={800}>
           {loading ? "…" : yearlyCount.toLocaleString()}
         </Typography>
@@ -3921,7 +4033,7 @@ function TradeCountsCard({
             ? "Loading…"
             : `${stats?.yearTradedDays ?? 0} traded day${stats?.yearTradedDays === 1 ? "" : "s"} YTD`}
         </Typography>
-        <Stack spacing={0.75} sx={{ mt: 1.5 }}>
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
           <Stack direction="row" justifyContent="space-between">
             <Typography variant="body2" color="text.secondary">Month</Typography>
             <Typography variant="body2" fontWeight={700}>{loading ? "…" : stats?.monthTradeCount ?? 0}</Typography>
@@ -3950,114 +4062,67 @@ function TradeCountsCard({
 
 function InferredAccountTradeCountsCard({
   title,
-  accounts,
+  account,
+  accountOptions,
+  accountFilter,
+  onAccountFilterChange,
   loading,
 }: {
   title: string;
-  accounts: InferredAccountTradeCounts[];
+  account: InferredAccountTradeCounts | null;
+  accountOptions: DashboardAccountOption[];
+  accountFilter: string;
+  onAccountFilterChange: (value: string) => void;
   loading?: boolean;
 }) {
-  const topAccount = accounts[0];
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="overline" color="text.secondary">
-            {title}
-          </Typography>
-          <Chip size="small" label="Beta" />
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="overline" color="text.secondary">
+              {title}
+            </Typography>
+            <Chip size="small" label="Beta" />
+          </Stack>
+          <AccountFilterSelect
+            value={accountFilter}
+            options={accountOptions}
+            onChange={onAccountFilterChange}
+          />
         </Stack>
         <Typography variant="h5" fontWeight={800}>
-          {loading ? "…" : topAccount ? topAccount.inferredTotalCount.toLocaleString() : "—"}
+          {loading ? "…" : account ? account.inferredTotalCount.toLocaleString() : "—"}
         </Typography>
         <Typography variant="body2" color="text.secondary">
           {loading
             ? "Loading…"
-            : topAccount
-              ? `${topAccount.accountName} • ${topAccount.recordedTradeCount} recorded close${topAccount.recordedTradeCount === 1 ? "" : "s"}`
+            : account
+              ? `${account.inferredBuyCount} buy / ${account.inferredSellCount} sell`
               : "No inferred executions"}
         </Typography>
-        {!loading && accounts.length > 0 ? (
-          <Stack spacing={1} sx={{ mt: 1.5 }}>
-            {accounts.slice(0, 3).map((account) => (
-              <Box
-                key={account.accountId ?? "unassigned"}
-                sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}
-              >
-                <Stack direction="row" justifyContent="space-between" spacing={1}>
-                  <Typography variant="body2" fontWeight={700} noWrap>
-                    {account.accountName}
-                  </Typography>
-                  <Typography variant="body2" fontWeight={700}>
-                    {account.inferredBuyCount} buy / {account.inferredSellCount} sell
-                  </Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  {account.inferredTotalCount} inferred execution{account.inferredTotalCount === 1 ? "" : "s"} • {account.recordedTradeCount} recorded
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {account.inferredAddCount} add edit{account.inferredAddCount === 1 ? "" : "s"} • +{account.inferredAddedQuantity.toLocaleString()} shares • avg {formatSignedNumber(account.averageInferredAddPrice)}
-                </Typography>
-              </Box>
-            ))}
+        <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Recorded closes</Typography>
+            <Typography variant="body2" fontWeight={700}>{loading || !account ? "…" : account.recordedTradeCount}</Typography>
           </Stack>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function PositionUpdateSignalsCard({
-  title,
-  signals,
-  loading,
-}: {
-  title: string;
-  signals: PositionUpdateSignal[];
-  loading?: boolean;
-}) {
-  const topSignal = signals[0];
-  return (
-    <Card variant="outlined" sx={{ height: "100%" }}>
-      <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="overline" color="text.secondary">
-            {title}
-          </Typography>
-          <Chip size="small" label="Beta" />
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Add edits</Typography>
+            <Typography variant="body2" fontWeight={700}>{loading || !account ? "…" : account.inferredAddCount}</Typography>
+          </Stack>
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Added shares</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : account.inferredAddedQuantity.toLocaleString()}
+            </Typography>
+          </Stack>
+          <Stack direction="row" justifyContent="space-between">
+            <Typography variant="body2" color="text.secondary">Avg add price</Typography>
+            <Typography variant="body2" fontWeight={700}>
+              {loading || !account ? "…" : formatSignedNumber(account.averageInferredAddPrice)}
+            </Typography>
+          </Stack>
         </Stack>
-        <Typography variant="h5" fontWeight={800}>
-          {loading ? "…" : topSignal ? `+${topSignal.quantityDelta.toLocaleString()}` : "—"}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          {loading
-            ? "Loading…"
-            : topSignal
-              ? `${topSignal.symbol} • ${topSignal.accountName} • ${topSignal.closedAt}`
-              : "No quantity-increase edits"}
-        </Typography>
-        {!loading && signals.length > 0 ? (
-          <Stack spacing={1} sx={{ mt: 1.5 }}>
-            {signals.slice(0, 3).map((signal) => (
-              <Box key={signal.tradeId} sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
-                <Stack direction="row" justifyContent="space-between" spacing={1}>
-                  <Typography variant="body2" fontWeight={700} noWrap>
-                    {signal.symbol}
-                  </Typography>
-                  <Typography variant="body2" fontWeight={700}>
-                    {signal.initialQuantity.toLocaleString()} → {signal.latestQuantity.toLocaleString()}
-                  </Typography>
-                </Stack>
-                <Typography variant="caption" color="text.secondary">
-                  Entry {formatSignedNumber(signal.initialEntryPrice)} → {formatSignedNumber(signal.latestEntryPrice)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" display="block">
-                  {signal.editCount} edit{signal.editCount === 1 ? "" : "s"} • {signal.accountName}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        ) : null}
       </CardContent>
     </Card>
   );
