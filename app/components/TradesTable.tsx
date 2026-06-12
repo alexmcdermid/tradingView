@@ -46,6 +46,7 @@ interface TradesTableProps {
   sortBy?: TradeSortField;
   sortDirection?: TradeSortDirection;
   onSortChange?: (sortBy: TradeSortField, sortDirection: TradeSortDirection) => void;
+  emptyMessage?: string;
 }
 
 function TablePaginationActions({
@@ -150,6 +151,7 @@ export function TradesTable({
   sortBy,
   sortDirection,
   onSortChange,
+  emptyMessage = "No trades yet. Log a trade to see it here.",
 }: TradesTableProps) {
   const paginationEnabled =
     page !== undefined &&
@@ -230,7 +232,7 @@ export function TradesTable({
             <TableRow>
               <TableCell colSpan={15}>
                 <Typography color="text.secondary">
-                  No trades yet. Log a trade to see it here.
+                  {emptyMessage}
                 </Typography>
               </TableCell>
             </TableRow>

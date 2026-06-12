@@ -29,6 +29,12 @@ export type TradeSortField =
   | "UPDATED_AT";
 export type TradeSortDirection = "ASC" | "DESC";
 
+export interface TradeFilters {
+  accountIds?: string[];
+  includeUnassigned?: boolean;
+  symbol?: string;
+}
+
 export interface Trade {
   id: string;
   symbol: string;

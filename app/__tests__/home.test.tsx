@@ -281,6 +281,53 @@ describe("Home (authenticated)", () => {
     expect(await screen.findByText("TSLA")).toBeInTheDocument();
   });
 
+  it("passes account and ticker filters to the paged trade fetch", async () => {
+    mockListUserAccounts.mockResolvedValue([
+      {
+        id: "acc-1",
+        name: "Webull",
+        defaultStockFees: 0,
+        defaultOptionFees: 0,
+        defaultMarginRateUsd: 0,
+        defaultMarginRateCad: 0,
+        createdAt: "2024-01-01",
+        updatedAt: "2024-01-01",
+      },
+    ]);
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalled();
+      expect(mockListUserAccounts).toHaveBeenCalled();
+    });
+
+    const user = userEvent.setup();
+    const accountInput = screen.getByLabelText("Accounts");
+    await user.click(accountInput);
+    await user.type(accountInput, "Webull");
+    await user.click(await screen.findByText("Webull"));
+
+    const tickerInput = screen.getByLabelText("Ticker");
+    await user.type(tickerInput, "TS");
+
+    await waitFor(() => {
+      expect(
+        mockFetchTrades.mock.calls.some((call) => (
+          call[6]?.accountIds?.[0] === "acc-1" &&
+          call[6]?.includeUnassigned === false &&
+          call[6]?.symbol === "TS"
+        ))
+      ).toBe(true);
+    });
+  });
+
   it("shows an expired session as a warning instead of an error", async () => {
     mockFetchTrades.mockRejectedValueOnce(new ApiError("Unauthorized", 401));
     const router = createMemoryRouter([
@@ -435,7 +482,12 @@ describe("Home (authenticated)", () => {
         undefined,
         selectedDate,
         "CLOSED_AT",
-        "DESC"
+        "DESC",
+        {
+          accountIds: [],
+          includeUnassigned: false,
+          symbol: "",
+        }
       );
     });
   });

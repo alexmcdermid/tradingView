@@ -6,6 +6,7 @@ import type {
   PnlSummary,
   AggregateStats,
   Trade,
+  TradeFilters,
   TradeCountStats,
   TradeHistory,
   TradePayload,
@@ -19,7 +20,8 @@ export async function fetchTrades(
   month?: string,
   date?: string,
   sortBy?: TradeSortField,
-  sortDirection?: TradeSortDirection
+  sortDirection?: TradeSortDirection,
+  filters?: TradeFilters
 ) {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   if (month) {
@@ -33,6 +35,18 @@ export async function fetchTrades(
   }
   if (sortDirection) {
     params.append("sortDirection", sortDirection);
+  }
+  filters?.accountIds?.forEach((accountId) => {
+    if (accountId) {
+      params.append("accountId", accountId);
+    }
+  });
+  if (filters?.includeUnassigned) {
+    params.append("unassigned", "true");
+  }
+  const symbol = filters?.symbol?.trim();
+  if (symbol) {
+    params.append("symbol", symbol);
   }
   return request<PagedResult<Trade>>(`/trades/paged?${params.toString()}`);
 }
