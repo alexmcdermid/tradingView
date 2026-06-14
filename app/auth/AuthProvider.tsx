@@ -1,8 +1,21 @@
 import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  FormControlLabel,
+  Link,
+  Stack,
+} from "@mui/material";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { ApiError } from "../api/client";
-import { fetchUserProfile } from "../api/users";
+import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
 
 type UserInfo = {
@@ -22,6 +35,9 @@ type AuthContextValue = {
   initializing: boolean;
   loginButton: React.ReactNode;
   logout: () => void;
+  legalAgreementRequired: boolean;
+  legalAgreementError: string | null;
+  acceptLegalAgreement: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -88,6 +104,9 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   taxPersonalRate: profile.taxPersonalRate,
 });
 
+const hasAcceptedLegalAgreement = (profile: UserProfile) =>
+  Boolean(profile.termsAcceptedAt && profile.privacyPolicyAcceptedAt);
+
 type GoogleIdentityWindow = Window & {
   google?: {
     accounts?: {
@@ -120,6 +139,8 @@ export function AuthProvider({
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [preferences, setPreferencesState] = useState<UserPreferences | null>(null);
+  const [legalAgreementProfile, setLegalAgreementProfile] = useState<UserProfile | null>(null);
+  const [legalAgreementError, setLegalAgreementError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
@@ -153,6 +174,8 @@ export function AuthProvider({
   const applyProfile = useCallback(
     (data: UserProfile) => {
       const nextPreferences = preferencesFromProfile(data);
+      setLegalAgreementProfile(null);
+      setLegalAgreementError(null);
       setProfile(data);
       setUser(userFromProfile(data));
       setToken(SESSION_TOKEN);
@@ -163,13 +186,43 @@ export function AuthProvider({
     [savePreferencesCache]
   );
 
+  const applyProfileOrRequireAgreement = useCallback(
+    (data: UserProfile) => {
+      if (!hasAcceptedLegalAgreement(data)) {
+        clearSessionState();
+        setLegalAgreementProfile(data);
+        setLegalAgreementError(null);
+        setAuthError(null);
+        return;
+      }
+      applyProfile(data);
+    },
+    [applyProfile, clearSessionState]
+  );
+
   const logout = useCallback(() => {
     void logoutSession().catch(() => {
       // The local auth state still clears even if the server session is already gone.
     });
     setAuthError(null);
+    setLegalAgreementProfile(null);
+    setLegalAgreementError(null);
     clearSessionState();
   }, [clearSessionState]);
+
+  const acceptLegalAgreement = useCallback(async () => {
+    if (!legalAgreementProfile) {
+      return;
+    }
+    try {
+      const data = await acceptUserLegalAgreement();
+      applyProfile(data);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not record legal agreement.";
+      setLegalAgreementError(message);
+      throw error;
+    }
+  }, [applyProfile, legalAgreementProfile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,7 +230,7 @@ export function AuthProvider({
     fetchUserProfile()
       .then((data) => {
         if (!cancelled) {
-          applyProfile(data);
+          applyProfileOrRequireAgreement(data);
         }
       })
       .catch(() => {
@@ -224,10 +277,12 @@ export function AuthProvider({
     return () => {
       cancelled = true;
     };
-  }, [applyProfile, clearSessionState]);
+  }, [applyProfileOrRequireAgreement, clearSessionState]);
+
+  const legalAgreementRequired = Boolean(legalAgreementProfile);
 
   useEffect(() => {
-    if (typeof window === "undefined" || disableLoginPrompts || token) {
+    if (typeof window === "undefined" || disableLoginPrompts || token || legalAgreementRequired) {
       return;
     }
 
@@ -260,15 +315,17 @@ export function AuthProvider({
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [disableLoginPrompts, token]);
+  }, [disableLoginPrompts, legalAgreementRequired, token]);
 
   const handleSuccess = async (credential?: string | undefined) => {
     if (!credential) return;
     try {
       const data = await loginWithGoogleCredential(credential);
-      applyProfile(data);
+      applyProfileOrRequireAgreement(data);
     } catch (error) {
       clearSessionState();
+      setLegalAgreementProfile(null);
+      setLegalAgreementError(null);
       setAuthError(getLoginErrorMessage(error));
     }
   };
@@ -282,10 +339,10 @@ export function AuthProvider({
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: disableLoginPrompts || !mounted || !!token,
+    disabled: disableLoginPrompts || !mounted || !!token || legalAgreementRequired,
   });
 
-  const loginButton = mounted && !disableLoginPrompts ? (
+  const loginButton = mounted && !disableLoginPrompts && !legalAgreementRequired ? (
     <div
       style={{
         width: `${loginWidth}px`,
@@ -385,11 +442,37 @@ export function AuthProvider({
       initializing,
       loginButton,
       logout,
+      legalAgreementRequired,
+      legalAgreementError,
+      acceptLegalAgreement,
     }),
-    [authError, initializing, loginButton, logout, preferences, profile, setPreferences, token, user]
+    [
+      acceptLegalAgreement,
+      authError,
+      initializing,
+      legalAgreementError,
+      legalAgreementRequired,
+      loginButton,
+      logout,
+      preferences,
+      profile,
+      setPreferences,
+      token,
+      user,
+    ]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <LegalAgreementDialog
+        open={legalAgreementRequired}
+        error={legalAgreementError}
+        onAccept={acceptLegalAgreement}
+        onSignOut={logout}
+      />
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
@@ -398,6 +481,91 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
+}
+
+function LegalAgreementDialog({
+  open,
+  error,
+  onAccept,
+  onSignOut,
+}: {
+  open: boolean;
+  error: string | null;
+  onAccept: () => Promise<void>;
+  onSignOut: () => void;
+}) {
+  const [checked, setChecked] = useState(false);
+  const [accepting, setAccepting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setChecked(false);
+      setAccepting(false);
+    }
+  }, [open]);
+
+  const handleAccept = async () => {
+    if (!checked || accepting) {
+      return;
+    }
+    try {
+      setAccepting(true);
+      await onAccept();
+    } catch {
+      // The parent sets the visible error state.
+    } finally {
+      setAccepting(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      disableEscapeKeyDown
+      aria-labelledby="legal-agreement-title"
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle id="legal-agreement-title">Terms and Privacy Agreement</DialogTitle>
+      <DialogContent>
+        <Stack spacing={2}>
+          <DialogContentText>
+            You must agree to the Terms of Service and Privacy Policy before using tradelog.
+          </DialogContentText>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={checked}
+                onChange={(event) => setChecked(event.target.checked)}
+              />
+            }
+            label={
+              <span>
+                I agree to the{" "}
+                <Link href="/terms-of-service" target="_blank" rel="noopener noreferrer">
+                  Terms of Service
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy-policy" target="_blank" rel="noopener noreferrer">
+                  Privacy Policy
+                </Link>
+                .
+              </span>
+            }
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onSignOut} disabled={accepting}>
+          Sign out
+        </Button>
+        <Button variant="contained" onClick={handleAccept} disabled={!checked || accepting}>
+          {accepting ? "Saving..." : "Agree and continue"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 }
 
 export function AuthWrapper({

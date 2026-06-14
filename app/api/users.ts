@@ -20,6 +20,12 @@ export async function fetchUserProfile() {
   return request<UserProfile>("/users/me");
 }
 
+export async function acceptUserLegalAgreement() {
+  return request<UserProfile>("/users/me/legal-agreement", {
+    method: "POST",
+  });
+}
+
 export async function fetchUserPreferences() {
   return request<UserPreferences>("/users/me/preferences");
 }
