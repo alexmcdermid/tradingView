@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Checkbox,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -11,6 +12,7 @@ import {
   FormControlLabel,
   Link,
   Stack,
+  Typography,
 } from "@mui/material";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
@@ -159,6 +161,7 @@ export function AuthProvider({
   const [legalAgreementProfile, setLegalAgreementProfile] = useState<UserProfile | null>(null);
   const [legalAgreementError, setLegalAgreementError] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
@@ -222,6 +225,7 @@ export function AuthProvider({
       // The local auth state still clears even if the server session is already gone.
     });
     setAuthError(null);
+    setSigningIn(false);
     setLegalAgreementProfile(null);
     setLegalAgreementError(null);
     clearSessionState();
@@ -299,7 +303,13 @@ export function AuthProvider({
   const legalAgreementRequired = Boolean(legalAgreementProfile);
 
   useEffect(() => {
-    if (typeof window === "undefined" || disableLoginPrompts || token || legalAgreementRequired) {
+    if (
+      typeof window === "undefined" ||
+      disableLoginPrompts ||
+      token ||
+      legalAgreementRequired ||
+      signingIn
+    ) {
       return;
     }
 
@@ -332,11 +342,17 @@ export function AuthProvider({
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [disableLoginPrompts, legalAgreementRequired, token]);
+  }, [disableLoginPrompts, legalAgreementRequired, signingIn, token]);
 
   const handleSuccess = async (credential?: string | undefined) => {
-    if (!credential) return;
+    if (!credential) {
+      setSigningIn(false);
+      setAuthError("Google sign-in failed before a credential was returned. Try again.");
+      return;
+    }
     try {
+      setSigningIn(true);
+      setAuthError(null);
       const data = await loginWithGoogleCredential(credential);
       applyProfileOrRequireAgreement(data);
     } catch (error) {
@@ -344,6 +360,8 @@ export function AuthProvider({
       setLegalAgreementProfile(null);
       setLegalAgreementError(null);
       setAuthError(getLoginErrorMessage(error));
+    } finally {
+      setSigningIn(false);
     }
   };
 
@@ -356,34 +374,72 @@ export function AuthProvider({
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: disableLoginPrompts || !mounted || !!token || legalAgreementRequired,
+    disabled: disableLoginPrompts || !mounted || !!token || legalAgreementRequired || signingIn,
   });
 
   const loginButton = mounted && !disableLoginPrompts && !legalAgreementRequired ? (
-    <div
-      style={{
-        width: `${loginWidth}px`,
-        height: "44px",
-        borderRadius: "22px",
-        overflow: "hidden",
-      }}
+    <Stack
+      spacing={0.5}
+      alignItems="flex-end"
+      sx={{ width: `${loginWidth}px` }}
+      aria-live="polite"
     >
-      <GoogleLogin
-        key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
-        onSuccess={(response) => void handleSuccess(response.credential)}
-        onError={() => {
-          clearSessionState();
-          setAuthError("Google sign-in failed before a credential was returned. Try again.");
-        }}
-        text="signin_with"
-        theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
-        shape="pill"
-        width={loginWidth}
-        itp_support
-        use_fedcm_for_button
-        cancel_on_tap_outside={false}
-      />
-    </div>
+      {signingIn ? (
+        <Button
+          disabled
+          variant={loginThemeMode === "dark" ? "contained" : "outlined"}
+          startIcon={<CircularProgress size={16} color="inherit" />}
+          sx={{
+            width: "100%",
+            height: 44,
+            borderRadius: 22,
+            textTransform: "none",
+          }}
+        >
+          Signing in...
+        </Button>
+      ) : (
+        <div
+          style={{
+            width: `${loginWidth}px`,
+            height: "44px",
+            borderRadius: "22px",
+            overflow: "hidden",
+          }}
+        >
+          <GoogleLogin
+            key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
+            onSuccess={(response) => void handleSuccess(response.credential)}
+            onError={() => {
+              clearSessionState();
+              setSigningIn(false);
+              setAuthError("Google sign-in failed before a credential was returned. Try again.");
+            }}
+            text="signin_with"
+            theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
+            shape="pill"
+            width={loginWidth}
+            itp_support
+            use_fedcm_for_button
+            cancel_on_tap_outside={false}
+          />
+        </div>
+      )}
+      {!signingIn && authError && (
+        <Typography
+          variant="caption"
+          color="error"
+          sx={{
+            lineHeight: 1.2,
+            maxWidth: "100%",
+            textAlign: "right",
+            wordBreak: "normal",
+          }}
+        >
+          Sign-in failed. Try again.
+        </Typography>
+      )}
+    </Stack>
   ) : null;
 
   const setPreferences = useCallback((next: UserPreferences) => {

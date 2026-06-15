@@ -1,9 +1,10 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, AuthWrapper, useAuth } from "../auth/AuthProvider";
-import { logoutSession } from "../api/auth";
+import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
+import type { UserProfile } from "../api/types";
 
 const googleMocks = vi.hoisted(() => ({
   useGoogleOneTapLogin: vi.fn(),
@@ -52,9 +53,46 @@ function AuthProbe() {
   );
 }
 
+function acceptedProfile(overrides: Partial<UserProfile> = {}): UserProfile {
+  return {
+    id: "user-id",
+    authId: "auth-id",
+    email: "trader@example.com",
+    admin: false,
+    premium: true,
+    createdAt: "2024-01-01T00:00:00Z",
+    updatedAt: "2024-01-01T00:00:00Z",
+    themeMode: "LIGHT",
+    pnlDisplayMode: "PNL",
+    defaultTradeSortBy: "CLOSED_AT",
+    defaultTradeSortDirection: "DESC",
+    showTradeHistory: true,
+    dashboardWidgets: ["TOTAL_REALIZED"],
+    displayCurrency: "USD",
+    taxCapitalGainsRate: 50,
+    taxPersonalRate: 40,
+    termsAcceptedAt: "2024-01-01T00:00:00Z",
+    privacyPolicyAcceptedAt: "2024-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function latestGoogleLoginProps() {
+  return (googleMocks.GoogleLogin.mock.calls.at(-1) as
+    | [
+        {
+          onSuccess: (response: { credential?: string }) => void;
+          onError: () => void;
+          click_listener?: () => void;
+        },
+      ]
+    | undefined)?.[0];
+}
+
 describe("AuthProvider", () => {
   beforeEach(() => {
     vi.mocked(fetchUserProfile).mockRejectedValue(new Error("No active session"));
+    vi.mocked(loginWithGoogleCredential).mockReset();
     vi.mocked(acceptUserLegalAgreement).mockReset();
     vi.mocked(logoutSession).mockResolvedValue(undefined);
     window.localStorage.clear();
@@ -162,33 +200,72 @@ describe("AuthProvider", () => {
       expect(googleMocks.GoogleLogin).toHaveBeenCalled();
     });
 
-    const props = (googleMocks.GoogleLogin.mock.calls.at(-1) as
-      | [{ click_listener?: () => void }]
-      | undefined)?.[0];
+    const props = latestGoogleLoginProps();
     expect(props?.click_listener).toBeUndefined();
   });
 
-  it("applies display currency preference updates without waiting for a profile reload", async () => {
-    vi.mocked(fetchUserProfile).mockResolvedValue({
-      id: "user-id",
-      authId: "auth-id",
-      email: "trader@example.com",
-      admin: false,
-      premium: true,
-      createdAt: "2024-01-01T00:00:00Z",
-      updatedAt: "2024-01-01T00:00:00Z",
-      themeMode: "LIGHT",
-      pnlDisplayMode: "PNL",
-      defaultTradeSortBy: "CLOSED_AT",
-      defaultTradeSortDirection: "DESC",
-      showTradeHistory: true,
-      dashboardWidgets: ["TOTAL_REALIZED"],
-      displayCurrency: "USD",
-      taxCapitalGainsRate: 50,
-      taxPersonalRate: 40,
-      termsAcceptedAt: "2024-01-01T00:00:00Z",
-      privacyPolicyAcceptedAt: "2024-01-01T00:00:00Z",
+  it("shows a pending state while the backend verifies Google sign-in", async () => {
+    let resolveLogin!: (profile: UserProfile) => void;
+    vi.mocked(loginWithGoogleCredential).mockReturnValue(
+      new Promise<UserProfile>((resolve) => {
+        resolveLogin = resolve;
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
     });
+
+    act(() => {
+      latestGoogleLoginProps()?.onSuccess({ credential: "google-token" });
+    });
+
+    expect(screen.getByRole("button", { name: /signing in/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    expect(loginWithGoogleCredential).toHaveBeenCalledWith("google-token");
+
+    await act(async () => {
+      resolveLogin(acceptedProfile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
+    });
+    expect(screen.queryByRole("button", { name: /signing in/i })).not.toBeInTheDocument();
+  });
+
+  it("returns to the Google button and shows a compact failure state when sign-in fails", async () => {
+    vi.mocked(loginWithGoogleCredential).mockRejectedValue(new Error("backend unavailable"));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+
+    act(() => {
+      latestGoogleLoginProps()?.onSuccess({ credential: "google-token" });
+    });
+
+    expect(screen.getByRole("button", { name: /signing in/i })).toBeDisabled();
+
+    expect(await screen.findByText("Sign-in failed. Try again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+  });
+
+  it("applies display currency preference updates without waiting for a profile reload", async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue(acceptedProfile());
 
     render(
       <AuthProvider disableLoginPrompts>
