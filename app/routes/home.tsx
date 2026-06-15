@@ -3073,66 +3073,6 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Box>
-            <Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={1}
-              alignItems={{ xs: "stretch", md: "center" }}
-              sx={{ mb: 1.5 }}
-            >
-              <Autocomplete
-                multiple
-                disableCloseOnSelect
-                disablePortal
-                size="small"
-                options={tradeAccountFilterOptions}
-                value={selectedTradeAccountFilterOptions}
-                onChange={(_, selected) => handleTradeAccountFilterChange(selected)}
-                getOptionLabel={(option) => option.label}
-                isOptionEqualToValue={(option, value) => option.value === value.value}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props}>
-                    <Checkbox
-                      checked={selected}
-                      size="small"
-                      sx={{ mr: 1 }}
-                    />
-                    {option.label}
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Accounts"
-                    placeholder={selectedTradeAccountFilterOptions.length === 0 ? "Search accounts" : ""}
-                  />
-                )}
-                sx={{ minWidth: { xs: "100%", md: 320 }, flex: { md: "0 1 380px" } }}
-              />
-              <TextField
-                label="Ticker"
-                placeholder="Search ticker"
-                size="small"
-                value={symbolFilterDraft}
-                onChange={(event) => handleSymbolFilterChange(event.target.value)}
-                sx={{ minWidth: { xs: "100%", md: 180 }, flex: { md: "0 1 220px" } }}
-              />
-              {hasTradeFilters && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleClearTradeFilters}
-                  sx={{ alignSelf: { xs: "flex-start", md: "center" }, whiteSpace: "nowrap" }}
-                >
-                  Clear filters
-                </Button>
-              )}
-              {hasTradeFilters && (
-                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                  {activeTradeFilterCount} active
-                </Typography>
-              )}
-            </Stack>
             <TradesTable
               trades={filteredTrades}
               accountNamesById={accountNamesById}
@@ -3144,6 +3084,69 @@ export default function Home() {
               sortBy={user && token ? tradeSort.sortBy : undefined}
               sortDirection={user && token ? tradeSort.sortDirection : undefined}
               onSortChange={user && token ? handleTradeSortChange : undefined}
+              toolbar={
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={1}
+                  alignItems={{ xs: "stretch", md: "center" }}
+                >
+                  <TextField
+                    label="Ticker"
+                    placeholder="Search ticker"
+                    size="small"
+                    value={symbolFilterDraft}
+                    onChange={(event) => handleSymbolFilterChange(event.target.value)}
+                    sx={{ minWidth: { xs: "100%", md: 180 }, flex: { md: "0 1 220px" } }}
+                  />
+                  <Autocomplete
+                    multiple
+                    disableCloseOnSelect
+                    disablePortal
+                    size="small"
+                    options={tradeAccountFilterOptions}
+                    value={selectedTradeAccountFilterOptions}
+                    onChange={(_, selected) => handleTradeAccountFilterChange(selected)}
+                    getOptionLabel={(option) => option.label}
+                    isOptionEqualToValue={(option, value) => option.value === value.value}
+                    renderOption={(props, option, { selected }) => (
+                      <li {...props}>
+                        <Checkbox checked={selected} size="small" sx={{ mr: 1 }} />
+                        {option.label}
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Accounts"
+                        placeholder={
+                          selectedTradeAccountFilterOptions.length === 0 ? "Search accounts" : ""
+                        }
+                      />
+                    )}
+                    sx={{ minWidth: { xs: "100%", md: 320 }, flex: { md: "0 1 380px" } }}
+                  />
+                  <Box sx={{ display: { xs: "none", md: "block" }, flex: 1 }} />
+                  {hasTradeFilters && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ whiteSpace: "nowrap", alignSelf: { xs: "flex-start", md: "center" } }}
+                    >
+                      {activeTradeFilterCount} active
+                    </Typography>
+                  )}
+                  {hasTradeFilters && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={handleClearTradeFilters}
+                      sx={{ alignSelf: { xs: "flex-start", md: "center" }, whiteSpace: "nowrap" }}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </Stack>
+              }
               emptyMessage={
                 hasTradeFilters || selectedDate || hidePastTrades
                   ? "No trades match the current filters."
@@ -3180,7 +3183,6 @@ export default function Home() {
                 />
               </Stack>
             )}
-          </Box>
         </Stack>
       </Container>
 

@@ -47,6 +47,7 @@ interface TradesTableProps {
   sortDirection?: TradeSortDirection;
   onSortChange?: (sortBy: TradeSortField, sortDirection: TradeSortDirection) => void;
   emptyMessage?: string;
+  toolbar?: React.ReactNode;
 }
 
 function TablePaginationActions({
@@ -152,6 +153,7 @@ export function TradesTable({
   sortDirection,
   onSortChange,
   emptyMessage = "No trades yet. Log a trade to see it here.",
+  toolbar,
 }: TradesTableProps) {
   const paginationEnabled =
     page !== undefined &&
@@ -196,8 +198,20 @@ export function TradesTable({
   );
 
   return (
-    <TableContainer component={Paper}>
-      <Table size="small">
+    <Paper>
+      {toolbar ? (
+        <Box
+          sx={(theme) => ({
+            borderBottom: 1,
+            borderColor: theme.palette.divider,
+            p: { xs: 1.5, sm: 2 },
+          })}
+        >
+          {toolbar}
+        </Box>
+      ) : null}
+      <TableContainer>
+        <Table size="small">
         <TableHead>
           <TableRow>
             {renderSortableHeader("Symbol", "SYMBOL")}
@@ -409,7 +423,8 @@ export function TradesTable({
             </TableRow>
           </TableFooter>
         )}
-      </Table>
-    </TableContainer>
+        </Table>
+      </TableContainer>
+    </Paper>
   );
 }
