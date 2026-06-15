@@ -309,12 +309,15 @@ describe("Home (authenticated)", () => {
     });
 
     const user = userEvent.setup();
+    const tickerInput = screen.getByLabelText("Ticker");
     const accountInput = screen.getByLabelText("Accounts");
+    expect(
+      Boolean(tickerInput.compareDocumentPosition(accountInput) & Node.DOCUMENT_POSITION_FOLLOWING)
+    ).toBe(true);
     await user.click(accountInput);
     await user.type(accountInput, "Webull");
     await user.click(await screen.findByText("Webull"));
 
-    const tickerInput = screen.getByLabelText("Ticker");
     await user.type(tickerInput, "TS");
 
     await waitFor(() => {
