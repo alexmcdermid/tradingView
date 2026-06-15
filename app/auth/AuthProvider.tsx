@@ -46,6 +46,21 @@ const PREFERENCES_KEY_PREFIX = "user-preferences";
 const THEME_STORAGE_KEY = "tv-theme-mode";
 const SESSION_TOKEN = "cookie-session";
 
+const PUBLIC_AUTH_CONTEXT_VALUE: AuthContextValue = {
+  user: null,
+  profile: null,
+  preferences: null,
+  setPreferences: () => {},
+  token: null,
+  authError: null,
+  initializing: false,
+  loginButton: null,
+  logout: () => {},
+  legalAgreementRequired: false,
+  legalAgreementError: null,
+  acceptLegalAgreement: async () => {},
+};
+
 function getEnvironmentName() {
   const explicit = import.meta.env.VITE_APP_ENV?.toLowerCase();
   if (explicit) {
@@ -131,9 +146,11 @@ function cancelGoogleIdentityPrompt() {
 export function AuthProvider({
   children,
   disableLoginPrompts = false,
+  suppressLegalAgreementDialog = false,
 }: {
   children: React.ReactNode;
   disableLoginPrompts?: boolean;
+  suppressLegalAgreementDialog?: boolean;
 }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -466,7 +483,7 @@ export function AuthProvider({
     <AuthContext.Provider value={value}>
       {children}
       <LegalAgreementDialog
-        open={legalAgreementRequired}
+        open={legalAgreementRequired && !suppressLegalAgreementDialog}
         error={legalAgreementError}
         onAccept={acceptLegalAgreement}
         onSignOut={logout}
@@ -481,6 +498,14 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
+}
+
+function PublicAuthProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthContext.Provider value={PUBLIC_AUTH_CONTEXT_VALUE}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 function LegalAgreementDialog({
@@ -571,10 +596,18 @@ function LegalAgreementDialog({
 export function AuthWrapper({
   children,
   disableLoginPrompts = false,
+  suppressLegalAgreementDialog = false,
+  disableAuthentication = false,
 }: {
   children: React.ReactNode;
   disableLoginPrompts?: boolean;
+  suppressLegalAgreementDialog?: boolean;
+  disableAuthentication?: boolean;
 }) {
+  if (disableAuthentication) {
+    return <PublicAuthProvider>{children}</PublicAuthProvider>;
+  }
+
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
     return (
@@ -590,7 +623,12 @@ export function AuthWrapper({
   }
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      <AuthProvider disableLoginPrompts={disableLoginPrompts}>{children}</AuthProvider>
+      <AuthProvider
+        disableLoginPrompts={disableLoginPrompts}
+        suppressLegalAgreementDialog={suppressLegalAgreementDialog}
+      >
+        {children}
+      </AuthProvider>
     </GoogleOAuthProvider>
   );
 }

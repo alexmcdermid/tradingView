@@ -1,7 +1,7 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider, useAuth } from "../auth/AuthProvider";
+import { AuthProvider, AuthWrapper, useAuth } from "../auth/AuthProvider";
 import { logoutSession } from "../api/auth";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 
@@ -82,6 +82,21 @@ describe("AuthProvider", () => {
     expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
       expect.objectContaining({ disabled: true })
     );
+  });
+
+  it("does not initialize Google auth on legal review pages", () => {
+    render(
+      <AuthWrapper disableAuthentication>
+        <AuthProbe />
+      </AuthWrapper>
+    );
+
+    expect(screen.getByText("Auth ready")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    expect(fetchUserProfile).not.toHaveBeenCalled();
+    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
+    expect(googleMocks.useGoogleOneTapLogin).not.toHaveBeenCalled();
   });
 
   it("keeps FedCM enabled for low-click Google sign-in", async () => {
@@ -242,6 +257,30 @@ describe("AuthProvider", () => {
       expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
     });
     expect(screen.getByTestId("legal-required")).toHaveTextContent("no");
+  });
+
+  it("keeps legal review pages readable while agreement is pending", async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+      displayCurrency: "USD",
+    });
+
+    render(
+      <AuthProvider disableLoginPrompts suppressLegalAgreementDialog>
+        <AuthProbe />
+        <main>Legal document content</main>
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText("Legal document content")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    expect(screen.getByTestId("legal-required")).toHaveTextContent("yes");
+    expect(screen.queryByText("Terms and Privacy Agreement")).not.toBeInTheDocument();
   });
 
   it("logs out when a pending legal agreement is declined", async () => {
