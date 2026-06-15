@@ -46,7 +46,7 @@ import {
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type Key, type ReactNode } from "react";
 import type { Route } from "./+types/home";
 import { Link as RouterLink } from "react-router";
 import {
@@ -3108,12 +3108,15 @@ export default function Home() {
                     onChange={(_, selected) => handleTradeAccountFilterChange(selected)}
                     getOptionLabel={(option) => option.label}
                     isOptionEqualToValue={(option, value) => option.value === value.value}
-                    renderOption={(props, option, { selected }) => (
-                      <li {...props}>
-                        <Checkbox checked={selected} size="small" sx={{ mr: 1 }} />
-                        {option.label}
-                      </li>
-                    )}
+                    renderOption={(props, option, { selected }) => {
+                      const { key, ...optionProps } = props as typeof props & { key: Key };
+                      return (
+                        <li key={key} {...optionProps}>
+                          <Checkbox checked={selected} size="small" sx={{ mr: 1 }} />
+                          {option.label}
+                        </li>
+                      );
+                    }}
                     renderInput={(params) => (
                       <TextField
                         {...params}

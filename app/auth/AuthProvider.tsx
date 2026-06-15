@@ -382,7 +382,6 @@ export function AuthProvider({
         itp_support
         use_fedcm_for_button
         cancel_on_tap_outside={false}
-        click_listener={cancelGoogleIdentityPrompt}
       />
     </div>
   ) : null;
