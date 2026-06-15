@@ -26,6 +26,27 @@ jobs:
         env:
           CI: true
           VITEST_WATCH: false
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Build frontend image for scan
+        run: |
+          docker build \
+            --build-arg VITE_GOOGLE_CLIENT_ID="ci-scan-client-id" \
+            --build-arg VITE_USE_HEADER_AUTH="false" \
+            --build-arg VITE_USER_ID="" \
+            --build-arg VITE_PUBLIC_ORIGIN="http://127.0.0.1:3000" \
+            --build-arg VITE_PUBLIC_HOST_ALLOWLIST="127.0.0.1:3000" \
+            -t tradingview-frontend:${{ github.sha }} \
+            -f Dockerfile \
+            .
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: tradingview-frontend:${{ github.sha }}
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
   deploy-dev:
     needs: test
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -51,7 +72,6 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
           VITE_API_BASE_URL: ${{ secrets.DEV_API_BASE_URL }}
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.DEV_GOOGLE_CLIENT_ID }}
-          VITE_ADMIN_EMAILS: ${{ secrets.DEV_ADMIN_EMAILS }}
           VITE_USE_HEADER_AUTH: "false"
           VITE_USER_ID: ""
           VITE_PUBLIC_ORIGIN: ${{ secrets.DEV_PUBLIC_ORIGIN }}
@@ -61,7 +81,6 @@ jobs:
           docker build \
             --build-arg VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
             --build-arg VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID}" \
-            --build-arg VITE_ADMIN_EMAILS="${VITE_ADMIN_EMAILS}" \
             --build-arg VITE_USE_HEADER_AUTH="${VITE_USE_HEADER_AUTH}" \
             --build-arg VITE_USER_ID="${VITE_USER_ID}" \
             --build-arg VITE_PUBLIC_ORIGIN="${VITE_PUBLIC_ORIGIN}" \

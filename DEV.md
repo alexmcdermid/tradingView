@@ -54,7 +54,6 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 VITE_GOOGLE_CLIENT_ID=your-google-client-id
 VITE_USE_HEADER_AUTH=true
 VITE_USER_ID=local-user
-VITE_ADMIN_EMAILS=admin@example.com
 VITE_APP_ENV=local
 VITE_PUBLIC_ORIGIN=http://localhost:5173
 VITE_PUBLIC_HOST_ALLOWLIST=localhost:5173,127.0.0.1:5173
@@ -69,7 +68,6 @@ VITE_PUBLIC_HOST_ALLOWLIST=localhost:5173,127.0.0.1:5173
 
 **Optional:**
 - `VITE_PUBLIC_HOST_ALLOWLIST` — Comma-separated hosts accepted by SSR requests, in addition to `VITE_PUBLIC_ORIGIN`
-- `VITE_ADMIN_EMAILS` — Comma-separated list of admin email addresses
 - `VITE_USE_HEADER_AUTH` — Enable header-based auth for development (set to `false` in production)
 - `VITE_USER_ID` — Default user ID for header-based auth (dev only)
 - `VITE_APP_ENV` — Environment label shown in share links (e.g. "dev", "prod")
@@ -163,7 +161,6 @@ The Dockerfile accepts build arguments for runtime config:
 ```dockerfile
 ARG VITE_API_BASE_URL
 ARG VITE_GOOGLE_CLIENT_ID
-ARG VITE_ADMIN_EMAILS
 ARG VITE_USE_HEADER_AUTH=false
 ARG VITE_APP_ENV
 ARG VITE_PUBLIC_ORIGIN
@@ -178,7 +175,6 @@ ARG VITE_PUBLIC_HOST_ALLOWLIST
 - `DEV_FRONTEND_SERVICE_ARN`
 - `DEV_API_BASE_URL`
 - `DEV_GOOGLE_CLIENT_ID`
-- `DEV_ADMIN_EMAILS` (optional)
 - `DEV_PUBLIC_ORIGIN`
 - `DEV_PUBLIC_HOST_ALLOWLIST` (optional)
 
@@ -196,7 +192,6 @@ DEV_PUBLIC_HOST_ALLOWLIST=dev.tradelog.ca
 - `PROD_FRONTEND_SERVICE_ARN` — App Runner service ARN, e.g. `arn:aws:apprunner:<region>:<account-id>:service/<service-name>/<service-id>`
 - `PROD_API_BASE_URL` — production backend API base URL, e.g. `<prod-api-origin>/api/v1`
 - `PROD_GOOGLE_CLIENT_ID`
-- `PROD_ADMIN_EMAILS` (optional)
 - `PROD_PUBLIC_ORIGIN`
 - `PROD_PUBLIC_HOST_ALLOWLIST` (optional)
 
