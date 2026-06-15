@@ -1,7 +1,7 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AuthProvider, useAuth } from "../auth/AuthProvider";
+import { AuthProvider, AuthWrapper, useAuth } from "../auth/AuthProvider";
 import { logoutSession } from "../api/auth";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 
@@ -82,6 +82,21 @@ describe("AuthProvider", () => {
     expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
       expect.objectContaining({ disabled: true })
     );
+  });
+
+  it("does not initialize Google auth on legal review pages", () => {
+    render(
+      <AuthWrapper disableAuthentication>
+        <AuthProbe />
+      </AuthWrapper>
+    );
+
+    expect(screen.getByText("Auth ready")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    expect(fetchUserProfile).not.toHaveBeenCalled();
+    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
+    expect(googleMocks.useGoogleOneTapLogin).not.toHaveBeenCalled();
   });
 
   it("keeps FedCM enabled for low-click Google sign-in", async () => {

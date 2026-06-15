@@ -79,6 +79,7 @@ export default function App() {
     <AuthWrapper
       disableLoginPrompts={disableLoginPrompts}
       suppressLegalAgreementDialog={isLegalReviewPath}
+      disableAuthentication={isLegalReviewPath}
     >
       <AppProviders />
     </AuthWrapper>
