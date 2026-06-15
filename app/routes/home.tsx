@@ -9,6 +9,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import {
   Alert,
   AppBar,
+  Autocomplete,
   Avatar,
   Chip,
   Box,
@@ -71,6 +72,7 @@ import type {
   ShareLinkResponse,
   Trade,
   TradeCountStats,
+  TradeFilters,
   TradeHistory,
   TradeSortDirection,
   TradeSortField,
@@ -163,6 +165,7 @@ const DEFAULT_DISPLAY_CURRENCY: Currency = "USD";
 const DEFAULT_CAD_TO_USD_RATE = 0.732;
 const DASHBOARD_ACCOUNT_ALL = "__ALL_ACCOUNTS__";
 const DASHBOARD_ACCOUNT_UNASSIGNED = "__UNASSIGNED__";
+const TRADE_FILTER_ACCOUNT_UNASSIGNED = "__TRADE_FILTER_UNASSIGNED__";
 const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> = [
   { id: "TOTAL_REALIZED", label: "Total Realized P/L" },
   { id: "BEST_MONTH", label: "Best Month" },
@@ -253,6 +256,12 @@ type PreferencesDraft = {
 type DashboardAccountOption = {
   value: string;
   label: string;
+};
+
+type TradeAccountFilterOption = {
+  value: string;
+  label: string;
+  unassigned?: boolean;
 };
 
 const normalizeDashboardWidgets = (value?: DashboardWidgetId[] | null): DashboardWidgetId[] => {
@@ -952,6 +961,12 @@ export default function Home() {
     sortBy: resolveTradeSortBy(preferences?.defaultTradeSortBy),
     sortDirection: resolveTradeSortDirection(preferences?.defaultTradeSortDirection),
   }));
+  const [tradeFilters, setTradeFilters] = useState<TradeFilters>({
+    accountIds: [],
+    includeUnassigned: false,
+    symbol: "",
+  });
+  const [symbolFilterDraft, setSymbolFilterDraft] = useState("");
   const [pageMeta, setPageMeta] = useState<{ totalPages: number; hasNext: boolean; hasPrevious: boolean; totalElements: number }>({
     totalPages: 0,
     hasNext: false,
@@ -1050,6 +1065,41 @@ export default function Home() {
     ],
     [accounts]
   );
+  const tradeAccountFilterOptions = useMemo<TradeAccountFilterOption[]>(
+    () => [
+      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      { value: TRADE_FILTER_ACCOUNT_UNASSIGNED, label: "Unassigned", unassigned: true },
+    ],
+    [accounts]
+  );
+  const selectedTradeAccountFilterOptions = useMemo<TradeAccountFilterOption[]>(() => {
+    const optionsByValue = new Map(
+      tradeAccountFilterOptions.map((option) => [option.value, option])
+    );
+    const selected = (tradeFilters.accountIds ?? []).map((accountId) =>
+      optionsByValue.get(accountId) ?? {
+        value: accountId,
+        label: accountNamesById[accountId] ?? "Deleted account",
+      }
+    );
+    if (tradeFilters.includeUnassigned) {
+      const unassignedOption = optionsByValue.get(TRADE_FILTER_ACCOUNT_UNASSIGNED);
+      if (unassignedOption) {
+        selected.push(unassignedOption);
+      }
+    }
+    return selected;
+  }, [
+    accountNamesById,
+    tradeAccountFilterOptions,
+    tradeFilters.accountIds,
+    tradeFilters.includeUnassigned,
+  ]);
+  const activeTradeFilterCount =
+    (tradeFilters.accountIds?.length ?? 0) +
+    (tradeFilters.includeUnassigned ? 1 : 0) +
+    (tradeFilters.symbol?.trim() ? 1 : 0);
+  const hasTradeFilters = activeTradeFilterCount > 0;
   const selectedDashboardAccount = useMemo(() => {
     if (dashboardAccountFilter === DASHBOARD_ACCOUNT_UNASSIGNED) {
       return { accountId: null, accountName: "Unassigned", unassigned: true };
@@ -1225,6 +1275,33 @@ export default function Home() {
     user,
   ]);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const symbol = symbolFilterDraft.trim();
+      if ((tradeFilters.symbol ?? "") !== symbol) {
+        setTradeFilters((prev) => ({ ...prev, symbol }));
+        setPage(0);
+      }
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [symbolFilterDraft, tradeFilters.symbol]);
+
+  useEffect(() => {
+    if (!user || !token) {
+      return;
+    }
+    const validAccountIds = new Set(accounts.map((account) => account.id));
+    setTradeFilters((prev) => {
+      const accountIds = (prev.accountIds ?? []).filter((accountId) =>
+        validAccountIds.has(accountId)
+      );
+      if (accountIds.length === (prev.accountIds ?? []).length) {
+        return prev;
+      }
+      return { ...prev, accountIds };
+    });
+  }, [accounts, token, user]);
+
   const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
     const cadToUsd = resolveCadToUsdRate(rate);
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
@@ -1386,7 +1463,8 @@ export default function Home() {
         month,
         date,
         tradeSort.sortBy,
-        tradeSort.sortDirection
+        tradeSort.sortDirection,
+        tradeFilters
       );
       setTrades(tradeData.items);
       setPage(tradeData.page);
@@ -1402,7 +1480,7 @@ export default function Home() {
     } finally {
       setLoadingTrades(false);
     }
-  }, [token, tradeSort.sortBy, tradeSort.sortDirection, user]);
+  }, [token, tradeFilters, tradeSort.sortBy, tradeSort.sortDirection, user]);
 
   const loadSummary = useCallback(async (month: string) => {
     if (!user || !token) {
@@ -2397,6 +2475,32 @@ export default function Home() {
     setPage(0);
   };
 
+  const handleTradeAccountFilterChange = (selected: TradeAccountFilterOption[]) => {
+    const accountIds = selected
+      .filter((option) => !option.unassigned)
+      .map((option) => option.value);
+    setTradeFilters((prev) => ({
+      ...prev,
+      accountIds,
+      includeUnassigned: selected.some((option) => option.unassigned),
+    }));
+    setPage(0);
+  };
+
+  const handleSymbolFilterChange = (value: string) => {
+    setSymbolFilterDraft(value);
+  };
+
+  const handleClearTradeFilters = () => {
+    setTradeFilters({
+      accountIds: [],
+      includeUnassigned: false,
+      symbol: "",
+    });
+    setSymbolFilterDraft("");
+    setPage(0);
+  };
+
   const filteredTrades = useMemo(() => {
     let result = trades;
     if (selectedDate) {
@@ -2406,8 +2510,21 @@ export default function Home() {
       const today = new Date().toISOString().slice(0, 10);
       result = result.filter((trade) => trade.closedAt >= today);
     }
+    if (tradeFilters.accountIds?.length || tradeFilters.includeUnassigned) {
+      const selectedAccountIds = new Set(tradeFilters.accountIds ?? []);
+      result = result.filter((trade) => {
+        if (!trade.accountId) {
+          return !!tradeFilters.includeUnassigned;
+        }
+        return selectedAccountIds.has(trade.accountId);
+      });
+    }
+    const symbol = tradeFilters.symbol?.trim().toLowerCase();
+    if (symbol) {
+      result = result.filter((trade) => trade.symbol.toLowerCase().includes(symbol));
+    }
     return result;
-  }, [hidePastTrades, selectedDate, trades]);
+  }, [hidePastTrades, selectedDate, tradeFilters, trades]);
   const displaySummary = useMemo(
     () => convertUsdSummary(summary, displayCurrency),
     [displayCurrency, summary]
@@ -2957,6 +3074,65 @@ export default function Home() {
           </Card>
 
           <Box>
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={1}
+              alignItems={{ xs: "stretch", md: "center" }}
+              sx={{ mb: 1.5 }}
+            >
+              <Autocomplete
+                multiple
+                disableCloseOnSelect
+                disablePortal
+                size="small"
+                options={tradeAccountFilterOptions}
+                value={selectedTradeAccountFilterOptions}
+                onChange={(_, selected) => handleTradeAccountFilterChange(selected)}
+                getOptionLabel={(option) => option.label}
+                isOptionEqualToValue={(option, value) => option.value === value.value}
+                renderOption={(props, option, { selected }) => (
+                  <li {...props}>
+                    <Checkbox
+                      checked={selected}
+                      size="small"
+                      sx={{ mr: 1 }}
+                    />
+                    {option.label}
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Accounts"
+                    placeholder={selectedTradeAccountFilterOptions.length === 0 ? "Search accounts" : ""}
+                  />
+                )}
+                sx={{ minWidth: { xs: "100%", md: 320 }, flex: { md: "0 1 380px" } }}
+              />
+              <TextField
+                label="Ticker"
+                placeholder="Search ticker"
+                size="small"
+                value={symbolFilterDraft}
+                onChange={(event) => handleSymbolFilterChange(event.target.value)}
+                sx={{ minWidth: { xs: "100%", md: 180 }, flex: { md: "0 1 220px" } }}
+              />
+              {hasTradeFilters && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={handleClearTradeFilters}
+                  sx={{ alignSelf: { xs: "flex-start", md: "center" }, whiteSpace: "nowrap" }}
+                >
+                  Clear filters
+                </Button>
+              )}
+              {hasTradeFilters && (
+                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+                  {activeTradeFilterCount} active
+                </Typography>
+              )}
+            </Stack>
             <TradesTable
               trades={filteredTrades}
               accountNamesById={accountNamesById}
@@ -2968,6 +3144,11 @@ export default function Home() {
               sortBy={user && token ? tradeSort.sortBy : undefined}
               sortDirection={user && token ? tradeSort.sortDirection : undefined}
               onSortChange={user && token ? handleTradeSortChange : undefined}
+              emptyMessage={
+                hasTradeFilters || selectedDate || hidePastTrades
+                  ? "No trades match the current filters."
+                  : undefined
+              }
               page={user && !selectedDate ? page : undefined}
               pageSize={user && !selectedDate ? pageSize : undefined}
               totalElements={user && !selectedDate ? pageMeta.totalElements : undefined}
