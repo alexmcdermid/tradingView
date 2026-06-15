@@ -151,13 +151,7 @@ describe("AuthProvider", () => {
     expect(cancel).toHaveBeenCalled();
   });
 
-  it("cancels stale FedCM prompts before explicit button login", async () => {
-    const cancel = vi.fn();
-    Object.defineProperty(window, "google", {
-      configurable: true,
-      value: { accounts: { id: { cancel } } },
-    });
-
+  it("does not cancel FedCM when the explicit Google button is clicked", async () => {
     render(
       <AuthProvider>
         <AuthProbe />
@@ -171,12 +165,7 @@ describe("AuthProvider", () => {
     const props = (googleMocks.GoogleLogin.mock.calls.at(-1) as
       | [{ click_listener?: () => void }]
       | undefined)?.[0];
-    if (!props?.click_listener) {
-      throw new Error("Expected GoogleLogin to receive a click_listener");
-    }
-    props.click_listener?.();
-
-    expect(cancel).toHaveBeenCalled();
+    expect(props?.click_listener).toBeUndefined();
   });
 
   it("applies display currency preference updates without waiting for a profile reload", async () => {
