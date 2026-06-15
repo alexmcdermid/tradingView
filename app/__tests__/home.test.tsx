@@ -10,8 +10,8 @@ import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
-  user: { sub: string } | null;
-  profile: { id: string } | null;
+  user: { sub: string; email?: string | null; name?: string | null } | null;
+  profile: { id: string; admin?: boolean | null } | null;
   preferences: {
     themeMode?: string | null;
     pnlDisplayMode?: string | null;
@@ -110,6 +110,7 @@ vi.mock("../api/shares", () => ({
 describe("Home (guest mode)", () => {
   beforeEach(() => {
     authState.user = null;
+    authState.profile = null;
     authState.preferences = null;
     authState.token = null;
     authState.authError = null;
@@ -208,6 +209,7 @@ describe("Home (guest mode)", () => {
 describe("Home (authenticated)", () => {
   beforeEach(() => {
     authState.user = { sub: "user-1" };
+    authState.profile = { id: "profile-1", admin: false };
     authState.preferences = { themeMode: "LIGHT", pnlDisplayMode: "PNL" };
     authState.token = "token";
     mockFetchTrades.mockResolvedValue({
@@ -279,6 +281,43 @@ describe("Home (authenticated)", () => {
       expect(mockFetchTrades).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("TSLA")).toBeInTheDocument();
+  });
+
+  it("does not show admin navigation based only on user email", async () => {
+    authState.user = { sub: "user-1", email: "admin@example.com", name: "Admin Person" };
+    authState.profile = { id: "profile-1", admin: false };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+
+    expect(screen.queryByRole("menuitem", { name: /^admin$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /preferences/i })).toBeInTheDocument();
+  });
+
+  it("shows admin navigation when the backend profile marks the user as admin", async () => {
+    authState.user = { sub: "user-1", email: "trader@example.com", name: "Trader" };
+    authState.profile = { id: "profile-1", admin: true };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+
+    expect(await screen.findByRole("menuitem", { name: /^admin$/i })).toBeInTheDocument();
   });
 
   it("passes account and ticker filters to the paged trade fetch", async () => {
