@@ -232,6 +232,7 @@ export interface UserProfile {
   id: string;
   authId: string;
   email?: string | null;
+  admin: boolean;
   premium: boolean;
   createdAt: string;
   updatedAt: string;

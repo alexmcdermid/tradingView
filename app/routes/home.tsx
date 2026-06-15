@@ -140,18 +140,6 @@ const tradeToPayload = (trade: Trade, overrides?: Partial<TradePayload>): TradeP
   ...overrides,
 });
 
-const parseEmailList = (value?: string) => {
-  if (!value) {
-    return new Set<string>();
-  }
-  return new Set(
-    value
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean)
-  );
-};
-
 const DEFAULT_TRADE_SORT_BY: TradeSortField = "CLOSED_AT";
 const DEFAULT_TRADE_SORT_DIRECTION: TradeSortDirection = "DESC";
 const DEFAULT_DASHBOARD_WIDGETS: DashboardWidgetId[] = [
@@ -938,7 +926,7 @@ const buildGuestSeedTrades = (month: string): Trade[] => {
 };
 
 export default function Home() {
-  const { user, token, authError, loginButton, initializing, logout, preferences, setPreferences } = useAuth();
+  const { user, token, authError, loginButton, initializing, logout, preferences, profile, setPreferences } = useAuth();
   const { mode, setMode } = useColorMode();
   const [trades, setTrades] = useState<Trade[]>([]);
   const [summary, setSummary] = useState<PnlSummary | null>(null);
@@ -1035,19 +1023,7 @@ export default function Home() {
   const [draggingDashboardWidget, setDraggingDashboardWidget] = useState<DashboardWidgetId | null>(null);
   const [dragOverDashboardWidget, setDragOverDashboardWidget] = useState<DashboardWidgetId | null>(null);
   const guestSeeded = useRef<boolean>(false);
-  const adminEmailSet = useMemo(() => {
-    const adminList = import.meta.env.VITE_ADMIN_EMAILS;
-    return parseEmailList(adminList);
-  }, []);
-  const isAdmin = useMemo(() => {
-    if (!user?.email) {
-      return false;
-    }
-    if (adminEmailSet.size === 0) {
-      return false;
-    }
-    return adminEmailSet.has(user.email.toLowerCase());
-  }, [adminEmailSet, user?.email]);
+  const isAdmin = Boolean(profile?.admin);
   const showTradeHistoryEnabled = Boolean(preferences?.showTradeHistory);
   const selectedDashboardWidgets = useMemo(
     () => normalizeDashboardWidgets(preferences?.dashboardWidgets),
