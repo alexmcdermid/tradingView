@@ -131,9 +131,11 @@ function cancelGoogleIdentityPrompt() {
 export function AuthProvider({
   children,
   disableLoginPrompts = false,
+  suppressLegalAgreementDialog = false,
 }: {
   children: React.ReactNode;
   disableLoginPrompts?: boolean;
+  suppressLegalAgreementDialog?: boolean;
 }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -466,7 +468,7 @@ export function AuthProvider({
     <AuthContext.Provider value={value}>
       {children}
       <LegalAgreementDialog
-        open={legalAgreementRequired}
+        open={legalAgreementRequired && !suppressLegalAgreementDialog}
         error={legalAgreementError}
         onAccept={acceptLegalAgreement}
         onSignOut={logout}
@@ -571,9 +573,11 @@ function LegalAgreementDialog({
 export function AuthWrapper({
   children,
   disableLoginPrompts = false,
+  suppressLegalAgreementDialog = false,
 }: {
   children: React.ReactNode;
   disableLoginPrompts?: boolean;
+  suppressLegalAgreementDialog?: boolean;
 }) {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
@@ -590,7 +594,12 @@ export function AuthWrapper({
   }
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      <AuthProvider disableLoginPrompts={disableLoginPrompts}>{children}</AuthProvider>
+      <AuthProvider
+        disableLoginPrompts={disableLoginPrompts}
+        suppressLegalAgreementDialog={suppressLegalAgreementDialog}
+      >
+        {children}
+      </AuthProvider>
     </GoogleOAuthProvider>
   );
 }

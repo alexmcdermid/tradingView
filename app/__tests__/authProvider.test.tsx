@@ -244,6 +244,30 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("legal-required")).toHaveTextContent("no");
   });
 
+  it("keeps legal review pages readable while agreement is pending", async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+      displayCurrency: "USD",
+    });
+
+    render(
+      <AuthProvider disableLoginPrompts suppressLegalAgreementDialog>
+        <AuthProbe />
+        <main>Legal document content</main>
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText("Legal document content")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    expect(screen.getByTestId("legal-required")).toHaveTextContent("yes");
+    expect(screen.queryByText("Terms and Privacy Agreement")).not.toBeInTheDocument();
+  });
+
   it("logs out when a pending legal agreement is declined", async () => {
     vi.mocked(fetchUserProfile).mockResolvedValue({
       id: "user-id",

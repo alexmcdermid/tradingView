@@ -72,10 +72,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const location = useLocation();
-  const disableLoginPrompts = isPublicSharePath(location.pathname);
+  const isLegalReviewPath = isLegalDocumentPath(location.pathname);
+  const disableLoginPrompts = isPublicSharePath(location.pathname) || isLegalReviewPath;
 
   return (
-    <AuthWrapper disableLoginPrompts={disableLoginPrompts}>
+    <AuthWrapper
+      disableLoginPrompts={disableLoginPrompts}
+      suppressLegalAgreementDialog={isLegalReviewPath}
+    >
       <AppProviders />
     </AuthWrapper>
   );
@@ -92,6 +96,10 @@ export function isPublicSharePath(pathname: string) {
     pathname === "/share-image" ||
     pathname.startsWith("/share-image/")
   );
+}
+
+export function isLegalDocumentPath(pathname: string) {
+  return pathname === "/privacy-policy" || pathname === "/terms-of-service";
 }
 
 function readStoredThemeMode(): PaletteMode | null {
