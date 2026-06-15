@@ -238,6 +238,8 @@ export interface UserProfile {
   displayCurrency?: Currency | null;
   taxCapitalGainsRate?: number | null;
   taxPersonalRate?: number | null;
+  termsAcceptedAt?: string | null;
+  privacyPolicyAcceptedAt?: string | null;
 }
 
 export interface TradingAccount {

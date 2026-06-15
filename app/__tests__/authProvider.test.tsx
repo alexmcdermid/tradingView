@@ -2,7 +2,8 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "../auth/AuthProvider";
-import { fetchUserProfile } from "../api/users";
+import { logoutSession } from "../api/auth";
+import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 
 const googleMocks = vi.hoisted(() => ({
   useGoogleOneTapLogin: vi.fn(),
@@ -22,13 +23,25 @@ vi.mock("../api/auth", () => ({
 
 vi.mock("../api/users", () => ({
   fetchUserProfile: vi.fn(),
+  acceptUserLegalAgreement: vi.fn(),
 }));
 
 function AuthProbe() {
-  const { loginButton, preferences, profile, setPreferences } = useAuth();
+  const {
+    legalAgreementError,
+    legalAgreementRequired,
+    loginButton,
+    preferences,
+    profile,
+    setPreferences,
+    user,
+  } = useAuth();
   return (
     <div>
       <span>Auth ready</span>
+      <span data-testid="auth-user">{user?.sub ?? "none"}</span>
+      <span data-testid="legal-required">{legalAgreementRequired ? "yes" : "no"}</span>
+      <span data-testid="legal-error">{legalAgreementError ?? "none"}</span>
       <span data-testid="preferences-currency">{preferences?.displayCurrency ?? "none"}</span>
       <span data-testid="profile-currency">{profile?.displayCurrency ?? "none"}</span>
       <button type="button" onClick={() => setPreferences({ displayCurrency: "CAD" })}>
@@ -42,6 +55,8 @@ function AuthProbe() {
 describe("AuthProvider", () => {
   beforeEach(() => {
     vi.mocked(fetchUserProfile).mockRejectedValue(new Error("No active session"));
+    vi.mocked(acceptUserLegalAgreement).mockReset();
+    vi.mocked(logoutSession).mockResolvedValue(undefined);
     window.localStorage.clear();
   });
 
@@ -166,6 +181,8 @@ describe("AuthProvider", () => {
       displayCurrency: "USD",
       taxCapitalGainsRate: 50,
       taxPersonalRate: 40,
+      termsAcceptedAt: "2024-01-01T00:00:00Z",
+      privacyPolicyAcceptedAt: "2024-01-01T00:00:00Z",
     });
 
     render(
@@ -182,5 +199,74 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("preferences-currency")).toHaveTextContent("CAD");
     expect(screen.getByTestId("profile-currency")).toHaveTextContent("CAD");
     expect(window.localStorage.getItem("user-preferences:auth-id")).toContain('"displayCurrency":"CAD"');
+  });
+
+  it("requires legal agreement before exposing an authenticated profile", async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+      displayCurrency: "USD",
+    });
+    vi.mocked(acceptUserLegalAgreement).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-02T00:00:00Z",
+      displayCurrency: "USD",
+      termsAcceptedAt: "2024-01-02T00:00:00Z",
+      privacyPolicyAcceptedAt: "2024-01-02T00:00:00Z",
+    });
+
+    render(
+      <AuthProvider disableLoginPrompts>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByText("Terms and Privacy Agreement")).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    expect(screen.getByTestId("legal-required")).toHaveTextContent("yes");
+    expect(screen.getByRole("button", { name: /agree and continue/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /i agree/i }));
+    fireEvent.click(screen.getByRole("button", { name: /agree and continue/i }));
+
+    await waitFor(() => {
+      expect(acceptUserLegalAgreement).toHaveBeenCalled();
+      expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
+    });
+    expect(screen.getByTestId("legal-required")).toHaveTextContent("no");
+  });
+
+  it("logs out when a pending legal agreement is declined", async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+      displayCurrency: "USD",
+    });
+
+    render(
+      <AuthProvider disableLoginPrompts>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /sign out/i }));
+
+    await waitFor(() => {
+      expect(logoutSession).toHaveBeenCalled();
+      expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+    });
+    expect(screen.getByTestId("legal-required")).toHaveTextContent("no");
   });
 });
