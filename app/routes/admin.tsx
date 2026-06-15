@@ -49,7 +49,7 @@ function formatNumber(value: number) {
 }
 
 export default function Admin() {
-  const { user, token, loginButton, logout } = useAuth();
+  const { user, token, loginButton, logout, initializing } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -153,7 +153,10 @@ export default function Admin() {
         </Toolbar>
       </AppBar>
       <Container maxWidth="lg" sx={{ py: 3 }}>
-        {!user && (
+        {initializing && !user && (
+          <Alert severity="info">Checking session...</Alert>
+        )}
+        {!initializing && !user && (
           <Stack spacing={2}>
             <Alert severity="info">Sign in to view admin users.</Alert>
             <Box>{loginButton}</Box>

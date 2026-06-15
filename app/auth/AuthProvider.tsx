@@ -252,15 +252,12 @@ export function AuthProvider({
       .then((data) => {
         if (!cancelled) {
           applyProfileOrRequireAgreement(data);
+          setInitializing(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
           clearSessionState();
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
           setInitializing(false);
         }
       });
@@ -306,6 +303,7 @@ export function AuthProvider({
     if (
       typeof window === "undefined" ||
       disableLoginPrompts ||
+      initializing ||
       token ||
       legalAgreementRequired ||
       signingIn
@@ -342,7 +340,7 @@ export function AuthProvider({
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [disableLoginPrompts, legalAgreementRequired, signingIn, token]);
+  }, [disableLoginPrompts, initializing, legalAgreementRequired, signingIn, token]);
 
   const handleSuccess = async (credential?: string | undefined) => {
     if (!credential) {
@@ -365,6 +363,11 @@ export function AuthProvider({
     }
   };
 
+  const loginDisabled =
+    disableLoginPrompts || initializing || !mounted || !!token || legalAgreementRequired || signingIn;
+  const shouldShowLoginButton =
+    mounted && !initializing && !disableLoginPrompts && !legalAgreementRequired && !token && !user;
+
   useGoogleOneTapLogin({
     onSuccess: (response) => void handleSuccess(response.credential),
     onError: () => {
@@ -374,10 +377,10 @@ export function AuthProvider({
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: disableLoginPrompts || !mounted || !!token || legalAgreementRequired || signingIn,
+    disabled: loginDisabled,
   });
 
-  const loginButton = mounted && !disableLoginPrompts && !legalAgreementRequired ? (
+  const loginButton = shouldShowLoginButton ? (
     <Stack
       spacing={0.5}
       alignItems="flex-end"

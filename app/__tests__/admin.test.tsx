@@ -61,6 +61,7 @@ describe("Admin", () => {
     authState.preferences = null;
     authState.token = null;
     authState.authError = null;
+    authState.initializing = false;
   });
 
   afterEach(() => {
@@ -80,6 +81,24 @@ describe("Admin", () => {
 
     expect(screen.getByText(/sign in to view admin users/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
+    expect(mockFetchUsers).not.toHaveBeenCalled();
+  });
+
+  it("does not prompt login while restoring the session", () => {
+    authState.initializing = true;
+    const router = createMemoryRouter([{ path: "/admin", element: <Admin /> }], {
+      initialEntries: ["/admin"],
+    });
+
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    expect(screen.getByText(/checking session/i)).toBeInTheDocument();
+    expect(screen.queryByText(/sign in to view admin users/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /sign in/i })).not.toBeInTheDocument();
     expect(mockFetchUsers).not.toHaveBeenCalled();
   });
 

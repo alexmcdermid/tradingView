@@ -204,6 +204,38 @@ describe("AuthProvider", () => {
     expect(props?.click_listener).toBeUndefined();
   });
 
+  it("does not render or initialize Google sign-in while restoring an existing session", async () => {
+    let resolveProfile!: (profile: UserProfile) => void;
+    vi.mocked(fetchUserProfile).mockReturnValue(
+      new Promise<UserProfile>((resolve) => {
+        resolveProfile = resolve;
+      })
+    );
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
+        expect.objectContaining({ disabled: true })
+      );
+    });
+    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveProfile(acceptedProfile());
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
+    });
+    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
+  });
+
   it("shows a pending state while the backend verifies Google sign-in", async () => {
     let resolveLogin!: (profile: UserProfile) => void;
     vi.mocked(loginWithGoogleCredential).mockReturnValue(
