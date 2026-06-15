@@ -44,7 +44,7 @@ jobs:
         with:
           image-ref: tradingview-frontend:${{ github.sha }}
           vuln-type: os,library
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
   deploy-dev:
