@@ -17,12 +17,14 @@ type AuthState = {
     pnlDisplayMode?: string | null;
     defaultTradeSortBy?: string | null;
     defaultTradeSortDirection?: string | null;
+    showDetailedTradeTimes?: boolean | null;
   } | null;
   setPreferences: (preferences: {
     themeMode?: string | null;
     pnlDisplayMode?: string | null;
     defaultTradeSortBy?: string | null;
     defaultTradeSortDirection?: string | null;
+    showDetailedTradeTimes?: boolean | null;
   }) => void;
   token: string | null;
   authError: string | null;
@@ -227,8 +229,10 @@ describe("Home (authenticated)", () => {
           realizedPnl: 2,
           openedAt: "2024-01-01",
           closedAt: "2024-01-02",
-          createdAt: "2024-01-02",
-          updatedAt: "2024-01-02",
+          inferredOpenedAt: "2024-01-01T14:15:00Z",
+          inferredClosedAt: "2024-01-02T20:30:00Z",
+          createdAt: "2024-01-01T14:15:00Z",
+          updatedAt: "2024-01-02T20:30:00Z",
           optionType: null,
           strikePrice: null,
           expiryDate: null,
@@ -281,6 +285,34 @@ describe("Home (authenticated)", () => {
       expect(mockFetchTrades).toHaveBeenCalledTimes(1);
     });
     expect(await screen.findByText("TSLA")).toBeInTheDocument();
+  });
+
+  it("shows inferred trade times when the preference is enabled", async () => {
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      showDetailedTradeTimes: true,
+    };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const openTime = new Date("2024-01-01T14:15:00Z").toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const closeTime = new Date("2024-01-02T20:30:00Z").toLocaleTimeString(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    expect(await screen.findByText(openTime)).toBeInTheDocument();
+    expect(screen.getByText(closeTime)).toBeInTheDocument();
   });
 
   it("does not show admin navigation based only on user email", async () => {
@@ -490,6 +522,32 @@ describe("Home (authenticated)", () => {
       expect.objectContaining({
         dashboardWidgets: ["BEST_MONTH", "BEST_DAY", "TOTAL_REALIZED"],
       })
+    );
+  });
+
+  it("saves the inferred trade time preference", async () => {
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      showDetailedTradeTimes: false,
+    };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+    await user.click(await screen.findByRole("menuitem", { name: /preferences/i }));
+    await user.click(screen.getByRole("checkbox", { name: /show inferred trade times/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(mockUpdateUserPreferences).toHaveBeenCalledWith(
+      expect.objectContaining({ showDetailedTradeTimes: true })
     );
   });
 

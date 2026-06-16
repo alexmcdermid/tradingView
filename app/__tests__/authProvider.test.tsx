@@ -67,6 +67,7 @@ function acceptedProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     defaultTradeSortBy: "CLOSED_AT",
     defaultTradeSortDirection: "DESC",
     showTradeHistory: true,
+    showDetailedTradeTimes: false,
     dashboardWidgets: ["TOTAL_REALIZED"],
     displayCurrency: "USD",
     taxCapitalGainsRate: 50,
