@@ -11,7 +11,7 @@ import { ColorModeContext } from "../theme/colorMode";
 
 type AuthState = {
   user: { sub: string; email?: string | null; name?: string | null } | null;
-  profile: { id: string; admin?: boolean | null } | null;
+  profile: { id: string; admin?: boolean | null; premium?: boolean | null } | null;
   preferences: {
     themeMode?: string | null;
     pnlDisplayMode?: string | null;
@@ -318,6 +318,50 @@ describe("Home (authenticated)", () => {
     await user.click(await screen.findByRole("button", { name: /user menu/i }));
 
     expect(await screen.findByRole("menuitem", { name: /^admin$/i })).toBeInTheDocument();
+  });
+
+  it("links non-premium users to Pro from the header and account menu", async () => {
+    authState.profile = { id: "profile-1", admin: false, premium: false };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+      { path: "/pro", element: <div>Pro page</div> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const proLinks = await screen.findAllByRole("link", { name: /go pro/i });
+    expect(proLinks.some((link) => link.getAttribute("href") === "/pro")).toBe(true);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+
+    const menuItem = await screen.findByRole("menuitem", { name: /upgrade to pro/i });
+    expect(menuItem).toHaveAttribute("href", "/pro");
+  });
+
+  it("labels premium users as Pro and exposes billing management from the account menu", async () => {
+    authState.profile = { id: "profile-1", admin: false, premium: true };
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+      { path: "/pro", element: <div>Pro page</div> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const proLinks = await screen.findAllByRole("link", { name: /^pro$/i });
+    expect(proLinks.some((link) => link.getAttribute("href") === "/pro")).toBe(true);
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+
+    const menuItem = await screen.findByRole("menuitem", { name: /manage pro/i });
+    expect(menuItem).toHaveAttribute("href", "/pro");
   });
 
   it("passes account and ticker filters to the paged trade fetch", async () => {
