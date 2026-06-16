@@ -11,6 +11,8 @@ const googleMocks = vi.hoisted(() => ({
   GoogleLogin: vi.fn(() => <button>Google Login</button>),
 }));
 
+const originalMatchMedia = window.matchMedia;
+
 vi.mock("@react-oauth/google", () => ({
   GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   GoogleLogin: googleMocks.GoogleLogin,
@@ -89,6 +91,35 @@ function latestGoogleLoginProps() {
     | undefined)?.[0];
 }
 
+function latestOneTapProps() {
+  return (googleMocks.useGoogleOneTapLogin.mock.calls.at(-1) as
+    | [
+        {
+          onSuccess: (response: { credential?: string }) => void;
+          onError: () => void;
+          disabled?: boolean;
+        },
+      ]
+    | undefined)?.[0];
+}
+
+function mockMatchMedia(matchesByQuery: Record<string, boolean>) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn((query: string) => ({
+      matches: matchesByQuery[query] ?? false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    })),
+  });
+}
+
 describe("AuthProvider", () => {
   beforeEach(() => {
     vi.mocked(fetchUserProfile).mockRejectedValue(new Error("No active session"));
@@ -101,6 +132,11 @@ describe("AuthProvider", () => {
   afterEach(() => {
     vi.clearAllMocks();
     Reflect.deleteProperty(window, "google");
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: originalMatchMedia,
+    });
     cleanup();
   });
 
@@ -155,10 +191,94 @@ describe("AuthProvider", () => {
     expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
       expect.objectContaining({
         auto_select: true,
+        disabled: false,
         use_fedcm_for_button: true,
         use_fedcm_for_prompt: true,
       })
     );
+  });
+
+  it("keeps mobile one-tap prompts enabled with the explicit Google button available", async () => {
+    mockMatchMedia({
+      "(pointer: coarse)": true,
+      "(max-width: 640px)": true,
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+
+    expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
+    expect(googleMocks.GoogleLogin).toHaveBeenLastCalledWith(
+      expect.objectContaining({ use_fedcm_for_button: true }),
+      undefined
+    );
+    expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        auto_select: true,
+        disabled: false,
+        use_fedcm_for_button: true,
+        use_fedcm_for_prompt: true,
+      })
+    );
+  });
+
+  it("suppresses repeated one-tap prompts after a one-tap error", async () => {
+    const cancel = vi.fn();
+    Object.defineProperty(window, "google", {
+      configurable: true,
+      value: { accounts: { id: { cancel } } },
+    });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+    expect(latestOneTapProps()?.disabled).toBe(false);
+
+    act(() => {
+      latestOneTapProps()?.onError();
+    });
+
+    await waitFor(() => {
+      expect(latestOneTapProps()?.disabled).toBe(true);
+    });
+    expect(cancel).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
+  });
+
+  it("suppresses repeated one-tap prompts after an empty one-tap credential", async () => {
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+    });
+    expect(latestOneTapProps()?.disabled).toBe(false);
+
+    act(() => {
+      latestOneTapProps()?.onSuccess({});
+    });
+
+    await waitFor(() => {
+      expect(latestOneTapProps()?.disabled).toBe(true);
+    });
+    expect(screen.getByText("Sign-in failed. Try again.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
   });
 
   it("remounts the Google button after a cached page is restored", async () => {

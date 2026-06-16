@@ -166,6 +166,7 @@ export function AuthProvider({
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
   const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
+  const [oneTapSuppressed, setOneTapSuppressed] = useState(false);
   const [loginRenderNonce, setLoginRenderNonce] = useState(0);
 
   const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
@@ -226,6 +227,7 @@ export function AuthProvider({
     });
     setAuthError(null);
     setSigningIn(false);
+    setOneTapSuppressed(false);
     setLegalAgreementProfile(null);
     setLegalAgreementError(null);
     clearSessionState();
@@ -342,7 +344,13 @@ export function AuthProvider({
     };
   }, [disableLoginPrompts, initializing, legalAgreementRequired, signingIn, token]);
 
-  const handleSuccess = async (credential?: string | undefined) => {
+  const handleSuccess = async (
+    credential?: string | undefined,
+    source: "button" | "one-tap" = "button"
+  ) => {
+    if (source === "one-tap") {
+      setOneTapSuppressed(true);
+    }
     if (!credential) {
       setSigningIn(false);
       setAuthError("Google sign-in failed before a credential was returned. Try again.");
@@ -365,19 +373,21 @@ export function AuthProvider({
 
   const loginDisabled =
     disableLoginPrompts || initializing || !mounted || !!token || legalAgreementRequired || signingIn;
+  const oneTapLoginDisabled = loginDisabled || oneTapSuppressed;
   const shouldShowLoginButton =
     mounted && !initializing && !disableLoginPrompts && !legalAgreementRequired && !token && !user;
 
   useGoogleOneTapLogin({
-    onSuccess: (response) => void handleSuccess(response.credential),
+    onSuccess: (response) => void handleSuccess(response.credential, "one-tap"),
     onError: () => {
-      // Ignore prompt dismissals/errors; the explicit button remains available.
+      setOneTapSuppressed(true);
+      cancelGoogleIdentityPrompt();
     },
     auto_select: true,
     use_fedcm_for_prompt: true,
     use_fedcm_for_button: true,
     cancel_on_tap_outside: false,
-    disabled: loginDisabled,
+    disabled: oneTapLoginDisabled,
   });
 
   const loginButton = shouldShowLoginButton ? (
@@ -412,7 +422,7 @@ export function AuthProvider({
         >
           <GoogleLogin
             key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
-            onSuccess={(response) => void handleSuccess(response.credential)}
+            onSuccess={(response) => void handleSuccess(response.credential, "button")}
             onError={() => {
               clearSessionState();
               setSigningIn(false);
