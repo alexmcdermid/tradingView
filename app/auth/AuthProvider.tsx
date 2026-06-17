@@ -115,6 +115,7 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
   defaultTradeSortBy: profile.defaultTradeSortBy,
   defaultTradeSortDirection: profile.defaultTradeSortDirection,
   showTradeHistory: profile.showTradeHistory,
+  showDetailedTradeTimes: profile.showDetailedTradeTimes,
   dashboardWidgets: profile.dashboardWidgets,
   displayCurrency: profile.displayCurrency,
   taxCapitalGainsRate: profile.taxCapitalGainsRate,
@@ -468,6 +469,7 @@ export function AuthProvider({
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? prev.defaultTradeSortDirection,
         showTradeHistory: next.showTradeHistory ?? prev.showTradeHistory,
+        showDetailedTradeTimes: next.showDetailedTradeTimes ?? prev.showDetailedTradeTimes,
         dashboardWidgets: next.dashboardWidgets ?? prev.dashboardWidgets,
         displayCurrency: next.displayCurrency ?? prev.displayCurrency,
         taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev.taxCapitalGainsRate,
@@ -481,6 +483,7 @@ export function AuthProvider({
       defaultTradeSortDirection:
         next.defaultTradeSortDirection ?? prev?.defaultTradeSortDirection ?? null,
       showTradeHistory: next.showTradeHistory ?? prev?.showTradeHistory ?? null,
+      showDetailedTradeTimes: next.showDetailedTradeTimes ?? prev?.showDetailedTradeTimes ?? null,
       dashboardWidgets: next.dashboardWidgets ?? prev?.dashboardWidgets ?? null,
       displayCurrency: next.displayCurrency ?? prev?.displayCurrency ?? null,
       taxCapitalGainsRate: next.taxCapitalGainsRate ?? prev?.taxCapitalGainsRate ?? null,
@@ -495,6 +498,8 @@ export function AuthProvider({
         defaultTradeSortDirection:
           next.defaultTradeSortDirection ?? preferences?.defaultTradeSortDirection ?? null,
         showTradeHistory: next.showTradeHistory ?? preferences?.showTradeHistory ?? null,
+        showDetailedTradeTimes:
+          next.showDetailedTradeTimes ?? preferences?.showDetailedTradeTimes ?? null,
         dashboardWidgets: next.dashboardWidgets ?? preferences?.dashboardWidgets ?? null,
         displayCurrency: next.displayCurrency ?? preferences?.displayCurrency ?? null,
         taxCapitalGainsRate: next.taxCapitalGainsRate ?? preferences?.taxCapitalGainsRate ?? null,
@@ -507,6 +512,7 @@ export function AuthProvider({
     preferences?.defaultTradeSortDirection,
     preferences?.displayCurrency,
     preferences?.pnlDisplayMode,
+    preferences?.showDetailedTradeTimes,
     preferences?.showTradeHistory,
     preferences?.taxCapitalGainsRate,
     preferences?.taxPersonalRate,

@@ -55,6 +55,8 @@ export interface Trade {
   realizedPnl: number;
   pnlPercent?: number | null;
   notes?: string | null;
+  inferredOpenedAt?: string | null;
+  inferredClosedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -222,6 +224,7 @@ export interface UserPreferences {
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
+  showDetailedTradeTimes?: boolean | null;
   dashboardWidgets?: DashboardWidgetId[] | null;
   displayCurrency?: Currency | null;
   taxCapitalGainsRate?: number | null;
@@ -241,6 +244,7 @@ export interface UserProfile {
   defaultTradeSortBy?: TradeSortField | null;
   defaultTradeSortDirection?: TradeSortDirection | null;
   showTradeHistory?: boolean | null;
+  showDetailedTradeTimes?: boolean | null;
   dashboardWidgets?: DashboardWidgetId[] | null;
   displayCurrency?: Currency | null;
   taxCapitalGainsRate?: number | null;

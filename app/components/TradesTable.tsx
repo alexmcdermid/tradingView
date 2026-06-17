@@ -46,6 +46,7 @@ interface TradesTableProps {
   sortBy?: TradeSortField;
   sortDirection?: TradeSortDirection;
   onSortChange?: (sortBy: TradeSortField, sortDirection: TradeSortDirection) => void;
+  showDetailedTradeTimes?: boolean;
   emptyMessage?: string;
   toolbar?: React.ReactNode;
 }
@@ -106,6 +107,16 @@ function formatDate(value: string) {
   return iso.replace(/-/g, "/");
 }
 
+function formatTime(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function formatNumber(value?: number | null, digits = 2) {
   if (value === null || value === undefined) return "—";
   return value.toLocaleString(undefined, {
@@ -152,6 +163,7 @@ export function TradesTable({
   sortBy,
   sortDirection,
   onSortChange,
+  showDetailedTradeTimes = false,
   emptyMessage = "No trades yet. Log a trade to see it here.",
   toolbar,
 }: TradesTableProps) {
@@ -196,6 +208,31 @@ export function TradesTable({
       </TableSortLabel>
     </TableCell>
   );
+
+  const renderTradeDate = (
+    dateValue: string,
+    detailedValue: string | null | undefined,
+    tooltip: string
+  ) => {
+    const time = showDetailedTradeTimes ? formatTime(detailedValue) : null;
+    return (
+      <Stack spacing={0} sx={{ minWidth: 96 }}>
+        <Typography variant="body2">{formatDate(dateValue)}</Typography>
+        {time ? (
+          <Tooltip title={tooltip}>
+            <Typography
+              component="span"
+              variant="caption"
+              color="text.secondary"
+              sx={{ lineHeight: 1.2, whiteSpace: "nowrap" }}
+            >
+              {time}
+            </Typography>
+          </Tooltip>
+        ) : null}
+      </Stack>
+    );
+  };
 
   return (
     <Paper>
@@ -334,8 +371,20 @@ export function TradesTable({
                 </TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(marginFee, 2)}</TableCell>
-                <TableCell>{formatDate(trade.openedAt)}</TableCell>
-                <TableCell>{formatDate(trade.closedAt)}</TableCell>
+                <TableCell>
+                  {renderTradeDate(
+                    trade.openedAt,
+                    trade.inferredOpenedAt ?? trade.createdAt,
+                    "Inferred from the first trade save"
+                  )}
+                </TableCell>
+                <TableCell>
+                  {renderTradeDate(
+                    trade.closedAt,
+                    trade.inferredClosedAt ?? trade.updatedAt,
+                    "Inferred from the last trade update"
+                  )}
+                </TableCell>
                 <TableCell>
                   {trade.accountId
                     ? accountNamesById?.[trade.accountId] || "—"

@@ -235,6 +235,7 @@ type PreferencesDraft = {
   defaultTradeSortBy: TradeSortField;
   defaultTradeSortDirection: TradeSortDirection;
   showTradeHistory: boolean;
+  showDetailedTradeTimes: boolean;
   dashboardWidgets: DashboardWidgetId[];
   displayCurrency: Currency;
   taxCapitalGainsRate: string;
@@ -1025,6 +1026,7 @@ export default function Home() {
   const guestSeeded = useRef<boolean>(false);
   const isAdmin = Boolean(profile?.admin);
   const showTradeHistoryEnabled = Boolean(preferences?.showTradeHistory);
+  const showDetailedTradeTimesEnabled = Boolean(preferences?.showDetailedTradeTimes);
   const selectedDashboardWidgets = useMemo(
     () => normalizeDashboardWidgets(preferences?.dashboardWidgets),
     [preferences?.dashboardWidgets]
@@ -1102,6 +1104,7 @@ export default function Home() {
       defaultTradeSortBy: prev?.defaultTradeSortBy ?? tradeSort.sortBy,
       defaultTradeSortDirection: prev?.defaultTradeSortDirection ?? tradeSort.sortDirection,
       showTradeHistory: prev?.showTradeHistory ?? showTradeHistoryEnabled,
+      showDetailedTradeTimes: prev?.showDetailedTradeTimes ?? showDetailedTradeTimesEnabled,
       dashboardWidgets: prev?.dashboardWidgets ?? selectedDashboardWidgets,
       displayCurrency: prev?.displayCurrency ?? displayCurrency,
       taxCapitalGainsRate: prev?.taxCapitalGainsRate ?? String(taxCapitalGainsRate),
@@ -1112,6 +1115,7 @@ export default function Home() {
       displayCurrency,
       mode,
       selectedDashboardWidgets,
+      showDetailedTradeTimesEnabled,
       showTradeHistoryEnabled,
       taxCapitalGainsRate,
       taxPersonalRate,
@@ -1955,6 +1959,7 @@ export default function Home() {
       defaultTradeSortBy,
       defaultTradeSortDirection,
       showTradeHistory,
+      showDetailedTradeTimes,
       dashboardWidgets,
       displayCurrency: nextDisplayCurrency,
       taxCapitalGainsRate: taxCapitalGainsRateDraft,
@@ -1987,6 +1992,7 @@ export default function Home() {
       defaultTradeSortBy !== tradeSort.sortBy ||
       defaultTradeSortDirection !== tradeSort.sortDirection ||
       showTradeHistory !== showTradeHistoryEnabled ||
+      showDetailedTradeTimes !== showDetailedTradeTimesEnabled ||
       !sameDashboardWidgets(normalizedDashboardWidgets, selectedDashboardWidgets) ||
       nextDisplayCurrency !== displayCurrency ||
       parsedCapitalGainsRate.value !== taxCapitalGainsRate ||
@@ -2008,6 +2014,7 @@ export default function Home() {
           defaultTradeSortBy,
           defaultTradeSortDirection,
           showTradeHistory,
+          showDetailedTradeTimes,
           dashboardWidgets: normalizedDashboardWidgets,
           displayCurrency: nextDisplayCurrency,
           taxCapitalGainsRate: parsedCapitalGainsRate.value,
@@ -2026,6 +2033,7 @@ export default function Home() {
         defaultTradeSortBy,
         defaultTradeSortDirection,
         showTradeHistory,
+        showDetailedTradeTimes,
         dashboardWidgets: normalizedDashboardWidgets,
         displayCurrency: nextDisplayCurrency,
         taxCapitalGainsRate: parsedCapitalGainsRate.value,
@@ -3060,6 +3068,7 @@ export default function Home() {
               sortBy={user && token ? tradeSort.sortBy : undefined}
               sortDirection={user && token ? tradeSort.sortDirection : undefined}
               onSortChange={user && token ? handleTradeSortChange : undefined}
+              showDetailedTradeTimes={showDetailedTradeTimesEnabled}
               toolbar={
                 <Stack
                   direction={{ xs: "column", md: "row" }}
@@ -3702,6 +3711,27 @@ export default function Home() {
               }
               label="Show trade history in edit dialog"
             />
+            <Box>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={preferencesDraft?.showDetailedTradeTimes ?? showDetailedTradeTimesEnabled}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setPreferencesDraft((prev) => ({
+                        ...buildPreferencesDraft(prev),
+                        showDetailedTradeTimes: next,
+                      }));
+                    }}
+                  />
+                }
+                label="Show inferred trade times"
+              />
+              <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+                Open time uses the first save. Close time uses the last trade update. Manual
+                trade dates remain the source of truth.
+              </Typography>
+            </Box>
             <FormControl component="fieldset">
               <FormLabel component="legend">Dashboard widgets</FormLabel>
               <Stack spacing={0.5} sx={{ mt: 0.5 }}>
