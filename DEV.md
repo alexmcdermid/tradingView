@@ -153,7 +153,7 @@ app/
 
 ## Deployment (AWS App Runner)
 
-This repo auto-deploys to **dev** on pushes to `main` (after CI tests pass). Production deploys are manual via `workflow_dispatch`.
+This repo auto-deploys to **dev** on pushes to `main`, and the PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Cleanup pauses dev App Runner after merge/prod handoff when no open PR still needs shared dev. Production deploys are manual via `workflow_dispatch`.
 
 ### Build Args (Docker)
 
@@ -173,10 +173,12 @@ ARG VITE_PUBLIC_HOST_ALLOWLIST
 - `AWS_ROLE_ARN`
 - `DEV_ECR_TRADINGVIEW_REPO`
 - `DEV_FRONTEND_SERVICE_ARN`
+- `DEV_BACKEND_SERVICE_ARN` (needed for PR lifecycle resume/pause)
 - `DEV_API_BASE_URL`
 - `DEV_GOOGLE_CLIENT_ID`
 - `DEV_PUBLIC_ORIGIN`
 - `DEV_PUBLIC_HOST_ALLOWLIST` (optional)
+- `CROSS_REPO_PR_READ_TOKEN` (optional fallback for cross-repo shared-dev cleanup)
 
 For the current dev frontend domain:
 ```text
@@ -206,6 +208,16 @@ If `https://tradelog.ca` also reaches the React SSR app instead of only redirect
 The frontend App Runner service stays public and does not need a VPC connector. Private Neon and DynamoDB access are backend-only concerns.
 
 The detailed AWS/Neon private networking runbook lives in the backend repo at `transaction-api/docs/private-app-runner-neon.md`. It includes the prod VPC, App Runner, DynamoDB gateway endpoint, Neon PrivateLink endpoint, security group, and rollback debugging checklist.
+
+Neon is not part of the dev App Runner PR lifecycle. PR automation should resume both dev App Runner services, deploy the frontend PR image into dev, then pause dev after merge/prod handoff.
+
+### OIDC Permissions
+
+Role permissions for App Runner deploys must include:
+- `apprunner:UpdateService`
+- `apprunner:DescribeService`
+- `apprunner:ResumeService` for PR deploys when dev is paused
+- `apprunner:PauseService` for post-merge shared-dev cleanup
 
 Production public DNS currently treats `<prod-frontend-origin>` as canonical. The DNS provider can forward `<prod-root-origin>` to `<prod-frontend-origin>` with a permanent 301. Keep both origins in Google OAuth/CORS where relevant, but point `PROD_API_BASE_URL` at `<prod-api-origin>/api/v1`.
 

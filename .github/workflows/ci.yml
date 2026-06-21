@@ -6,6 +6,11 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+env:
+  FRONTEND_REPOSITORY: alexmcdermid/tradingView
+  BACKEND_REPOSITORY: alexmcdermid/transaction-api
 
 jobs:
   test:
@@ -52,6 +57,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: dev
+    concurrency:
+      group: dev-app-runner-frontend
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
@@ -65,6 +73,13 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
+      - name: Resume dev App Runner services
+        env:
+          DEV_FRONTEND_SERVICE_ARN: ${{ secrets.DEV_FRONTEND_SERVICE_ARN }}
+          DEV_BACKEND_SERVICE_ARN: ${{ secrets.DEV_BACKEND_SERVICE_ARN }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/apprunner-lifecycle.sh resume "${DEV_BACKEND_SERVICE_ARN}" "${DEV_FRONTEND_SERVICE_ARN}"
       - name: Build and push frontend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -107,3 +122,91 @@ jobs:
           }
           EOF
           aws apprunner update-service --service-arn "${SERVICE_ARN}" --source-configuration file:///tmp/apprunner-frontend.json
+          bash .github/scripts/apprunner-lifecycle.sh wait-running "${SERVICE_ARN}"
+      - name: Count open PRs using shared dev
+        id: open-prs
+        env:
+          GH_TOKEN: ${{ secrets.CROSS_REPO_PR_READ_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/github-open-pr-count.sh "${FRONTEND_REPOSITORY}" "${BACKEND_REPOSITORY}"
+      - name: Pause dev App Runner services when idle
+        if: steps.open-prs.outputs.count == '0'
+        env:
+          DEV_FRONTEND_SERVICE_ARN: ${{ secrets.DEV_FRONTEND_SERVICE_ARN }}
+          DEV_BACKEND_SERVICE_ARN: ${{ secrets.DEV_BACKEND_SERVICE_ARN }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/apprunner-lifecycle.sh pause "${DEV_FRONTEND_SERVICE_ARN}" "${DEV_BACKEND_SERVICE_ARN}"
+
+  deploy-pr-dev:
+    needs: test
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency:
+      group: dev-app-runner-frontend
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Resume dev App Runner services
+        env:
+          DEV_FRONTEND_SERVICE_ARN: ${{ secrets.DEV_FRONTEND_SERVICE_ARN }}
+          DEV_BACKEND_SERVICE_ARN: ${{ secrets.DEV_BACKEND_SERVICE_ARN }}
+        run: |
+          set -euo pipefail
+          bash .github/scripts/apprunner-lifecycle.sh resume "${DEV_BACKEND_SERVICE_ARN}" "${DEV_FRONTEND_SERVICE_ARN}"
+      - name: Build and push PR frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.DEV_ECR_TRADINGVIEW_REPO }}
+          IMAGE_TAG: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          VITE_API_BASE_URL: ${{ secrets.DEV_API_BASE_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.DEV_GOOGLE_CLIENT_ID }}
+          VITE_USE_HEADER_AUTH: "false"
+          VITE_USER_ID: ""
+          VITE_PUBLIC_ORIGIN: ${{ secrets.DEV_PUBLIC_ORIGIN }}
+          VITE_PUBLIC_HOST_ALLOWLIST: ${{ secrets.DEV_PUBLIC_HOST_ALLOWLIST }}
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg VITE_API_BASE_URL="${VITE_API_BASE_URL}" \
+            --build-arg VITE_GOOGLE_CLIENT_ID="${VITE_GOOGLE_CLIENT_ID}" \
+            --build-arg VITE_USE_HEADER_AUTH="${VITE_USE_HEADER_AUTH}" \
+            --build-arg VITE_USER_ID="${VITE_USER_ID}" \
+            --build-arg VITE_PUBLIC_ORIGIN="${VITE_PUBLIC_ORIGIN}" \
+            --build-arg VITE_PUBLIC_HOST_ALLOWLIST="${VITE_PUBLIC_HOST_ALLOWLIST}" \
+            -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            -f Dockerfile \
+            .
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+      - name: Deploy PR frontend to App Runner dev
+        env:
+          SERVICE_ARN: ${{ secrets.DEV_FRONTEND_SERVICE_ARN }}
+          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ secrets.DEV_ECR_TRADINGVIEW_REPO }}:pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/apprunner-frontend.json <<EOF
+          {
+            "ImageRepository": {
+              "ImageIdentifier": "${IMAGE}",
+              "ImageRepositoryType": "ECR",
+              "ImageConfiguration": {
+                "Port": "3000"
+              }
+            }
+          }
+          EOF
+          aws apprunner update-service --service-arn "${SERVICE_ARN}" --source-configuration file:///tmp/apprunner-frontend.json
+          bash .github/scripts/apprunner-lifecycle.sh wait-running "${SERVICE_ARN}"
