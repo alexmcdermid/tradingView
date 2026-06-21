@@ -155,6 +155,8 @@ app/
 
 This repo auto-deploys to **dev** on pushes to `main`, and the PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Cleanup pauses dev App Runner after merge/prod handoff when no open PR still needs shared dev. Production deploys are manual via `workflow_dispatch`.
 
+Dev App Runner lifecycle is coordinated across the frontend and backend repos. A same-repository PR resumes both dev services before deploying this repo's frontend image, and cleanup pauses both dev services only when neither repo has an open PR that still needs shared dev.
+
 ### Build Args (Docker)
 
 The Dockerfile accepts build arguments for runtime config:
