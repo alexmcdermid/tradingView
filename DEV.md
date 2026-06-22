@@ -153,7 +153,7 @@ app/
 
 ## Deployment (AWS App Runner)
 
-This repo auto-deploys to **dev** on pushes to `main`, and the PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Production deploys are manual via `workflow_dispatch`.
+Pushes to `main` run CI only and do not resume, deploy, or pause shared dev. The PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Production deploys are manual via `workflow_dispatch`.
 
 Dev App Runner lifecycle is coordinated across the frontend and backend repos. A same-repository PR resumes both dev services before deploying this repo's frontend image, and cleanup pauses both dev services when neither repo has an open PR that still needs shared dev.
 
@@ -176,6 +176,7 @@ Shared dev is intentionally treated as a PR preview environment, not as always-o
 The backend repo runs the same lifecycle for backend PRs, but deploys the backend image into the shared dev backend service.
 
 Important behavior:
+- Direct pushes or merges to `main` run CI only and do not touch dev App Runner.
 - A frontend PR resumes both services because dev testing needs both frontend and backend online.
 - A backend PR also resumes both services for the same reason.
 - Cleanup pauses both services only when both repos have no open PRs. This avoids pausing shared dev while a PR in the other repo still needs it.
