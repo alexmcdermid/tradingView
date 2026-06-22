@@ -153,7 +153,69 @@ app/
 
 ## Deployment (AWS App Runner)
 
-This repo auto-deploys to **dev** on pushes to `main`, and the PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Cleanup pauses dev App Runner after merge/prod handoff when no open PR still needs shared dev. Production deploys are manual via `workflow_dispatch`.
+Pushes to `main` run CI only and do not resume, deploy, or pause shared dev. The PR lifecycle deploys PR images into dev for testing after the required IAM/secrets are configured. Production deploys are manual via `workflow_dispatch`.
+
+Dev App Runner lifecycle is coordinated across the frontend and backend repos. A same-repository PR resumes both dev services before deploying this repo's frontend image, and cleanup pauses both dev services when neither repo has an open PR that still needs shared dev.
+
+### Dev PR Deployment Lifecycle
+
+Shared dev is intentionally treated as a PR preview environment, not as always-on infrastructure:
+
+1. A same-repository PR is opened, reopened, marked ready for review, or updated.
+2. GitHub Actions assumes the frontend AWS OIDC role through the `dev` GitHub environment.
+3. The workflow resumes both dev App Runner services:
+   - `DEV_BACKEND_SERVICE_ARN`
+   - `DEV_FRONTEND_SERVICE_ARN`
+4. The workflow builds and pushes a PR-tagged frontend image:
+   - `pr-<pull-request-number>-<pull-request-head-sha>`
+5. The workflow updates the dev frontend App Runner service to that image.
+6. The frontend dev service points at the shared dev backend through `DEV_API_BASE_URL`.
+7. When a PR is closed or merged, the cleanup workflow counts open PRs in both `tradingView` and `transaction-api`.
+8. If the open PR count is zero, cleanup pauses both dev App Runner services.
+
+The backend repo runs the same lifecycle for backend PRs, but deploys the backend image into the shared dev backend service.
+
+Important behavior:
+- Direct pushes or merges to `main` run CI only and do not touch dev App Runner.
+- A frontend PR resumes both services because dev testing needs both frontend and backend online.
+- A backend PR also resumes both services for the same reason.
+- Cleanup pauses both services only when both repos have no open PRs. This avoids pausing shared dev while a PR in the other repo still needs it.
+- `pull_request` deploys are restricted to same-repository PRs so AWS secrets are not exposed to forks.
+- `pull_request_target` is used only for closed-PR cleanup, and checks out the base branch instead of the PR head.
+- Neon is not scaled by this lifecycle. Only dev App Runner services are paused/resumed.
+- Pausing App Runner reduces idle service cost, but it does not delete the services, ECR repos, custom domains, logs, or Neon databases.
+
+### Dev App Runner IAM
+
+The GitHub Actions role for this repo must be allowed to resume and pause both shared dev App Runner services. Use name-scoped App Runner ARNs so a recreated dev service does not require updating the policy service ID:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ManageSharedDevAppRunnerLifecycle",
+      "Effect": "Allow",
+      "Action": [
+        "apprunner:DescribeService",
+        "apprunner:ResumeService",
+        "apprunner:PauseService"
+      ],
+      "Resource": [
+        "arn:aws:apprunner:<region>:<account-id>:service/<dev-frontend-service-name>/*",
+        "arn:aws:apprunner:<region>:<account-id>:service/<dev-backend-service-name>/*"
+      ]
+    }
+  ]
+}
+```
+
+Keep the existing deploy permissions as well:
+- `apprunner:UpdateService` for this repo's frontend App Runner service.
+- ECR push/read permissions for this repo's dev frontend repository.
+- `ecr:GetAuthorizationToken` on `*`.
+
+If `deploy-pr-dev` fails with `AccessDeniedException` for `apprunner:ResumeService`, the role was assumed successfully and the issue is the identity policy attached to the GitHub Actions role, not the OIDC trust policy.
 
 ### Build Args (Docker)
 
