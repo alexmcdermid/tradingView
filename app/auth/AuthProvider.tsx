@@ -14,7 +14,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { ApiError } from "../api/client";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
@@ -35,7 +35,7 @@ type AuthContextValue = {
   token: string | null;
   authError: string | null;
   initializing: boolean;
-  loginButton: React.ReactNode;
+  loginButton: ReactNode;
   logout: () => void;
   legalAgreementRequired: boolean;
   legalAgreementError: string | null;
@@ -47,6 +47,8 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const PREFERENCES_KEY_PREFIX = "user-preferences";
 const THEME_STORAGE_KEY = "tv-theme-mode";
 const SESSION_TOKEN = "cookie-session";
+const GOOGLE_INTERACTION_TIMEOUT_MS = 90_000;
+type GoogleInteractionSource = "button" | "one-tap";
 
 const PUBLIC_AUTH_CONTEXT_VALUE: AuthContextValue = {
   user: null,
@@ -151,7 +153,7 @@ export function AuthProvider({
   disableLoginPrompts = false,
   suppressLegalAgreementDialog = false,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   disableLoginPrompts?: boolean;
   suppressLegalAgreementDialog?: boolean;
 }) {
@@ -169,6 +171,9 @@ export function AuthProvider({
   const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
   const [oneTapSuppressed, setOneTapSuppressed] = useState(false);
   const [loginRenderNonce, setLoginRenderNonce] = useState(0);
+  const googleInteractionInProgressRef = useRef(false);
+  const googleInteractionSourceRef = useRef<GoogleInteractionSource | null>(null);
+  const googleInteractionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const preferenceStorageKey = useCallback((authId: string) => `${PREFERENCES_KEY_PREFIX}:${authId}`, []);
 
@@ -191,6 +196,28 @@ export function AuthProvider({
     setUser(null);
     setProfile(null);
     setPreferencesState(null);
+  }, []);
+
+  const clearGoogleInteraction = useCallback(() => {
+    googleInteractionInProgressRef.current = false;
+    googleInteractionSourceRef.current = null;
+    if (googleInteractionTimeoutRef.current) {
+      clearTimeout(googleInteractionTimeoutRef.current);
+      googleInteractionTimeoutRef.current = null;
+    }
+  }, []);
+
+  const startGoogleInteraction = useCallback((source: GoogleInteractionSource) => {
+    googleInteractionInProgressRef.current = true;
+    googleInteractionSourceRef.current = source;
+    if (googleInteractionTimeoutRef.current) {
+      clearTimeout(googleInteractionTimeoutRef.current);
+    }
+    googleInteractionTimeoutRef.current = setTimeout(() => {
+      googleInteractionInProgressRef.current = false;
+      googleInteractionSourceRef.current = null;
+      googleInteractionTimeoutRef.current = null;
+    }, GOOGLE_INTERACTION_TIMEOUT_MS);
   }, []);
 
   const applyProfile = useCallback(
@@ -228,11 +255,14 @@ export function AuthProvider({
     });
     setAuthError(null);
     setSigningIn(false);
+    clearGoogleInteraction();
     setOneTapSuppressed(false);
     setLegalAgreementProfile(null);
     setLegalAgreementError(null);
     clearSessionState();
-  }, [clearSessionState]);
+  }, [clearGoogleInteraction, clearSessionState]);
+
+  useEffect(() => () => clearGoogleInteraction(), [clearGoogleInteraction]);
 
   const acceptLegalAgreement = useCallback(async () => {
     if (!legalAgreementProfile) {
@@ -315,11 +345,17 @@ export function AuthProvider({
     }
 
     const refreshLoginButton = () => {
+      if (googleInteractionInProgressRef.current) {
+        return;
+      }
       cancelGoogleIdentityPrompt();
       setLoginRenderNonce((current) => current + 1);
     };
 
     const handlePageHide = () => {
+      if (googleInteractionInProgressRef.current) {
+        return;
+      }
       cancelGoogleIdentityPrompt();
     };
     const handlePageShow = (event: PageTransitionEvent) => {
@@ -329,6 +365,9 @@ export function AuthProvider({
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
+        if (googleInteractionInProgressRef.current) {
+          return;
+        }
         cancelGoogleIdentityPrompt();
       } else if (document.visibilityState === "visible") {
         refreshLoginButton();
@@ -349,10 +388,12 @@ export function AuthProvider({
     credential?: string | undefined,
     source: "button" | "one-tap" = "button"
   ) => {
+    startGoogleInteraction(source);
     if (source === "one-tap") {
       setOneTapSuppressed(true);
     }
     if (!credential) {
+      clearGoogleInteraction();
       setSigningIn(false);
       setAuthError("Google sign-in failed before a credential was returned. Try again.");
       return;
@@ -368,6 +409,7 @@ export function AuthProvider({
       setLegalAgreementError(null);
       setAuthError(getLoginErrorMessage(error));
     } finally {
+      clearGoogleInteraction();
       setSigningIn(false);
     }
   };
@@ -381,8 +423,27 @@ export function AuthProvider({
   useGoogleOneTapLogin({
     onSuccess: (response) => void handleSuccess(response.credential, "one-tap"),
     onError: () => {
+      if (googleInteractionSourceRef.current === "button") {
+        return;
+      }
+      clearGoogleInteraction();
       setOneTapSuppressed(true);
       cancelGoogleIdentityPrompt();
+    },
+    promptMomentNotification: (notification) => {
+      if (
+        notification.isDisplayMoment() &&
+        notification.isDisplayed() &&
+        !googleInteractionInProgressRef.current
+      ) {
+        startGoogleInteraction("one-tap");
+      }
+      if (
+        (notification.isSkippedMoment() || notification.isDismissedMoment()) &&
+        googleInteractionSourceRef.current !== "button"
+      ) {
+        clearGoogleInteraction();
+      }
     },
     auto_select: true,
     use_fedcm_for_prompt: true,
@@ -425,6 +486,7 @@ export function AuthProvider({
             key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
             onSuccess={(response) => void handleSuccess(response.credential, "button")}
             onError={() => {
+              clearGoogleInteraction();
               clearSessionState();
               setSigningIn(false);
               setAuthError("Google sign-in failed before a credential was returned. Try again.");
@@ -436,6 +498,7 @@ export function AuthProvider({
             itp_support
             use_fedcm_for_button
             cancel_on_tap_outside={false}
+            click_listener={() => startGoogleInteraction("button")}
           />
         </div>
       )}
@@ -574,7 +637,7 @@ export function useAuth() {
   return ctx;
 }
 
-function PublicAuthProvider({ children }: { children: React.ReactNode }) {
+function PublicAuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={PUBLIC_AUTH_CONTEXT_VALUE}>
       {children}
@@ -673,7 +736,7 @@ export function AuthWrapper({
   suppressLegalAgreementDialog = false,
   disableAuthentication = false,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   disableLoginPrompts?: boolean;
   suppressLegalAgreementDialog?: boolean;
   disableAuthentication?: boolean;
