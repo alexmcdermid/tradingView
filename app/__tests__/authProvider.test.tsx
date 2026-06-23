@@ -98,10 +98,41 @@ function latestOneTapProps() {
         {
           onSuccess: (response: { credential?: string }) => void;
           onError: () => void;
+          promptMomentNotification?: (notification: {
+            isDisplayMoment: () => boolean;
+            isDisplayed: () => boolean;
+            isSkippedMoment: () => boolean;
+            isDismissedMoment: () => boolean;
+          }) => void;
           disabled?: boolean;
         },
       ]
     | undefined)?.[0];
+}
+
+function dispatchVisibilityChange(state: DocumentVisibilityState) {
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: state,
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+}
+
+function promptNotification({
+  displayed = false,
+  skipped = false,
+  dismissed = false,
+}: {
+  displayed?: boolean;
+  skipped?: boolean;
+  dismissed?: boolean;
+}) {
+  return {
+    isDisplayMoment: () => displayed,
+    isDisplayed: () => displayed,
+    isSkippedMoment: () => skipped,
+    isDismissedMoment: () => dismissed,
+  };
 }
 
 function mockMatchMedia(matchesByQuery: Record<string, boolean>) {
@@ -133,6 +164,10 @@ describe("AuthProvider", () => {
   afterEach(() => {
     vi.clearAllMocks();
     Reflect.deleteProperty(window, "google");
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      value: "visible",
+    });
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
       writable: true,
@@ -302,7 +337,9 @@ describe("AuthProvider", () => {
     const pageShow = new Event("pageshow");
     Object.defineProperty(pageShow, "persisted", { value: true });
 
-    window.dispatchEvent(pageShow);
+    act(() => {
+      window.dispatchEvent(pageShow);
+    });
 
     await waitFor(() => {
       expect(googleMocks.GoogleLogin.mock.calls.length).toBeGreaterThan(initialRenderCount);
@@ -310,7 +347,13 @@ describe("AuthProvider", () => {
     expect(cancel).toHaveBeenCalled();
   });
 
-  it("does not cancel FedCM when the explicit Google button is clicked", async () => {
+  it("does not cancel or remount FedCM while an explicit Google button flow is active", async () => {
+    const cancel = vi.fn();
+    Object.defineProperty(window, "google", {
+      configurable: true,
+      value: { accounts: { id: { cancel } } },
+    });
+
     render(
       <AuthProvider>
         <AuthProbe />
@@ -322,7 +365,25 @@ describe("AuthProvider", () => {
     });
 
     const props = latestGoogleLoginProps();
-    expect(props?.click_listener).toBeUndefined();
+    const initialRenderCount = googleMocks.GoogleLogin.mock.calls.length;
+
+    act(() => {
+      props?.click_listener?.();
+      latestOneTapProps()?.onError();
+      latestOneTapProps()?.promptMomentNotification?.(promptNotification({ dismissed: true }));
+      dispatchVisibilityChange("hidden");
+      dispatchVisibilityChange("visible");
+    });
+
+    expect(cancel).not.toHaveBeenCalled();
+    expect(googleMocks.GoogleLogin.mock.calls.length).toBe(initialRenderCount);
+
+    act(() => {
+      props?.onError();
+      dispatchVisibilityChange("hidden");
+    });
+
+    expect(cancel).toHaveBeenCalled();
   });
 
   it("does not render or initialize Google sign-in while restoring an existing session", async () => {
