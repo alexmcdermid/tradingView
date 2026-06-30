@@ -125,6 +125,14 @@ function formatNumber(value?: number | null, digits = 2) {
   });
 }
 
+function formatQuantity(value?: number | null) {
+  if (value === null || value === undefined) return "—";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  });
+}
+
 function computeTradePnlPercent(trade: Trade) {
   if (trade.pnlPercent !== undefined && trade.pnlPercent !== null) {
     return trade.pnlPercent;
@@ -344,7 +352,7 @@ export function TradesTable({
                     color={trade.direction === "LONG" ? "success" : "warning"}
                   />
                 </TableCell>
-                <TableCell align="right">{formatNumber(trade.quantity, 0)}</TableCell>
+                <TableCell align="right">{formatQuantity(trade.quantity)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.entryPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.exitPrice, 2)}</TableCell>
                 <TableCell align="right" sx={{ minWidth: 140 }}>

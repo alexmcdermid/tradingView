@@ -604,6 +604,14 @@ const formatSignedNumber = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value);
 
+const formatQuantity = (value?: number | null) => {
+  if (value === null || value === undefined) return "—";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  });
+};
+
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
 type StatsScope = {
@@ -3251,7 +3259,7 @@ export default function Home() {
                       <TableCell>{formatHistoryTimestamp(entry.actionAt)}</TableCell>
                       <TableCell>{entry.symbol}</TableCell>
                       <TableCell>{entry.direction}</TableCell>
-                      <TableCell align="right">{entry.quantity}</TableCell>
+                      <TableCell align="right">{formatQuantity(entry.quantity)}</TableCell>
                       <TableCell align="right">{formatSignedNumber(entry.entryPrice)}</TableCell>
                       <TableCell align="right">{formatSignedNumber(entry.exitPrice)}</TableCell>
                       <TableCell align="right">{formatSignedNumber(entry.realizedPnl)}</TableCell>
