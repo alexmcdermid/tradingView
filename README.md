@@ -35,3 +35,7 @@ This trading journal helps you:
 ## Development
 
 See [DEV.md](DEV.md) for setup instructions, build commands, and deployment details.
+
+## Backend API
+
+This frontend is backed by the companion Spring Boot API: [alexmcdermid/transaction-api](https://github.com/alexmcdermid/transaction-api).
