@@ -48,6 +48,13 @@ function formatNumber(value: number) {
   }).format(value);
 }
 
+function formatQuantity(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  }).format(value);
+}
+
 export default function Admin() {
   const { user, token, loginButton, logout, initializing } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -239,7 +246,7 @@ export default function Admin() {
                                       <TableCell>{entry.tradeId}</TableCell>
                                       <TableCell>{entry.symbol}</TableCell>
                                       <TableCell>{entry.direction}</TableCell>
-                                      <TableCell align="right">{entry.quantity}</TableCell>
+                                      <TableCell align="right">{formatQuantity(entry.quantity)}</TableCell>
                                       <TableCell align="right">{formatNumber(entry.realizedPnl)}</TableCell>
                                       <TableCell>{entry.closedAt}</TableCell>
                                     </TableRow>

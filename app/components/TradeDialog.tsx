@@ -442,7 +442,7 @@ export function TradeDialog({
               value={values.quantity}
               onChange={handleNumericChange("quantity")}
               fullWidth
-              inputProps={{ min: 0, step: 1 }}
+              inputProps={{ min: 0, step: 0.00000001 }}
             />
             <TextField
               label="Entry Price"

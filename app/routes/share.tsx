@@ -61,6 +61,14 @@ const formatNumber = (value?: number | null, digits = 2) => {
   });
 };
 
+const formatQuantity = (value?: number | null) => {
+  if (value === null || value === undefined) return "—";
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+  });
+};
+
 const formatPercent = (value: number) =>
   `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
 
@@ -544,7 +552,7 @@ function SharedTradesTable({ trades }: { trades: SharedTrade[] }) {
                     color={trade.direction === "LONG" ? "success" : "warning"}
                   />
                 </TableCell>
-                <TableCell align="right">{formatNumber(trade.quantity, 0)}</TableCell>
+                <TableCell align="right">{formatQuantity(trade.quantity)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.entryPrice, 2)}</TableCell>
                 <TableCell align="right">{formatNumber(trade.exitPrice, 2)}</TableCell>
                 <TableCell align="right" sx={{ minWidth: 140 }}>
