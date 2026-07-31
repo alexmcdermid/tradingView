@@ -69,11 +69,33 @@ const toIsoDate = (date: Date) =>
 const toLocalIsoDate = (date: Date) =>
   `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 
-const observedDate = (year: number, monthIndex: number, day: number) => {
+const observedUsMarketHoliday = (year: number, monthIndex: number, day: number) => {
   const date = new Date(Date.UTC(year, monthIndex, day));
   const dow = date.getUTCDay();
   if (dow === 6) {
     date.setUTCDate(day - 1);
+  } else if (dow === 0) {
+    date.setUTCDate(day + 1);
+  }
+  return date;
+};
+
+const observedUsNewYearsDay = (year: number) => {
+  const date = new Date(Date.UTC(year, 0, 1));
+  if (date.getUTCDay() === 6) {
+    return null;
+  }
+  if (date.getUTCDay() === 0) {
+    date.setUTCDate(2);
+  }
+  return date;
+};
+
+const observedCanadianMarketHoliday = (year: number, monthIndex: number, day: number) => {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  const dow = date.getUTCDay();
+  if (dow === 6) {
+    date.setUTCDate(day + 2);
   } else if (dow === 0) {
     date.setUTCDate(day + 1);
   }
@@ -90,6 +112,13 @@ const lastWeekdayOfMonth = (year: number, monthIndex: number, weekday: number) =
   const last = new Date(Date.UTC(year, monthIndex + 1, 0));
   const offset = (last.getUTCDay() - weekday + 7) % 7;
   return new Date(Date.UTC(year, monthIndex + 1, 0 - offset));
+};
+
+const weekdayOnOrBefore = (year: number, monthIndex: number, day: number, weekday: number) => {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  const offset = (date.getUTCDay() - weekday + 7) % 7;
+  date.setUTCDate(day - offset);
+  return date;
 };
 
 const easterSunday = (year: number) => {
@@ -119,26 +148,178 @@ const goodFriday = (year: number) => {
 type MarketHoliday = {
   date: Date;
   name: string;
+  market: "TSX" | "NYSE";
+  country: "Canada" | "United States";
 };
 
-const holidayCache = new Map<number, Map<string, string>>();
-const getUsMarketHolidays = (year: number) => {
+type CalendarHoliday = {
+  label: string;
+  tooltip: string;
+};
+
+const canadianChristmasHolidays = (year: number): MarketHoliday[] => {
+  const reservedDates = new Set<string>();
+  const observedDateWithoutCollision = (monthIndex: number, day: number) => {
+    const date = new Date(Date.UTC(year, monthIndex, day));
+    while (date.getUTCDay() === 0 || date.getUTCDay() === 6 || reservedDates.has(toIsoDate(date))) {
+      date.setUTCDate(date.getUTCDate() + 1);
+    }
+    reservedDates.add(toIsoDate(date));
+    return date;
+  };
+
+  return [
+    {
+      date: observedDateWithoutCollision(11, 25),
+      name: "Christmas Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: observedDateWithoutCollision(11, 26),
+      name: "Boxing Day",
+      market: "TSX",
+      country: "Canada",
+    },
+  ];
+};
+
+const holidayCache = new Map<number, Map<string, CalendarHoliday>>();
+const getNorthAmericanMarketHolidays = (year: number) => {
   if (holidayCache.has(year)) return holidayCache.get(year)!;
 
+  const usNewYearsHolidays: MarketHoliday[] = [year, year + 1].flatMap((holidayYear) => {
+    const date = observedUsNewYearsDay(holidayYear);
+    return date
+      ? [{ date, name: "New Year's Day", market: "NYSE", country: "United States" }]
+      : [];
+  });
   const holidays: MarketHoliday[] = [
-    { date: observedDate(year, 0, 1), name: "New Year's Day" },
-    { date: nthWeekdayOfMonth(year, 0, 1, 3), name: "Martin Luther King Jr. Day" },
-    { date: nthWeekdayOfMonth(year, 1, 1, 3), name: "Presidents Day" },
-    { date: goodFriday(year), name: "Good Friday" },
-    { date: lastWeekdayOfMonth(year, 4, 1), name: "Memorial Day" },
-    { date: observedDate(year, 5, 19), name: "Juneteenth" },
-    { date: observedDate(year, 6, 4), name: "Independence Day" },
-    { date: nthWeekdayOfMonth(year, 8, 1, 1), name: "Labor Day" },
-    { date: nthWeekdayOfMonth(year, 10, 4, 4), name: "Thanksgiving Day" },
-    { date: observedDate(year, 11, 25), name: "Christmas Day" },
+    ...usNewYearsHolidays,
+    {
+      date: nthWeekdayOfMonth(year, 0, 1, 3),
+      name: "Martin Luther King Jr. Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 1, 1, 3),
+      name: "Washington's Birthday",
+      market: "NYSE",
+      country: "United States",
+    },
+    { date: goodFriday(year), name: "Good Friday", market: "NYSE", country: "United States" },
+    {
+      date: lastWeekdayOfMonth(year, 4, 1),
+      name: "Memorial Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    ...(year >= 2022
+      ? [{
+          date: observedUsMarketHoliday(year, 5, 19),
+          name: "Juneteenth National Independence Day",
+          market: "NYSE" as const,
+          country: "United States" as const,
+        }]
+      : []),
+    {
+      date: observedUsMarketHoliday(year, 6, 4),
+      name: "Independence Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 8, 1, 1),
+      name: "Labor Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 10, 4, 4),
+      name: "Thanksgiving Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    {
+      date: observedUsMarketHoliday(year, 11, 25),
+      name: "Christmas Day",
+      market: "NYSE",
+      country: "United States",
+    },
+    {
+      date: observedCanadianMarketHoliday(year, 0, 1),
+      name: "New Year's Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: observedCanadianMarketHoliday(year + 1, 0, 1),
+      name: "New Year's Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 1, 1, 3),
+      name: "Family Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    { date: goodFriday(year), name: "Good Friday", market: "TSX", country: "Canada" },
+    {
+      date: weekdayOnOrBefore(year, 4, 24, 1),
+      name: "Victoria Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: observedCanadianMarketHoliday(year, 6, 1),
+      name: "Canada Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 7, 1, 1),
+      name: "Civic Holiday",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 8, 1, 1),
+      name: "Labour Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    {
+      date: nthWeekdayOfMonth(year, 9, 1, 2),
+      name: "Thanksgiving Day",
+      market: "TSX",
+      country: "Canada",
+    },
+    ...canadianChristmasHolidays(year),
   ];
 
-  const map = new Map(holidays.map((holiday) => [toIsoDate(holiday.date), holiday.name]));
+  const holidaysByDate = new Map<string, MarketHoliday[]>();
+  holidays
+    .filter((holiday) => holiday.date.getUTCFullYear() === year)
+    .forEach((holiday) => {
+      const date = toIsoDate(holiday.date);
+      holidaysByDate.set(date, [...(holidaysByDate.get(date) ?? []), holiday]);
+    });
+
+  const map = new Map<string, CalendarHoliday>();
+  holidaysByDate.forEach((dateHolidays, date) => {
+    const orderedHolidays = dateHolidays.sort((a, b) =>
+      a.market === b.market ? 0 : a.market === "TSX" ? -1 : 1
+    );
+    const markets = orderedHolidays.map((holiday) => holiday.market);
+    map.set(date, {
+      label: `${markets.join("/")} closed`,
+      tooltip: orderedHolidays
+        .map((holiday) => `${holiday.market} closed (${holiday.country}) — ${holiday.name}`)
+        .join(" · "),
+    });
+  });
   holidayCache.set(year, map);
   return map;
 };
@@ -147,7 +328,10 @@ const parseHolidayString = (holiday: string) => {
   const date = holiday.slice(0, 10);
   const remainder = holiday.slice(10).trim();
   const name = remainder.startsWith("T") ? "" : remainder.replace(/^[:\s-]+/, "").trim();
-  return [date, name || "Trading holiday"] as const;
+  return [
+    date,
+    { label: "Market closed", tooltip: name || "Trading holiday" } satisfies CalendarHoliday,
+  ] as const;
 };
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -221,7 +405,7 @@ export function MonthlyCalendar({
     if (holidays && holidays.length > 0) {
       return new Map(holidays.map(parseHolidayString));
     }
-    return getUsMarketHolidays(activeMonth.getFullYear());
+    return getNorthAmericanMarketHolidays(activeMonth.getFullYear());
   }, [activeMonth, holidays]);
 
   const firstDay = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1);
@@ -430,8 +614,8 @@ export function MonthlyCalendar({
           const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
           const hasTrade = Boolean(bucket);
           const isPastNoTrade = !hasTrade && cellDate < todayStart;
-          const holidayName = hasTrade ? undefined : holidayByDate.get(date);
-          const isHoliday = Boolean(holidayName);
+          const holiday = hasTrade ? undefined : holidayByDate.get(date);
+          const isHoliday = Boolean(holiday);
           const showHolidayLabel = isHoliday;
           const isSelected = selectedDate === date;
           const color =
@@ -480,17 +664,17 @@ export function MonthlyCalendar({
                 : value.toFixed(2);
           const netPnlDisplayValue =
             showHolidayLabel
-              ? "Holiday"
+              ? holiday!.label
               : !hasTrade
                 ? "—"
                 : formatPnlValue(netPnl);
           const pnlOnlyDisplayValue =
             showHolidayLabel
-              ? "Holiday"
+              ? holiday!.label
               : !hasTrade
                 ? "—"
                 : formatPnlValue(grossPnl);
-          const marginDisplayValue = showHolidayLabel ? "Holiday" : !hasTrade ? "—" : marginFee.toFixed(2);
+          const marginDisplayValue = showHolidayLabel ? holiday!.label : !hasTrade ? "—" : marginFee.toFixed(2);
           const displayValue =
             marginMode === "margin"
               ? marginDisplayValue
@@ -508,8 +692,8 @@ export function MonthlyCalendar({
                   : valueMode === "percent"
                     ? `Return: ${pnlOnlyDisplayValue}`
                     : `P/L: ${pnlOnlyDisplayValue}`;
-          const tooltipTitle = holidayName
-            ? holidayName
+          const tooltipTitle = holiday
+            ? holiday.tooltip
             : hasTrade
               ? tradeTooltipTitle
               : "";
@@ -558,12 +742,9 @@ export function MonthlyCalendar({
                   : undefined
               }
               aria-label={
-                selectable
-                  ? holidayName
-                    ? `Select ${date} (${holidayName})`
-                    : `Select ${date}`
-                  : undefined
+                selectable ? `Select ${date}` : undefined
               }
+              aria-description={holiday?.tooltip}
               aria-pressed={selectable ? isSelected : undefined}
               data-calendar-date={selectable ? date : undefined}
               data-drop-target={isDropTarget ? "true" : undefined}
@@ -620,6 +801,7 @@ export function MonthlyCalendar({
             <Tooltip
               key={date}
               title={tooltipTitle}
+              describeChild
             >
               <span>{content}</span>
             </Tooltip>

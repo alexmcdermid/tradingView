@@ -75,7 +75,7 @@ describe("MonthlyCalendar", () => {
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-02");
   });
 
-  it("allows selecting holiday dates", async () => {
+  it("lists U.S. and Canadian market closures with the country and holiday", async () => {
     const user = userEvent.setup();
     const onDateSelect = vi.fn();
     render(
@@ -87,14 +87,64 @@ describe("MonthlyCalendar", () => {
     );
 
     const memorialDay = screen.getByRole("button", {
-      name: /select 2024-05-27 \(memorial day\)/i,
+      name: /select 2024-05-27/i,
     });
+    expect(memorialDay).toHaveAccessibleDescription(
+      "NYSE closed (United States) — Memorial Day"
+    );
     await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
-    expect(screen.getByText(/holiday/i)).toBeInTheDocument();
+    expect(screen.getByText("NYSE closed")).toBeInTheDocument();
 
     await user.hover(memorialDay);
-    expect(await screen.findByText("Memorial Day")).toBeInTheDocument();
+    expect(
+      await screen.findByText("NYSE closed (United States) — Memorial Day")
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /select 2024-05-20/i })).toHaveAccessibleDescription(
+      "TSX closed (Canada) — Victoria Day"
+    );
+    expect(screen.getByText("TSX closed")).toBeInTheDocument();
+  });
+
+  it("identifies dates when both Canadian and U.S. markets are closed", async () => {
+    const user = userEvent.setup();
+    render(
+      <MonthlyCalendar
+        daily={[]}
+        initialMonth="2024-03-01"
+        onDateSelect={vi.fn()}
+      />
+    );
+
+    const goodFriday = screen.getByRole("button", {
+      name: /select 2024-03-29/i,
+    });
+    expect(goodFriday).toHaveAccessibleDescription(
+      "TSX closed (Canada) — Good Friday · NYSE closed (United States) — Good Friday"
+    );
+    expect(screen.getByText("TSX/NYSE closed")).toBeInTheDocument();
+
+    await user.hover(goodFriday);
+    expect(
+      await screen.findByText(
+        "TSX closed (Canada) — Good Friday · NYSE closed (United States) — Good Friday"
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("does not observe a Saturday U.S. New Year's Day on the prior Friday", () => {
+    render(
+      <MonthlyCalendar
+        daily={[]}
+        initialMonth="2027-12-01"
+        onDateSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /select 2027-12-31/i })).not.toHaveAttribute(
+      "aria-description"
+    );
   });
 
   it("treats holiday dates with trades as normal trading days", async () => {
