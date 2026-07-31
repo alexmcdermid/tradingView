@@ -145,11 +145,12 @@ const goodFriday = (year: number) => {
   return easter;
 };
 
+// Trades do not currently carry an exchange/MIC, so holidays are scoped to country-level
+// equity market calendars instead of implying that a trade belongs to a specific venue.
 type MarketHoliday = {
   date: Date;
   name: string;
-  market: "TSX" | "NYSE";
-  country: "Canada" | "United States";
+  market: "CA" | "US";
 };
 
 type CalendarHoliday = {
@@ -172,14 +173,12 @@ const canadianChristmasHolidays = (year: number): MarketHoliday[] => {
     {
       date: observedDateWithoutCollision(11, 25),
       name: "Christmas Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: observedDateWithoutCollision(11, 26),
       name: "Boxing Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
   ];
 };
@@ -191,7 +190,7 @@ const getNorthAmericanMarketHolidays = (year: number) => {
   const usNewYearsHolidays: MarketHoliday[] = [year, year + 1].flatMap((holidayYear) => {
     const date = observedUsNewYearsDay(holidayYear);
     return date
-      ? [{ date, name: "New Year's Day", market: "NYSE", country: "United States" }]
+      ? [{ date, name: "New Year's Day", market: "US" }]
       : [];
   });
   const holidays: MarketHoliday[] = [
@@ -199,102 +198,86 @@ const getNorthAmericanMarketHolidays = (year: number) => {
     {
       date: nthWeekdayOfMonth(year, 0, 1, 3),
       name: "Martin Luther King Jr. Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     {
       date: nthWeekdayOfMonth(year, 1, 1, 3),
       name: "Washington's Birthday",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
-    { date: goodFriday(year), name: "Good Friday", market: "NYSE", country: "United States" },
+    { date: goodFriday(year), name: "Good Friday", market: "US" },
     {
       date: lastWeekdayOfMonth(year, 4, 1),
       name: "Memorial Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     ...(year >= 2022
       ? [{
           date: observedUsMarketHoliday(year, 5, 19),
           name: "Juneteenth National Independence Day",
-          market: "NYSE" as const,
-          country: "United States" as const,
+          market: "US" as const,
         }]
       : []),
     {
       date: observedUsMarketHoliday(year, 6, 4),
       name: "Independence Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     {
       date: nthWeekdayOfMonth(year, 8, 1, 1),
       name: "Labor Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     {
       date: nthWeekdayOfMonth(year, 10, 4, 4),
       name: "Thanksgiving Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     {
       date: observedUsMarketHoliday(year, 11, 25),
       name: "Christmas Day",
-      market: "NYSE",
-      country: "United States",
+      market: "US",
     },
     {
       date: observedCanadianMarketHoliday(year, 0, 1),
       name: "New Year's Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: observedCanadianMarketHoliday(year + 1, 0, 1),
       name: "New Year's Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: nthWeekdayOfMonth(year, 1, 1, 3),
       name: "Family Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
-    { date: goodFriday(year), name: "Good Friday", market: "TSX", country: "Canada" },
+    { date: goodFriday(year), name: "Good Friday", market: "CA" },
     {
       date: weekdayOnOrBefore(year, 4, 24, 1),
       name: "Victoria Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: observedCanadianMarketHoliday(year, 6, 1),
       name: "Canada Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: nthWeekdayOfMonth(year, 7, 1, 1),
       name: "Civic Holiday",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: nthWeekdayOfMonth(year, 8, 1, 1),
       name: "Labour Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     {
       date: nthWeekdayOfMonth(year, 9, 1, 2),
       name: "Thanksgiving Day",
-      market: "TSX",
-      country: "Canada",
+      market: "CA",
     },
     ...canadianChristmasHolidays(year),
   ];
@@ -310,13 +293,15 @@ const getNorthAmericanMarketHolidays = (year: number) => {
   const map = new Map<string, CalendarHoliday>();
   holidaysByDate.forEach((dateHolidays, date) => {
     const orderedHolidays = dateHolidays.sort((a, b) =>
-      a.market === b.market ? 0 : a.market === "TSX" ? -1 : 1
+      a.market === b.market ? 0 : a.market === "CA" ? -1 : 1
     );
     const markets = orderedHolidays.map((holiday) => holiday.market);
     map.set(date, {
       label: `${markets.join("/")} closed`,
       tooltip: orderedHolidays
-        .map((holiday) => `${holiday.market} closed (${holiday.country}) — ${holiday.name}`)
+        .map((holiday) =>
+          `${holiday.market === "CA" ? "Canadian" : "U.S."} equity markets closed — ${holiday.name}`
+        )
         .join(" · "),
     });
   });

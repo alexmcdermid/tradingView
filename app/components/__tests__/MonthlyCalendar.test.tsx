@@ -90,21 +90,21 @@ describe("MonthlyCalendar", () => {
       name: /select 2024-05-27/i,
     });
     expect(memorialDay).toHaveAccessibleDescription(
-      "NYSE closed (United States) — Memorial Day"
+      "U.S. equity markets closed — Memorial Day"
     );
     await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
-    expect(screen.getByText("NYSE closed")).toBeInTheDocument();
+    expect(screen.getByText("US closed")).toBeInTheDocument();
 
     await user.hover(memorialDay);
     expect(
-      await screen.findByText("NYSE closed (United States) — Memorial Day")
+      await screen.findByText("U.S. equity markets closed — Memorial Day")
     ).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /select 2024-05-20/i })).toHaveAccessibleDescription(
-      "TSX closed (Canada) — Victoria Day"
+      "Canadian equity markets closed — Victoria Day"
     );
-    expect(screen.getByText("TSX closed")).toBeInTheDocument();
+    expect(screen.getByText("CA closed")).toBeInTheDocument();
   });
 
   it("identifies dates when both Canadian and U.S. markets are closed", async () => {
@@ -121,14 +121,14 @@ describe("MonthlyCalendar", () => {
       name: /select 2024-03-29/i,
     });
     expect(goodFriday).toHaveAccessibleDescription(
-      "TSX closed (Canada) — Good Friday · NYSE closed (United States) — Good Friday"
+      "Canadian equity markets closed — Good Friday · U.S. equity markets closed — Good Friday"
     );
-    expect(screen.getByText("TSX/NYSE closed")).toBeInTheDocument();
+    expect(screen.getByText("CA/US closed")).toBeInTheDocument();
 
     await user.hover(goodFriday);
     expect(
       await screen.findByText(
-        "TSX closed (Canada) — Good Friday · NYSE closed (United States) — Good Friday"
+        "Canadian equity markets closed — Good Friday · U.S. equity markets closed — Good Friday"
       )
     ).toBeInTheDocument();
   });
