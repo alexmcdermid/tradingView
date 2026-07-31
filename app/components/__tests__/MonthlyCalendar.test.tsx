@@ -75,7 +75,7 @@ describe("MonthlyCalendar", () => {
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-02");
   });
 
-  it("allows selecting holiday dates", async () => {
+  it("lists country holiday labels and names the holiday in the tooltip", async () => {
     const user = userEvent.setup();
     const onDateSelect = vi.fn();
     render(
@@ -87,14 +87,54 @@ describe("MonthlyCalendar", () => {
     );
 
     const memorialDay = screen.getByRole("button", {
-      name: /select 2024-05-27 \(memorial day\)/i,
+      name: /select 2024-05-27/i,
     });
+    expect(memorialDay).toHaveAccessibleDescription("Memorial Day");
     await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
-    expect(screen.getByText(/holiday/i)).toBeInTheDocument();
+    expect(screen.getByText("US Holiday")).toBeInTheDocument();
 
     await user.hover(memorialDay);
     expect(await screen.findByText("Memorial Day")).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /select 2024-05-20/i })).toHaveAccessibleDescription(
+      "Victoria Day"
+    );
+    expect(screen.getByText("CA Holiday")).toBeInTheDocument();
+  });
+
+  it("identifies dates when both Canadian and U.S. markets are closed", async () => {
+    const user = userEvent.setup();
+    render(
+      <MonthlyCalendar
+        daily={[]}
+        initialMonth="2024-03-01"
+        onDateSelect={vi.fn()}
+      />
+    );
+
+    const goodFriday = screen.getByRole("button", {
+      name: /select 2024-03-29/i,
+    });
+    expect(goodFriday).toHaveAccessibleDescription("Good Friday");
+    expect(screen.getByText("Holiday")).toBeInTheDocument();
+
+    await user.hover(goodFriday);
+    expect(await screen.findByText("Good Friday")).toBeInTheDocument();
+  });
+
+  it("does not observe a Saturday U.S. New Year's Day on the prior Friday", () => {
+    render(
+      <MonthlyCalendar
+        daily={[]}
+        initialMonth="2027-12-01"
+        onDateSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /select 2027-12-31/i })).not.toHaveAttribute(
+      "aria-description"
+    );
   });
 
   it("treats holiday dates with trades as normal trading days", async () => {

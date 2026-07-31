@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { RouterContextProvider } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import type { PnlSummary, Trade } from "../api/types";
 import { getShareLink } from "../api/shares";
@@ -17,7 +18,7 @@ const buildLoaderArgs = (request: Request): LoaderFunctionArgs => ({
   url: new URL(request.url),
   pattern: "",
   params: {},
-  context: {},
+  context: new RouterContextProvider(),
 });
 
 const loadShareImageLoader = async () => {
@@ -75,7 +76,7 @@ describe("share image loader", () => {
       url: new URL(request.url),
       pattern: "/share-image/:code",
       params: { code: "abc12345" },
-      context: {},
+      context: new RouterContextProvider(),
     });
 
     expect(response.status).toBe(200);

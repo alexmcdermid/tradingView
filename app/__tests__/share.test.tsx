@@ -69,7 +69,7 @@ describe("share route loader", () => {
 
     const descriptors = meta({
       location: { search: "" },
-      data: {
+      loaderData: {
         shareData,
         error: null,
         publicOrigin: "https://example.com",
@@ -114,7 +114,7 @@ describe("share route loader", () => {
     } as any);
     const descriptors = meta({
       location: { search: "" },
-      data,
+      loaderData: data,
     } as any);
 
     expect(descriptors).toContainEqual({
