@@ -177,13 +177,13 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   return { shareData: null, error: null, publicOrigin, shareCode: null };
 }
 
-export function meta({ location, data }: Route.MetaArgs) {
+export function meta({ location, loaderData }: Route.MetaArgs) {
   const defaultTitle = "Shared P/L";
   const defaultDescription = "View a shared P/L snapshot or daily trades";
   
-  const loaderData = data as Awaited<ReturnType<typeof loader>>;
-  const shared = loaderData?.shareData;
-  const publicOrigin = loaderData?.publicOrigin;
+  const shareLoaderData = loaderData as Awaited<ReturnType<typeof loader>>;
+  const shared = shareLoaderData?.shareData;
+  const publicOrigin = shareLoaderData?.publicOrigin;
   
   if (!shared) {
     const encoded = new URLSearchParams(location.search).get(SHARE_QUERY_PARAM);
