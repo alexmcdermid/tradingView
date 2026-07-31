@@ -75,7 +75,7 @@ describe("MonthlyCalendar", () => {
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-02");
   });
 
-  it("lists U.S. and Canadian market closures with the country and holiday", async () => {
+  it("lists country holiday labels and names the holiday in the tooltip", async () => {
     const user = userEvent.setup();
     const onDateSelect = vi.fn();
     render(
@@ -89,22 +89,18 @@ describe("MonthlyCalendar", () => {
     const memorialDay = screen.getByRole("button", {
       name: /select 2024-05-27/i,
     });
-    expect(memorialDay).toHaveAccessibleDescription(
-      "U.S. equity markets closed — Memorial Day"
-    );
+    expect(memorialDay).toHaveAccessibleDescription("Memorial Day");
     await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
-    expect(screen.getByText("US closed")).toBeInTheDocument();
+    expect(screen.getByText("US Holiday")).toBeInTheDocument();
 
     await user.hover(memorialDay);
-    expect(
-      await screen.findByText("U.S. equity markets closed — Memorial Day")
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Memorial Day")).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /select 2024-05-20/i })).toHaveAccessibleDescription(
-      "Canadian equity markets closed — Victoria Day"
+      "Victoria Day"
     );
-    expect(screen.getByText("CA closed")).toBeInTheDocument();
+    expect(screen.getByText("CA Holiday")).toBeInTheDocument();
   });
 
   it("identifies dates when both Canadian and U.S. markets are closed", async () => {
@@ -120,17 +116,11 @@ describe("MonthlyCalendar", () => {
     const goodFriday = screen.getByRole("button", {
       name: /select 2024-03-29/i,
     });
-    expect(goodFriday).toHaveAccessibleDescription(
-      "Canadian equity markets closed — Good Friday · U.S. equity markets closed — Good Friday"
-    );
-    expect(screen.getByText("CA/US closed")).toBeInTheDocument();
+    expect(goodFriday).toHaveAccessibleDescription("Good Friday");
+    expect(screen.getByText("Holiday")).toBeInTheDocument();
 
     await user.hover(goodFriday);
-    expect(
-      await screen.findByText(
-        "Canadian equity markets closed — Good Friday · U.S. equity markets closed — Good Friday"
-      )
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Good Friday")).toBeInTheDocument();
   });
 
   it("does not observe a Saturday U.S. New Year's Day on the prior Friday", () => {

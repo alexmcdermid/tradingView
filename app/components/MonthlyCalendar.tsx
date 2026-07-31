@@ -296,13 +296,10 @@ const getNorthAmericanMarketHolidays = (year: number) => {
       a.market === b.market ? 0 : a.market === "CA" ? -1 : 1
     );
     const markets = orderedHolidays.map((holiday) => holiday.market);
+    const holidayNames = [...new Set(orderedHolidays.map((holiday) => holiday.name))];
     map.set(date, {
-      label: `${markets.join("/")} closed`,
-      tooltip: orderedHolidays
-        .map((holiday) =>
-          `${holiday.market === "CA" ? "Canadian" : "U.S."} equity markets closed — ${holiday.name}`
-        )
-        .join(" · "),
+      label: markets.length === 2 ? "Holiday" : `${markets[0]} Holiday`,
+      tooltip: holidayNames.join(" · "),
     });
   });
   holidayCache.set(year, map);
@@ -315,7 +312,7 @@ const parseHolidayString = (holiday: string) => {
   const name = remainder.startsWith("T") ? "" : remainder.replace(/^[:\s-]+/, "").trim();
   return [
     date,
-    { label: "Market closed", tooltip: name || "Trading holiday" } satisfies CalendarHoliday,
+    { label: "Holiday", tooltip: name || "Trading holiday" } satisfies CalendarHoliday,
   ] as const;
 };
 
