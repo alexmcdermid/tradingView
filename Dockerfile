@@ -1,14 +1,17 @@
-FROM node:20-alpine AS development-dependencies-env
+FROM node:20-alpine AS node-runtime
+RUN npm install --global npm@11.19.0
+
+FROM node-runtime AS development-dependencies-env
 COPY . /app
 WORKDIR /app
 RUN npm ci
 
-FROM node:20-alpine AS production-dependencies-env
+FROM node-runtime AS production-dependencies-env
 COPY ./package.json package-lock.json /app/
 WORKDIR /app
 RUN npm ci --omit=dev
 
-FROM node:20-alpine AS build-env
+FROM node-runtime AS build-env
 COPY . /app/
 COPY --from=development-dependencies-env /app/node_modules /app/node_modules
 WORKDIR /app
@@ -26,7 +29,7 @@ ENV VITE_PUBLIC_ORIGIN=$VITE_PUBLIC_ORIGIN
 ENV VITE_PUBLIC_HOST_ALLOWLIST=$VITE_PUBLIC_HOST_ALLOWLIST
 RUN npm run build
 
-FROM node:20-alpine
+FROM node-runtime
 COPY ./package.json package-lock.json /app/
 COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
