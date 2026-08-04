@@ -297,9 +297,10 @@ const getNorthAmericanMarketHolidays = (year: number) => {
     );
     const markets = orderedHolidays.map((holiday) => holiday.market);
     const holidayNames = [...new Set(orderedHolidays.map((holiday) => holiday.name))];
+    const marketLabel = markets.length === 2 ? "CA/US Holiday" : `${markets[0]} Holiday`;
     map.set(date, {
       label: markets.length === 2 ? "Holiday" : `${markets[0]} Holiday`,
-      tooltip: holidayNames.join(" · "),
+      tooltip: `${marketLabel} — ${holidayNames.join(" · ")}`,
     });
   });
   holidayCache.set(year, map);
@@ -663,6 +664,19 @@ export function MonthlyCalendar({
               : marginMode === "pnl"
                 ? pnlOnlyDisplayValue
                 : netPnlDisplayValue;
+          const holidayDisplayValue =
+            holiday && holiday.label !== "Holiday" ? (
+              <>
+                <Box component="span" sx={{ display: { xs: "inline", sm: "none" } }}>
+                  Holiday
+                </Box>
+                <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                  {holiday.label}
+                </Box>
+              </>
+            ) : (
+              displayValue
+            );
           const showMarginLine = marginMode === "combined" && hasTrade && !showHolidayLabel;
           const tradeTooltipTitle =
             marginMode === "margin"
@@ -760,7 +774,7 @@ export function MonthlyCalendar({
                 fontWeight={700}
                 sx={{ fontSize: { xs: "0.7rem", sm: "0.75rem" }, display: "block", whiteSpace: "nowrap" }}
               >
-                {displayValue}
+                {holidayDisplayValue}
               </Typography>
               {showMarginLine && (
                 <Typography
