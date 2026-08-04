@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen, cleanup, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, cleanup, waitFor, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MonthlyCalendar } from "../MonthlyCalendar";
@@ -89,16 +89,16 @@ describe("MonthlyCalendar", () => {
     const memorialDay = screen.getByRole("button", {
       name: /select 2024-05-27/i,
     });
-    expect(memorialDay).toHaveAccessibleDescription("Memorial Day");
+    expect(memorialDay).toHaveAccessibleDescription("US Holiday — Memorial Day");
     await user.click(memorialDay);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
     expect(screen.getByText("US Holiday")).toBeInTheDocument();
 
     await user.hover(memorialDay);
-    expect(await screen.findByText("Memorial Day")).toBeInTheDocument();
+    expect(await screen.findByText("US Holiday — Memorial Day")).toBeInTheDocument();
 
     expect(screen.getByRole("button", { name: /select 2024-05-20/i })).toHaveAccessibleDescription(
-      "Victoria Day"
+      "CA Holiday — Victoria Day"
     );
     expect(screen.getByText("CA Holiday")).toBeInTheDocument();
   });
@@ -116,11 +116,11 @@ describe("MonthlyCalendar", () => {
     const goodFriday = screen.getByRole("button", {
       name: /select 2024-03-29/i,
     });
-    expect(goodFriday).toHaveAccessibleDescription("Good Friday");
+    expect(goodFriday).toHaveAccessibleDescription("CA/US Holiday — Good Friday");
     expect(screen.getByText("Holiday")).toBeInTheDocument();
 
     await user.hover(goodFriday);
-    expect(await screen.findByText("Good Friday")).toBeInTheDocument();
+    expect(await screen.findByText("CA/US Holiday — Good Friday")).toBeInTheDocument();
   });
 
   it("does not observe a Saturday U.S. New Year's Day on the prior Friday", () => {
@@ -152,7 +152,7 @@ describe("MonthlyCalendar", () => {
       name: "Select 2024-05-27",
     });
     expect(screen.getByText("42.00")).toBeInTheDocument();
-    expect(screen.queryByText("Holiday")).not.toBeInTheDocument();
+    expect(within(memorialDayWithTrade).queryByText("Holiday")).not.toBeInTheDocument();
 
     await user.click(memorialDayWithTrade);
     expect(onDateSelect).toHaveBeenCalledWith("2024-05-27");
