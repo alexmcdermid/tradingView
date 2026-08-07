@@ -5,6 +5,7 @@ import type {
   PagedResult,
   PnlSummary,
   AggregateStats,
+  TaxablePnl,
   Trade,
   TradeFilters,
   TradeCountStats,
@@ -93,6 +94,11 @@ export async function fetchAggregateStats(year?: number, month?: string, day?: s
   }
   const search = params.toString();
   return request<AggregateStats>(`/trades/stats/scoped${search ? `?${search}` : ""}`);
+}
+
+export async function fetchTaxablePnl(year?: number) {
+  const search = typeof year === "number" ? `?year=${encodeURIComponent(String(year))}` : "";
+  return request<TaxablePnl>(`/trades/stats/taxable-pnl${search}`);
 }
 
 export async function fetchAccountStats(year?: number) {
