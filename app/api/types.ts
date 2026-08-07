@@ -141,6 +141,13 @@ export interface AggregateStats {
   day?: string | null;
 }
 
+export interface TaxablePnl {
+  totalPnl: number;
+  cadToUsdRate?: number | null;
+  fxDate?: string | null;
+  year?: number | null;
+}
+
 export interface AccountStats {
   accountId?: string | null;
   accountName: string;
@@ -256,6 +263,7 @@ export interface UserProfile {
 export interface TradingAccount {
   id: string;
   name: string;
+  taxFree: boolean;
   defaultStockFees: number;
   defaultOptionFees: number;
   defaultMarginRateUsd: number;
@@ -266,6 +274,7 @@ export interface TradingAccount {
 
 export interface TradingAccountPayload {
   name: string;
+  taxFree: boolean;
   defaultStockFees: number;
   defaultOptionFees: number;
   defaultMarginRateUsd: number;

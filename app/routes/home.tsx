@@ -56,6 +56,7 @@ import {
   fetchAggregateStats,
   fetchInferredAccountTradeCounts,
   fetchSummary,
+  fetchTaxablePnl,
   fetchTradeCountStats,
   fetchTradeHistory,
   fetchTrades,
@@ -77,6 +78,7 @@ import type {
   TradeSortDirection,
   TradeSortField,
   TradePayload,
+  TaxablePnl,
   TradingAccount,
 } from "../api/types";
 import {
@@ -553,6 +555,7 @@ const normalizeAccount = (account: TradingAccount): TradingAccount => {
   };
   return {
     ...account,
+    taxFree: Boolean(account.taxFree),
     defaultStockFees: toFiniteNumber(account.defaultStockFees, 0),
     defaultOptionFees: toFiniteNumber(account.defaultOptionFees, 0),
     defaultMarginRateUsd: toFiniteNumber(account.defaultMarginRateUsd, 0),
@@ -1002,6 +1005,7 @@ export default function Home() {
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
   const [accountDraft, setAccountDraft] = useState({
     name: "",
+    taxFree: false,
     defaultStockFees: "0",
     defaultOptionFees: "0",
     defaultMarginRateUsd: "0",
@@ -1011,6 +1015,7 @@ export default function Home() {
   const [savingEditAccount, setSavingEditAccount] = useState(false);
   const [accountEditDraft, setAccountEditDraft] = useState({
     name: "",
+    taxFree: false,
     defaultStockFees: "0",
     defaultOptionFees: "0",
     defaultMarginRateUsd: "0",
@@ -1022,6 +1027,7 @@ export default function Home() {
   );
   const [statsScopeFilter, setStatsScopeFilter] = useState<string | null>(null);
   const [statsScopeDraft, setStatsScopeDraft] = useState("");
+  const [taxablePnl, setTaxablePnl] = useState<TaxablePnl | null>(null);
   const authBlockedRef = useRef(false);
   const wasAuthenticated = useRef<boolean>(!!user && !!token);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
@@ -1046,14 +1052,20 @@ export default function Home() {
   const dashboardAccountOptions = useMemo(
     () => [
       { value: DASHBOARD_ACCOUNT_ALL, label: "All accounts" },
-      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      ...accounts.map((account) => ({
+        value: account.id,
+        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
+      })),
       { value: DASHBOARD_ACCOUNT_UNASSIGNED, label: "Unassigned" },
     ],
     [accounts]
   );
   const tradeAccountFilterOptions = useMemo<TradeAccountFilterOption[]>(
     () => [
-      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      ...accounts.map((account) => ({
+        value: account.id,
+        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
+      })),
       { value: TRADE_FILTER_ACCOUNT_UNASSIGNED, label: "Unassigned", unassigned: true },
     ],
     [accounts]
@@ -1491,12 +1503,16 @@ export default function Home() {
     }
     try {
       setLoadingStats(true);
-      const stats = await fetchAggregateStats(
-        effectiveStatsScope.year,
-        effectiveStatsScope.month,
-        effectiveStatsScope.day
-      );
+      const [stats, nextTaxablePnl] = await Promise.all([
+        fetchAggregateStats(
+          effectiveStatsScope.year,
+          effectiveStatsScope.month,
+          effectiveStatsScope.day
+        ),
+        fetchTaxablePnl(effectiveStatsScope.year),
+      ]);
       setAggregateStats(stats);
+      setTaxablePnl(nextTaxablePnl);
     } catch (err) {
       handleRequestError(err);
     } finally {
@@ -1676,6 +1692,7 @@ export default function Home() {
       setTrades([]);
       setSummary(null);
       setAggregateStats(null);
+      setTaxablePnl(null);
       setAccountStats([]);
       setTradeCountStats(null);
       setInferredAccountTradeCounts([]);
@@ -1692,6 +1709,7 @@ export default function Home() {
       const fxDate = summary?.fxDate;
       setSummary(computeSummary([], calendarMonth, rate, fxDate));
       setAggregateStats(null);
+      setTaxablePnl(null);
       setAccountStats([]);
       setTradeCountStats(null);
       setInferredAccountTradeCounts([]);
@@ -1829,6 +1847,7 @@ export default function Home() {
       setSavingAccount(true);
       const created = await createUserAccount({
         name: accountDraft.name.trim(),
+        taxFree: accountDraft.taxFree,
         defaultStockFees: Number(stockFees.toFixed(2)),
         defaultOptionFees: Number(optionFees.toFixed(2)),
         defaultMarginRateUsd: Number(marginUsd.toFixed(4)),
@@ -1843,6 +1862,7 @@ export default function Home() {
       );
       setAccountDraft({
         name: "",
+        taxFree: false,
         defaultStockFees: "0",
         defaultOptionFees: "0",
         defaultMarginRateUsd: "0",
@@ -1860,6 +1880,7 @@ export default function Home() {
       setDeletingAccountId(accountId);
       await deleteUserAccount(accountId);
       setAccounts((prev) => prev.filter((account) => account.id !== accountId));
+      await loadAggregateStats();
     } catch (err) {
       handleRequestError(err);
     } finally {
@@ -1871,6 +1892,7 @@ export default function Home() {
     setEditingAccountId(account.id);
     setAccountEditDraft({
       name: account.name,
+      taxFree: account.taxFree,
       defaultStockFees: String(account.defaultStockFees),
       defaultOptionFees: String(account.defaultOptionFees),
       defaultMarginRateUsd: String(account.defaultMarginRateUsd),
@@ -1908,6 +1930,7 @@ export default function Home() {
       setSavingEditAccount(true);
       const updated = await updateUserAccount(accountId, {
         name: accountEditDraft.name.trim(),
+        taxFree: accountEditDraft.taxFree,
         defaultStockFees: Number(stockFees.toFixed(2)),
         defaultOptionFees: Number(optionFees.toFixed(2)),
         defaultMarginRateUsd: Number(marginUsd.toFixed(4)),
@@ -1919,6 +1942,7 @@ export default function Home() {
           prev.map((account) => (account.id === accountId ? normalizedUpdated : account))
         )
       );
+      await loadAggregateStats();
       setEditingAccountId(null);
     } catch (err) {
       handleRequestError(err);
@@ -2525,6 +2549,10 @@ export default function Home() {
     () => convertUsdStats(aggregateStats, displayCurrency),
     [aggregateStats, displayCurrency]
   );
+  const displayTaxablePnl = useMemo(
+    () => convertUsdAmount(taxablePnl?.totalPnl, displayCurrency, taxablePnl?.cadToUsdRate) ?? undefined,
+    [displayCurrency, taxablePnl]
+  );
   const displayAccountStats = useMemo(
     () => convertUsdAccountStats(accountStats, displayCurrency, aggregateStats?.cadToUsdRate),
     [accountStats, aggregateStats?.cadToUsdRate, displayCurrency]
@@ -2617,8 +2645,12 @@ export default function Home() {
     };
   }, [inferredAccountTradeCounts, scopedStatsDay, scopedStatsMonth, scopedStatsYear, selectedDashboardAccount]);
   const taxOwing = useMemo(
-    () => computeTaxOwing(displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate),
-    [displayAggregateStats?.totalPnl, taxCapitalGainsRate, taxPersonalRate]
+    () => computeTaxOwing(
+      user && token ? displayTaxablePnl : displayAggregateStats?.totalPnl,
+      taxCapitalGainsRate,
+      taxPersonalRate
+    ),
+    [displayAggregateStats?.totalPnl, displayTaxablePnl, taxCapitalGainsRate, taxPersonalRate, token, user]
   );
   const ytdTradingDays = useMemo(() => countTradingDaysYtd(scopedStatsYear), [scopedStatsYear]);
   const totalPnlYtd = displayAggregateStats?.totalPnl ?? 0;
@@ -2704,7 +2736,7 @@ export default function Home() {
           <TaxCard
             title={`Tax Owing (${scopedStatsYear})`}
             value={taxOwing}
-            yearlyPnl={displayAggregateStats?.totalPnl}
+            taxablePnl={user && token ? displayTaxablePnl : displayAggregateStats?.totalPnl}
             currency={displayCurrency}
             capitalGainsRate={taxCapitalGainsRate}
             personalRate={taxPersonalRate}
@@ -3395,6 +3427,22 @@ export default function Home() {
                 }
                 fullWidth
               />
+              <Box>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={accountDraft.taxFree}
+                      onChange={(event) =>
+                        setAccountDraft((prev) => ({ ...prev, taxFree: event.target.checked }))
+                      }
+                    />
+                  }
+                  label="Tax-free account"
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 4 }}>
+                  Trades in this account are excluded from the Tax Owing widget.
+                </Typography>
+              </Box>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                 <TextField
                   label="Stock Fee"
@@ -3501,6 +3549,20 @@ export default function Home() {
                             fullWidth
                             size="small"
                           />
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={accountEditDraft.taxFree}
+                                onChange={(event) =>
+                                  setAccountEditDraft((prev) => ({
+                                    ...prev,
+                                    taxFree: event.target.checked,
+                                  }))
+                                }
+                              />
+                            }
+                            label="Tax-free account"
+                          />
                           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
                             <TextField
                               label="Stock Fee"
@@ -3574,9 +3636,12 @@ export default function Home() {
                           justifyContent="space-between"
                           alignItems={{ xs: "flex-start", sm: "center" }}
                         >
-                          <Typography variant="body2" fontWeight={700}>
-                            {account.name}
-                          </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Typography variant="body2" fontWeight={700}>
+                              {account.name}
+                            </Typography>
+                            {account.taxFree && <Chip label="Tax-free" size="small" color="success" />}
+                          </Stack>
                           <Typography variant="caption" color="text.secondary">
                             Stock fee/trade: {stockFee.toFixed(2)} | Option fee/contract: {optionFee.toFixed(2)} | Margin USD: {marginUsd.toFixed(2)}% | Margin CAD: {marginCad.toFixed(2)}%
                           </Typography>
@@ -4036,7 +4101,7 @@ function StatCard({
 function TaxCard({
   title,
   value,
-  yearlyPnl,
+  taxablePnl,
   capitalGainsRate,
   personalRate,
   currency,
@@ -4044,16 +4109,16 @@ function TaxCard({
 }: {
   title: string;
   value: number;
-  yearlyPnl?: number;
+  taxablePnl?: number;
   capitalGainsRate: number;
   personalRate: number;
   currency: Currency;
   loading?: boolean;
 }) {
   const display = formatMoney(value, currency);
-  const pnlLabel = yearlyPnl != null
-    ? `${formatMoney(yearlyPnl, currency)} P/L`
-    : "No yearly P/L";
+  const pnlLabel = taxablePnl != null
+    ? `${formatMoney(taxablePnl, currency)} taxable P/L`
+    : "No taxable P/L";
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
       <CardContent>

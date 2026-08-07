@@ -52,6 +52,7 @@ vi.mock("../auth/AuthProvider", () => ({
 const mockFetchTrades = vi.fn<() => Promise<{ items: Trade[]; page: number; size: number; totalPages: number; totalElements: number; hasNext: boolean; hasPrevious: boolean }>>();
 const mockFetchSummary = vi.fn();
 const mockFetchAggregateStats = vi.fn();
+const mockFetchTaxablePnl = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
 const mockDeleteTrade = vi.fn();
@@ -85,6 +86,7 @@ vi.mock("../api/trades", () => ({
   fetchTrades: (...args: Parameters<typeof mockFetchTrades>) => mockFetchTrades(...args),
   fetchSummary: (...args: Parameters<typeof mockFetchSummary>) => mockFetchSummary(...args),
   fetchAggregateStats: (...args: Parameters<typeof mockFetchAggregateStats>) => mockFetchAggregateStats(...args),
+  fetchTaxablePnl: (...args: Parameters<typeof mockFetchTaxablePnl>) => mockFetchTaxablePnl(...args),
   createTrade: (...args: Parameters<typeof mockCreateTrade>) => mockCreateTrade(...args),
   updateTrade: (...args: Parameters<typeof mockUpdateTrade>) => mockUpdateTrade(...args),
   deleteTrade: (...args: Parameters<typeof mockDeleteTrade>) => mockDeleteTrade(...args),
@@ -141,6 +143,12 @@ describe("Home (guest mode)", () => {
       bestMonth: null,
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
+    });
+    mockFetchTaxablePnl.mockResolvedValue({
+      totalPnl: 0,
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+      year: 2024,
     });
     mockListUserAccounts.mockResolvedValue([]);
     mockCreateShareLink.mockResolvedValue({
@@ -262,6 +270,12 @@ describe("Home (authenticated)", () => {
       bestMonth: { period: "2024-01", pnl: 1234.56, trades: 1 },
       cadToUsdRate: 0.732,
       fxDate: "2024-01-01",
+    });
+    mockFetchTaxablePnl.mockResolvedValue({
+      totalPnl: 1234.56,
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+      year: 2024,
     });
     mockListUserAccounts.mockResolvedValue([]);
   });
@@ -458,6 +472,7 @@ describe("Home (authenticated)", () => {
 
     await waitFor(() => {
       expect(mockFetchAggregateStats).toHaveBeenCalledTimes(1);
+      expect(mockFetchTaxablePnl).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -486,6 +501,33 @@ describe("Home (authenticated)", () => {
     expect(taxWidget.compareDocumentPosition(totalWidget) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText("246.91 USD")).toBeInTheDocument();
     expect(screen.queryByText(/Best Month/i)).not.toBeInTheDocument();
+  });
+
+  it("calculates the tax widget from taxable P/L only", async () => {
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      dashboardWidgets: ["TAX_OWED"],
+      taxCapitalGainsRate: 50,
+      taxPersonalRate: 40,
+    };
+    mockFetchTaxablePnl.mockResolvedValue({
+      totalPnl: 200,
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+      year: 2024,
+    });
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    expect(await screen.findByText("40.00 USD")).toBeInTheDocument();
+    expect(screen.getByText(/200\.00 USD taxable P\/L/)).toBeInTheDocument();
   });
 
   it("lets users drag dashboard widgets into a custom order from preferences", async () => {
