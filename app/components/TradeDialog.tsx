@@ -429,7 +429,7 @@ export function TradeDialog({
               </MenuItem>
               {accounts.map((account) => (
                 <MenuItem key={account.id} value={account.id}>
-                  {account.name}
+                  {account.taxFree ? `${account.name} (Tax-free)` : account.name}
                 </MenuItem>
               ))}
             </Select>
