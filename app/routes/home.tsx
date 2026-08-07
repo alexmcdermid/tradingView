@@ -563,8 +563,12 @@ const normalizeAccount = (account: TradingAccount): TradingAccount => {
   };
 };
 
-const sortAccountsByName = (accounts: TradingAccount[]) =>
+const sortAccountsForDisplay = (accounts: TradingAccount[]) =>
   [...accounts].sort((a, b) => {
+    const byTaxStatus = Number(a.taxFree) - Number(b.taxFree);
+    if (byTaxStatus !== 0) {
+      return byTaxStatus;
+    }
     const byName = a.name.localeCompare(b.name, undefined, {
       sensitivity: "base",
       numeric: true,
@@ -1052,14 +1056,20 @@ export default function Home() {
   const dashboardAccountOptions = useMemo(
     () => [
       { value: DASHBOARD_ACCOUNT_ALL, label: "All accounts" },
-      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      ...accounts.map((account) => ({
+        value: account.id,
+        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
+      })),
       { value: DASHBOARD_ACCOUNT_UNASSIGNED, label: "Unassigned" },
     ],
     [accounts]
   );
   const tradeAccountFilterOptions = useMemo<TradeAccountFilterOption[]>(
     () => [
-      ...accounts.map((account) => ({ value: account.id, label: account.name })),
+      ...accounts.map((account) => ({
+        value: account.id,
+        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
+      })),
       { value: TRADE_FILTER_ACCOUNT_UNASSIGNED, label: "Unassigned", unassigned: true },
     ],
     [accounts]
@@ -1747,7 +1757,7 @@ export default function Home() {
     try {
       setLoadingAccounts(true);
       const nextAccounts = await listUserAccounts();
-      setAccounts(sortAccountsByName(nextAccounts.map(normalizeAccount)));
+      setAccounts(sortAccountsForDisplay(nextAccounts.map(normalizeAccount)));
     } catch (err) {
       handleRequestError(err);
     } finally {
@@ -1849,7 +1859,7 @@ export default function Home() {
       });
       const normalizedCreated = normalizeAccount(created);
       setAccounts((prev) =>
-        sortAccountsByName([
+        sortAccountsForDisplay([
           normalizedCreated,
           ...prev.filter((account) => account.id !== normalizedCreated.id),
         ])
@@ -1932,7 +1942,7 @@ export default function Home() {
       });
       const normalizedUpdated = normalizeAccount(updated);
       setAccounts((prev) =>
-        sortAccountsByName(
+        sortAccountsForDisplay(
           prev.map((account) => (account.id === accountId ? normalizedUpdated : account))
         )
       );
