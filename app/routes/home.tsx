@@ -1052,20 +1052,14 @@ export default function Home() {
   const dashboardAccountOptions = useMemo(
     () => [
       { value: DASHBOARD_ACCOUNT_ALL, label: "All accounts" },
-      ...accounts.map((account) => ({
-        value: account.id,
-        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
-      })),
+      ...accounts.map((account) => ({ value: account.id, label: account.name })),
       { value: DASHBOARD_ACCOUNT_UNASSIGNED, label: "Unassigned" },
     ],
     [accounts]
   );
   const tradeAccountFilterOptions = useMemo<TradeAccountFilterOption[]>(
     () => [
-      ...accounts.map((account) => ({
-        value: account.id,
-        label: account.taxFree ? `${account.name} (Tax-free)` : account.name,
-      })),
+      ...accounts.map((account) => ({ value: account.id, label: account.name })),
       { value: TRADE_FILTER_ACCOUNT_UNASSIGNED, label: "Unassigned", unassigned: true },
     ],
     [accounts]
