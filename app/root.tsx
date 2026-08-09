@@ -24,7 +24,11 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
 import { securityHeaders, validateRequestHost } from "./config/security";
-import { ColorModeContext } from "./theme/colorMode";
+import {
+  ColorModeContext,
+  THEME_CHANGE_EVENT,
+  THEME_STORAGE_KEY,
+} from "./theme/colorMode";
 import type { ThemeMode } from "./api/types";
 
 export const links: Route.LinksFunction = () => [
@@ -86,7 +90,6 @@ export default function App() {
   );
 }
 
-const THEME_STORAGE_KEY = "tv-theme-mode";
 const useBrowserLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 
@@ -120,6 +123,7 @@ function writeStoredThemeMode(mode: PaletteMode) {
   } catch {
     // Ignore storage errors (e.g. disabled storage).
   }
+  window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: mode }));
 }
 
 function AppProviders() {

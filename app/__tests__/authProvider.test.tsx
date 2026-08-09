@@ -5,6 +5,7 @@ import { AuthProvider, AuthWrapper, useAuth } from "../auth/AuthProvider";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserProfile } from "../api/types";
+import { THEME_CHANGE_EVENT } from "../theme/colorMode";
 
 const googleMocks = vi.hoisted(() => ({
   useGoogleOneTapLogin: vi.fn(),
@@ -87,6 +88,7 @@ function latestGoogleLoginProps() {
           onSuccess: (response: { credential?: string }) => void;
           onError: () => void;
           click_listener?: () => void;
+          theme?: "filled_black" | "outline";
         },
       ]
     | undefined)?.[0];
@@ -232,6 +234,28 @@ describe("AuthProvider", () => {
         use_fedcm_for_prompt: true,
       })
     );
+  });
+
+  it("keeps the Google button aligned with same-page theme changes", async () => {
+    mockMatchMedia({ "(prefers-color-scheme: dark)": true });
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    await waitFor(() => {
+      expect(latestGoogleLoginProps()?.theme).toBe("outline");
+    });
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: "dark" }));
+    });
+
+    await waitFor(() => {
+      expect(latestGoogleLoginProps()?.theme).toBe("filled_black");
+    });
   });
 
   it("keeps mobile one-tap prompts enabled with the explicit Google button available", async () => {
