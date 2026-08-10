@@ -14,11 +14,21 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { ApiError } from "../api/client";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
+import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } from "../theme/colorMode";
 
 type UserInfo = {
   sub: string;
@@ -45,7 +55,6 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 const PREFERENCES_KEY_PREFIX = "user-preferences";
-const THEME_STORAGE_KEY = "tv-theme-mode";
 const SESSION_TOKEN = "cookie-session";
 const GOOGLE_INTERACTION_TIMEOUT_MS = 90_000;
 type GoogleInteractionSource = "button" | "one-tap";
@@ -100,9 +109,9 @@ function readAuthThemeMode(): "light" | "dark" {
       return stored;
     }
   } catch {
-    // Fall back to media query below.
+    // Fall back to the app's default mode below.
   }
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 const userFromProfile = (profile: UserProfile): UserInfo => ({
@@ -313,16 +322,20 @@ export function AuthProvider({
           syncLoginTheme();
         }
       };
-      const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
-      const mediaHandler = () => syncLoginTheme();
+      const themeChangeHandler = (event: Event) => {
+        const nextMode = (event as CustomEvent<"light" | "dark">).detail;
+        if (nextMode === "light" || nextMode === "dark") {
+          setLoginThemeMode(nextMode);
+        }
+      };
       window.addEventListener("resize", handler);
       window.addEventListener("storage", storageHandler);
-      mediaQuery?.addEventListener?.("change", mediaHandler);
+      window.addEventListener(THEME_CHANGE_EVENT, themeChangeHandler);
       return () => {
         cancelled = true;
         window.removeEventListener("resize", handler);
         window.removeEventListener("storage", storageHandler);
-        mediaQuery?.removeEventListener?.("change", mediaHandler);
+        window.removeEventListener(THEME_CHANGE_EVENT, themeChangeHandler);
       };
     }
     return () => {
