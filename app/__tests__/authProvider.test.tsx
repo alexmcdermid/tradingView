@@ -88,7 +88,7 @@ function latestGoogleLoginProps() {
           onSuccess: (response: { credential?: string }) => void;
           onError: () => void;
           click_listener?: () => void;
-          theme?: "filled_black" | "outline";
+          theme?: "outline_dark" | "outline";
         },
       ]
     | undefined)?.[0];
@@ -254,7 +254,7 @@ describe("AuthProvider", () => {
     });
 
     await waitFor(() => {
-      expect(latestGoogleLoginProps()?.theme).toBe("filled_black");
+      expect(latestGoogleLoginProps()?.theme).toBe("outline_dark");
     });
   });
 

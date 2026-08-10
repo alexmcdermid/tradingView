@@ -14,7 +14,17 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { ApiError } from "../api/client";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
@@ -48,6 +58,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const PREFERENCES_KEY_PREFIX = "user-preferences";
 const SESSION_TOKEN = "cookie-session";
 const GOOGLE_INTERACTION_TIMEOUT_MS = 90_000;
+// Google GIS supports outline_dark; @react-oauth/google's theme type has not added it yet.
+const DARK_GOOGLE_LOGIN_THEME = "outline_dark" as NonNullable<
+  ComponentProps<typeof GoogleLogin>["theme"]
+>;
 type GoogleInteractionSource = "button" | "one-tap";
 
 const PUBLIC_AUTH_CONTEXT_VALUE: AuthContextValue = {
@@ -496,7 +510,7 @@ export function AuthProvider({
               setAuthError("Google sign-in failed before a credential was returned. Try again.");
             }}
             text="signin_with"
-            theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
+            theme={loginThemeMode === "dark" ? DARK_GOOGLE_LOGIN_THEME : "outline"}
             shape="pill"
             width={loginWidth}
             itp_support
