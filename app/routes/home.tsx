@@ -1612,7 +1612,7 @@ export default function Home() {
       return;
     }
     if (selectedDate) {
-      loadTrades(0, pageSize, selectedDate);
+      loadTrades(page, pageSize, selectedDate);
       return;
     }
     loadTrades(page, pageSize, undefined, calendarMonth);
@@ -2156,7 +2156,7 @@ export default function Home() {
           await createTrade(payload);
         }
         if (selectedDate) {
-          await loadTrades(0, pageSize, selectedDate);
+          await loadTrades(page, pageSize, selectedDate);
         } else {
           await loadTrades(page, pageSize, undefined, calendarMonth);
         }
@@ -2221,7 +2221,7 @@ export default function Home() {
       if (user && token) {
         await updateTrade(trade.id, payload);
         if (selectedDate) {
-          await loadTrades(0, pageSize, selectedDate);
+          await loadTrades(page, pageSize, selectedDate);
         } else {
           await loadTrades(page, pageSize, undefined, calendarMonth);
         }
@@ -2287,7 +2287,7 @@ export default function Home() {
       if (user && token) {
         await deleteTrade(tradeToDelete.id);
         if (selectedDate) {
-          await loadTrades(0, pageSize, selectedDate);
+          await loadTrades(page, pageSize, selectedDate);
         } else {
           await loadTrades(page, pageSize, undefined, calendarMonth);
         }
@@ -3184,18 +3184,18 @@ export default function Home() {
                   ? "No trades match the current filters."
                   : undefined
               }
-              page={user && !selectedDate ? page : undefined}
-              pageSize={user && !selectedDate ? pageSize : undefined}
-              totalElements={user && !selectedDate ? pageMeta.totalElements : undefined}
+              page={user ? page : undefined}
+              pageSize={user ? pageSize : undefined}
+              totalElements={user ? pageMeta.totalElements : undefined}
               onPageChange={
-                user && !selectedDate
+                user
                   ? (newPage) => {
                       setPage(Math.max(0, newPage));
                     }
                   : undefined
               }
               onPageSizeChange={
-                user && !selectedDate
+                user
                   ? (size) => {
                       setPageSize(size);
                       setPage(0);
