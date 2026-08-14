@@ -466,7 +466,10 @@ export function TradesTable({
                   </Stack>
                   <Stack direction="row" spacing={1.5} alignItems="center">
                     <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                      {`${page * pageSize + 1}-${Math.min(totalElements, (page + 1) * pageSize)} of ${totalElements}`}
+                      {`${totalElements === 0 ? 0 : page * pageSize + 1}-${Math.min(
+                        totalElements,
+                        (page + 1) * pageSize
+                      )} of ${totalElements}`}
                     </Typography>
                     <TablePaginationActions
                       count={totalElements}

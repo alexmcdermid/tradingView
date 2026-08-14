@@ -593,7 +593,18 @@ describe("Home (authenticated)", () => {
     );
   });
 
-  it("fetches trades for a selected day", async () => {
+  it("paginates trades for a selected day", async () => {
+    mockFetchTrades.mockImplementation(
+      async (requestedPage = 0, requestedSize = 20, _month, date) => ({
+        items: [],
+        page: requestedPage,
+        size: requestedSize,
+        totalElements: date ? 21 : 1,
+        totalPages: date ? 2 : 1,
+        hasNext: Boolean(date) && requestedPage === 0,
+        hasPrevious: Boolean(date) && requestedPage > 0,
+      })
+    );
     const router = createMemoryRouter([
       { path: "/", element: <Home /> },
     ]);
@@ -620,7 +631,7 @@ describe("Home (authenticated)", () => {
     await waitFor(() => {
       expect(mockFetchTrades).toHaveBeenLastCalledWith(
         0,
-        expect.any(Number),
+        20,
         undefined,
         selectedDate,
         "CLOSED_AT",
@@ -632,6 +643,27 @@ describe("Home (authenticated)", () => {
         }
       );
     });
+
+    expect(await screen.findByText("1-20 of 21")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /next page/i }));
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenLastCalledWith(
+        1,
+        20,
+        undefined,
+        selectedDate,
+        "CLOSED_AT",
+        "DESC",
+        {
+          accountIds: [],
+          includeUnassigned: false,
+          symbol: "",
+        }
+      );
+    });
+    expect(await screen.findByText("21-21 of 21")).toBeInTheDocument();
   });
 
   it("updates trade closed date when dragging a table row onto a calendar day", async () => {
