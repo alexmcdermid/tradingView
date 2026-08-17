@@ -260,6 +260,10 @@ export interface UserProfile {
   privacyPolicyAcceptedAt?: string | null;
 }
 
+export interface BillingSessionResponse {
+  url: string;
+}
+
 export interface TradingAccount {
   id: string;
   name: string;

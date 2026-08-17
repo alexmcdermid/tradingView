@@ -6,6 +6,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ShareIcon from "@mui/icons-material/Share";
 import TuneIcon from "@mui/icons-material/Tune";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
 import {
   Alert,
   AppBar,
@@ -1043,6 +1044,7 @@ export default function Home() {
   const [dragOverDashboardWidget, setDragOverDashboardWidget] = useState<DashboardWidgetId | null>(null);
   const guestSeeded = useRef<boolean>(false);
   const isAdmin = Boolean(profile?.admin);
+  const isPremium = Boolean(profile?.premium);
   const showTradeHistoryEnabled = Boolean(preferences?.showTradeHistory);
   const showDetailedTradeTimesEnabled = Boolean(preferences?.showDetailedTradeTimes);
   const selectedDashboardWidgets = useMemo(
@@ -2851,6 +2853,34 @@ export default function Home() {
             alignItems="center"
             sx={{ flexWrap: "wrap", rowGap: 1, justifyContent: { xs: "flex-start", sm: "flex-end" } }}
           >
+            <Button
+              component={RouterLink}
+              to="/pro"
+              variant={isPremium ? "contained" : "outlined"}
+              color={isPremium ? "secondary" : "primary"}
+              size="small"
+              startIcon={<WorkspacePremiumIcon />}
+              sx={{
+                borderRadius: 999,
+                display: { xs: "none", sm: "inline-flex" },
+                textTransform: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {isPremium ? "Pro" : "Go Pro"}
+            </Button>
+            <Tooltip title={isPremium ? "Pro plan" : "Go Pro"}>
+              <IconButton
+                component={RouterLink}
+                to="/pro"
+                color={isPremium ? "secondary" : "primary"}
+                size="small"
+                aria-label={isPremium ? "Pro plan" : "Go Pro"}
+                sx={{ display: { xs: "inline-flex", sm: "none" } }}
+              >
+                <WorkspacePremiumIcon />
+              </IconButton>
+            </Tooltip>
             {user ? (
               <>
                 <IconButton
@@ -2881,6 +2911,13 @@ export default function Home() {
                       Admin
                     </MenuItem>
                   )}
+                  <MenuItem
+                    component={RouterLink}
+                    to="/pro"
+                    onClick={() => setMenuAnchor(null)}
+                  >
+                    {isPremium ? "Manage Pro" : "Upgrade to Pro"}
+                  </MenuItem>
                   <MenuItem onClick={handleOpenPreferencesDialog}>
                     Preferences
                   </MenuItem>
