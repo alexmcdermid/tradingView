@@ -17,7 +17,6 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TableFooter,
   TableHead,
   TableRow,
   TableSortLabel,
@@ -435,56 +434,52 @@ export function TradesTable({
             })
           )}
         </TableBody>
-        {paginationEnabled && (
-          <TableFooter>
-            <TableRow>
-              <TableCell colSpan={15} sx={{ p: 0 }}>
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    px: 1.5,
-                    py: 1,
-                  }}
-                >
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Rows
-                    </Typography>
-                    <Select
-                      size="small"
-                      value={pageSize}
-                      onChange={(event) => onPageSizeChange(Number(event.target.value))}
-                    >
-                      {[20, 50, 100].map((option) => (
-                        <MenuItem key={option} value={option}>
-                          {option}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </Stack>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                      {`${totalElements === 0 ? 0 : page * pageSize + 1}-${Math.min(
-                        totalElements,
-                        (page + 1) * pageSize
-                      )} of ${totalElements}`}
-                    </Typography>
-                    <TablePaginationActions
-                      count={totalElements}
-                      page={page}
-                      rowsPerPage={pageSize}
-                      onPageChange={(_, newPage) => onPageChange(newPage)}
-                    />
-                  </Stack>
-                </Box>
-              </TableCell>
-            </TableRow>
-          </TableFooter>
-        )}
         </Table>
       </TableContainer>
+      {paginationEnabled && (
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            px: 1.5,
+            py: 1,
+          }}
+        >
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Typography variant="body2" color="text.secondary">
+              Rows
+            </Typography>
+            <Select
+              size="small"
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            >
+              {[20, 50, 100].map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
+                </MenuItem>
+              ))}
+            </Select>
+          </Stack>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+              {`${totalElements === 0 ? 0 : page * pageSize + 1}-${Math.min(
+                totalElements,
+                (page + 1) * pageSize
+              )} of ${totalElements}`}
+            </Typography>
+            <TablePaginationActions
+              count={totalElements}
+              page={page}
+              rowsPerPage={pageSize}
+              onPageChange={(_, newPage) => onPageChange(newPage)}
+            />
+          </Stack>
+        </Box>
+      )}
     </Paper>
   );
 }
