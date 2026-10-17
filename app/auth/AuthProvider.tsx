@@ -283,7 +283,11 @@ export function AuthProvider({
     fetchUserProfile()
       .then((data) => {
         if (!cancelled) {
-          applyProfileOrRequireAgreement(data);
+          if (data) {
+            applyProfileOrRequireAgreement(data);
+          } else {
+            clearSessionState();
+          }
           setInitializing(false);
         }
       })
