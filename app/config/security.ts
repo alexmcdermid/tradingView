@@ -113,7 +113,7 @@ export function securityHeaders(): HeadersInit {
     "frame-ancestors 'none'",
     "form-action 'self'",
     "script-src 'self' 'unsafe-inline' https://accounts.google.com",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
     `connect-src ${Array.from(connectSources).join(" ")}`,

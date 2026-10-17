@@ -7,17 +7,11 @@ import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserProfile } from "../api/types";
 import { THEME_CHANGE_EVENT } from "../theme/colorMode";
 
-const googleMocks = vi.hoisted(() => ({
-  useGoogleOneTapLogin: vi.fn(),
-  GoogleLogin: vi.fn(() => <button>Google Login</button>),
-}));
-
 const originalMatchMedia = window.matchMedia;
 
 vi.mock("@react-oauth/google", () => ({
   GoogleOAuthProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  GoogleLogin: googleMocks.GoogleLogin,
-  useGoogleOneTapLogin: googleMocks.useGoogleOneTapLogin,
+  useGoogleOAuth: () => ({ clientId: "test-client-id", scriptLoadedSuccessfully: true }),
 }));
 
 vi.mock("../api/auth", () => ({
@@ -81,35 +75,43 @@ function acceptedProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   };
 }
 
-function latestGoogleLoginProps() {
-  return (googleMocks.GoogleLogin.mock.calls.at(-1) as
-    | [
-        {
-          onSuccess: (response: { credential?: string }) => void;
-          onError: () => void;
-          click_listener?: () => void;
-          theme?: "filled_black" | "outline";
-        },
-      ]
-    | undefined)?.[0];
+type GoogleIdConfig = {
+  callback?: (response: { credential?: string }) => void;
+  [option: string]: unknown;
+};
+
+type GoogleButtonOptions = {
+  click_listener?: () => void;
+  theme?: "filled_black" | "outline";
+  [option: string]: unknown;
+};
+
+function installGoogleIdentity() {
+  const googleId = {
+    initialize: vi.fn<(config: GoogleIdConfig) => void>(),
+    renderButton: vi.fn<(parent: HTMLElement, options: GoogleButtonOptions) => void>(
+      (parent) => {
+        parent.innerHTML = "<button>Google Login</button>";
+      }
+    ),
+    prompt: vi.fn(),
+    cancel: vi.fn(),
+  };
+  Object.defineProperty(window, "google", {
+    configurable: true,
+    value: { accounts: { id: googleId } },
+  });
+  return googleId;
 }
 
-function latestOneTapProps() {
-  return (googleMocks.useGoogleOneTapLogin.mock.calls.at(-1) as
-    | [
-        {
-          onSuccess: (response: { credential?: string }) => void;
-          onError: () => void;
-          promptMomentNotification?: (notification: {
-            isDisplayMoment: () => boolean;
-            isDisplayed: () => boolean;
-            isSkippedMoment: () => boolean;
-            isDismissedMoment: () => boolean;
-          }) => void;
-          disabled?: boolean;
-        },
-      ]
-    | undefined)?.[0];
+let googleId: ReturnType<typeof installGoogleIdentity>;
+
+function sendGoogleCredential(response: { credential?: string }) {
+  googleId.initialize.mock.calls.at(-1)?.[0].callback?.(response);
+}
+
+function latestButtonOptions() {
+  return googleId.renderButton.mock.calls.at(-1)?.[1];
 }
 
 function dispatchVisibilityChange(state: DocumentVisibilityState) {
@@ -118,23 +120,6 @@ function dispatchVisibilityChange(state: DocumentVisibilityState) {
     value: state,
   });
   document.dispatchEvent(new Event("visibilitychange"));
-}
-
-function promptNotification({
-  displayed = false,
-  skipped = false,
-  dismissed = false,
-}: {
-  displayed?: boolean;
-  skipped?: boolean;
-  dismissed?: boolean;
-}) {
-  return {
-    isDisplayMoment: () => displayed,
-    isDisplayed: () => displayed,
-    isSkippedMoment: () => skipped,
-    isDismissedMoment: () => dismissed,
-  };
 }
 
 function mockMatchMedia(matchesByQuery: Record<string, boolean>) {
@@ -161,6 +146,7 @@ describe("AuthProvider", () => {
     vi.mocked(acceptUserLegalAgreement).mockReset();
     vi.mocked(logoutSession).mockResolvedValue(undefined);
     window.localStorage.clear();
+    googleId = installGoogleIdentity();
   });
 
   afterEach(() => {
@@ -186,14 +172,12 @@ describe("AuthProvider", () => {
     );
 
     expect(screen.getByText("Auth ready")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    await act(async () => {});
 
-    await waitFor(() => {
-      expect(googleMocks.useGoogleOneTapLogin).toHaveBeenCalled();
-    });
-    expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
-      expect.objectContaining({ disabled: true })
-    );
+    expect(fetchUserProfile).toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    expect(googleId.renderButton).not.toHaveBeenCalled();
+    expect(googleId.prompt).not.toHaveBeenCalled();
   });
 
   it("does not initialize Google auth on legal review pages", () => {
@@ -207,8 +191,8 @@ describe("AuthProvider", () => {
     expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
     expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
     expect(fetchUserProfile).not.toHaveBeenCalled();
-    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
-    expect(googleMocks.useGoogleOneTapLogin).not.toHaveBeenCalled();
+    expect(googleId.initialize).not.toHaveBeenCalled();
+    expect(googleId.prompt).not.toHaveBeenCalled();
   });
 
   it("keeps FedCM enabled for low-click Google sign-in", async () => {
@@ -219,21 +203,37 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
 
-    expect(googleMocks.GoogleLogin).toHaveBeenLastCalledWith(
-      expect.objectContaining({ use_fedcm_for_button: true }),
-      undefined
-    );
-    expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
+    expect(googleId.initialize).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        client_id: "test-client-id",
         auto_select: true,
-        disabled: false,
         use_fedcm_for_button: true,
         use_fedcm_for_prompt: true,
       })
     );
+    expect(googleId.prompt).toHaveBeenCalled();
+  });
+
+  it("initializes Google Identity once for the button and One Tap", async () => {
+    render(
+      <React.StrictMode>
+        <AuthProvider>
+          <AuthProbe />
+        </AuthProvider>
+      </React.StrictMode>
+    );
+
+    await waitFor(() => {
+      expect(googleId.renderButton).toHaveBeenCalled();
+      expect(googleId.prompt).toHaveBeenCalled();
+    });
+
+    expect(googleId.initialize).toHaveBeenCalledTimes(1);
+    // A prompt status listener makes GSI log a FedCM migration warning.
+    expect(googleId.prompt.mock.calls.every((args) => args.length === 0)).toBe(true);
   });
 
   it("keeps the Google button aligned with same-page theme changes", async () => {
@@ -246,7 +246,7 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(latestGoogleLoginProps()?.theme).toBe("outline");
+      expect(latestButtonOptions()?.theme).toBe("outline");
     });
 
     act(() => {
@@ -254,8 +254,9 @@ describe("AuthProvider", () => {
     });
 
     await waitFor(() => {
-      expect(latestGoogleLoginProps()?.theme).toBe("filled_black");
+      expect(latestButtonOptions()?.theme).toBe("filled_black");
     });
+    expect(googleId.initialize).toHaveBeenCalledTimes(1);
   });
 
   it("keeps mobile one-tap prompts enabled with the explicit Google button available", async () => {
@@ -271,51 +272,18 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
 
     expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
-    expect(googleMocks.GoogleLogin).toHaveBeenLastCalledWith(
-      expect.objectContaining({ use_fedcm_for_button: true }),
-      undefined
-    );
-    expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
+    expect(googleId.prompt).toHaveBeenCalled();
+    expect(googleId.initialize).toHaveBeenLastCalledWith(
       expect.objectContaining({
         auto_select: true,
-        disabled: false,
         use_fedcm_for_button: true,
         use_fedcm_for_prompt: true,
       })
     );
-  });
-
-  it("suppresses repeated one-tap prompts after a one-tap error", async () => {
-    const cancel = vi.fn();
-    Object.defineProperty(window, "google", {
-      configurable: true,
-      value: { accounts: { id: { cancel } } },
-    });
-
-    render(
-      <AuthProvider>
-        <AuthProbe />
-      </AuthProvider>
-    );
-
-    await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
-    });
-    expect(latestOneTapProps()?.disabled).toBe(false);
-
-    act(() => {
-      latestOneTapProps()?.onError();
-    });
-
-    await waitFor(() => {
-      expect(latestOneTapProps()?.disabled).toBe(true);
-    });
-    expect(cancel).toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
   });
 
   it("suppresses repeated one-tap prompts after an empty one-tap credential", async () => {
@@ -326,28 +294,20 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.prompt).toHaveBeenCalledTimes(1);
     });
-    expect(latestOneTapProps()?.disabled).toBe(false);
 
     act(() => {
-      latestOneTapProps()?.onSuccess({});
+      sendGoogleCredential({});
     });
 
-    await waitFor(() => {
-      expect(latestOneTapProps()?.disabled).toBe(true);
-    });
-    expect(screen.getByText("Sign-in failed. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText("Sign-in failed. Try again.")).toBeInTheDocument();
+    expect(googleId.cancel).toHaveBeenCalled();
+    expect(googleId.prompt).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
   });
 
   it("remounts the Google button after a cached page is restored", async () => {
-    const cancel = vi.fn();
-    Object.defineProperty(window, "google", {
-      configurable: true,
-      value: { accounts: { id: { cancel } } },
-    });
-
     render(
       <AuthProvider>
         <AuthProbe />
@@ -355,9 +315,9 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
-    const initialRenderCount = googleMocks.GoogleLogin.mock.calls.length;
+    const initialRenderCount = googleId.renderButton.mock.calls.length;
     const pageShow = new Event("pageshow");
     Object.defineProperty(pageShow, "persisted", { value: true });
 
@@ -366,18 +326,13 @@ describe("AuthProvider", () => {
     });
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin.mock.calls.length).toBeGreaterThan(initialRenderCount);
+      expect(googleId.renderButton.mock.calls.length).toBeGreaterThan(initialRenderCount);
     });
-    expect(cancel).toHaveBeenCalled();
+    expect(googleId.cancel).toHaveBeenCalled();
+    expect(googleId.initialize).toHaveBeenCalledTimes(1);
   });
 
   it("does not cancel or remount FedCM while an explicit Google button flow is active", async () => {
-    const cancel = vi.fn();
-    Object.defineProperty(window, "google", {
-      configurable: true,
-      value: { accounts: { id: { cancel } } },
-    });
-
     render(
       <AuthProvider>
         <AuthProbe />
@@ -385,29 +340,26 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
 
-    const props = latestGoogleLoginProps();
-    const initialRenderCount = googleMocks.GoogleLogin.mock.calls.length;
+    const initialRenderCount = googleId.renderButton.mock.calls.length;
 
     act(() => {
-      props?.click_listener?.();
-      latestOneTapProps()?.onError();
-      latestOneTapProps()?.promptMomentNotification?.(promptNotification({ dismissed: true }));
+      latestButtonOptions()?.click_listener?.();
       dispatchVisibilityChange("hidden");
       dispatchVisibilityChange("visible");
     });
 
-    expect(cancel).not.toHaveBeenCalled();
-    expect(googleMocks.GoogleLogin.mock.calls.length).toBe(initialRenderCount);
+    expect(googleId.cancel).not.toHaveBeenCalled();
+    expect(googleId.renderButton.mock.calls.length).toBe(initialRenderCount);
 
     act(() => {
-      props?.onError();
+      sendGoogleCredential({});
       dispatchVisibilityChange("hidden");
     });
 
-    expect(cancel).toHaveBeenCalled();
+    expect(googleId.cancel).toHaveBeenCalled();
   });
 
   it("does not render or initialize Google sign-in while restoring an existing session", async () => {
@@ -424,13 +376,9 @@ describe("AuthProvider", () => {
       </AuthProvider>
     );
 
-    await waitFor(() => {
-      expect(googleMocks.useGoogleOneTapLogin).toHaveBeenLastCalledWith(
-        expect.objectContaining({ disabled: true })
-      );
-    });
-    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: /google login/i })).not.toBeInTheDocument();
+    expect(googleId.initialize).not.toHaveBeenCalled();
+    expect(googleId.prompt).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveProfile(acceptedProfile());
@@ -439,7 +387,9 @@ describe("AuthProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
     });
-    expect(googleMocks.GoogleLogin).not.toHaveBeenCalled();
+    expect(googleId.initialize).not.toHaveBeenCalled();
+    expect(googleId.renderButton).not.toHaveBeenCalled();
+    expect(googleId.prompt).not.toHaveBeenCalled();
   });
 
   it("shows a pending state while the backend verifies Google sign-in", async () => {
@@ -457,11 +407,12 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
 
     act(() => {
-      latestGoogleLoginProps()?.onSuccess({ credential: "google-token" });
+      latestButtonOptions()?.click_listener?.();
+      sendGoogleCredential({ credential: "google-token" });
     });
 
     expect(screen.getByRole("button", { name: /signing in/i })).toBeDisabled();
@@ -488,11 +439,12 @@ describe("AuthProvider", () => {
     );
 
     await waitFor(() => {
-      expect(googleMocks.GoogleLogin).toHaveBeenCalled();
+      expect(googleId.renderButton).toHaveBeenCalled();
     });
 
     act(() => {
-      latestGoogleLoginProps()?.onSuccess({ credential: "google-token" });
+      latestButtonOptions()?.click_listener?.();
+      sendGoogleCredential({ credential: "google-token" });
     });
 
     expect(screen.getByRole("button", { name: /signing in/i })).toBeDisabled();

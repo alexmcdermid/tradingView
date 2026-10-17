@@ -1,4 +1,4 @@
-import { GoogleOAuthProvider, GoogleLogin, useGoogleOneTapLogin } from "@react-oauth/google";
+import { GoogleOAuthProvider, useGoogleOAuth } from "@react-oauth/google";
 import {
   Alert,
   Button,
@@ -29,6 +29,11 @@ import { ApiError } from "../api/client";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } from "../theme/colorMode";
+import {
+  cancelGoogleIdentityPrompt,
+  initializeGoogleIdentity,
+  setGoogleCredentialHandler,
+} from "./googleIdentity";
 
 type UserInfo = {
   sub: string;
@@ -136,27 +141,6 @@ const preferencesFromProfile = (profile: UserProfile): UserPreferences => ({
 const hasAcceptedLegalAgreement = (profile: UserProfile) =>
   Boolean(profile.termsAcceptedAt && profile.privacyPolicyAcceptedAt);
 
-type GoogleIdentityWindow = Window & {
-  google?: {
-    accounts?: {
-      id?: {
-        cancel?: () => void;
-      };
-    };
-  };
-};
-
-function cancelGoogleIdentityPrompt() {
-  if (typeof window === "undefined") {
-    return;
-  }
-  try {
-    (window as GoogleIdentityWindow).google?.accounts?.id?.cancel?.();
-  } catch {
-    // Ignore Google Identity cleanup failures; the next render will reinitialize it.
-  }
-}
-
 export function AuthProvider({
   children,
   disableLoginPrompts = false,
@@ -166,6 +150,7 @@ export function AuthProvider({
   disableLoginPrompts?: boolean;
   suppressLegalAgreementDialog?: boolean;
 }) {
+  const { clientId, scriptLoadedSuccessfully } = useGoogleOAuth();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -228,6 +213,11 @@ export function AuthProvider({
       googleInteractionTimeoutRef.current = null;
     }, GOOGLE_INTERACTION_TIMEOUT_MS);
   }, []);
+
+  const startGoogleButtonInteraction = useCallback(
+    () => startGoogleInteraction("button"),
+    [startGoogleInteraction]
+  );
 
   const applyProfile = useCallback(
     (data: UserProfile) => {
@@ -433,37 +423,27 @@ export function AuthProvider({
   const shouldShowLoginButton =
     mounted && !initializing && !disableLoginPrompts && !legalAgreementRequired && !token && !user;
 
-  useGoogleOneTapLogin({
-    onSuccess: (response) => void handleSuccess(response.credential, "one-tap"),
-    onError: () => {
-      if (googleInteractionSourceRef.current === "button") {
-        return;
-      }
-      clearGoogleInteraction();
-      setOneTapSuppressed(true);
-      cancelGoogleIdentityPrompt();
-    },
-    promptMomentNotification: (notification) => {
-      if (
-        notification.isDisplayMoment() &&
-        notification.isDisplayed() &&
-        !googleInteractionInProgressRef.current
-      ) {
-        startGoogleInteraction("one-tap");
-      }
-      if (
-        (notification.isSkippedMoment() || notification.isDismissedMoment()) &&
-        googleInteractionSourceRef.current !== "button"
-      ) {
-        clearGoogleInteraction();
-      }
-    },
-    auto_select: true,
-    use_fedcm_for_prompt: true,
-    use_fedcm_for_button: true,
-    cancel_on_tap_outside: false,
-    disabled: oneTapLoginDisabled,
-  });
+  useEffect(() =>
+    setGoogleCredentialHandler((response) => {
+      // The button and One Tap share one GSI callback; the button's click listener marks its flow.
+      const source = googleInteractionSourceRef.current === "button" ? "button" : "one-tap";
+      void handleSuccess(response.credential, source);
+    })
+  );
+
+  useEffect(() => {
+    if (!scriptLoadedSuccessfully || oneTapLoginDisabled) {
+      return;
+    }
+    const googleIdentity = initializeGoogleIdentity(clientId);
+    if (!googleIdentity?.prompt) {
+      return;
+    }
+    // Prompt without a moment listener: GSI warns about any status callback since FedCM no longer
+    // reports display moments.
+    googleIdentity.prompt();
+    return cancelGoogleIdentityPrompt;
+  }, [clientId, oneTapLoginDisabled, scriptLoadedSuccessfully]);
 
   const loginButton = shouldShowLoginButton ? (
     <Stack
@@ -495,23 +475,13 @@ export function AuthProvider({
             overflow: "hidden",
           }}
         >
-          <GoogleLogin
+          <GoogleSignInButton
             key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
-            onSuccess={(response) => void handleSuccess(response.credential, "button")}
-            onError={() => {
-              clearGoogleInteraction();
-              clearSessionState();
-              setSigningIn(false);
-              setAuthError("Google sign-in failed before a credential was returned. Try again.");
-            }}
-            text="signin_with"
+            clientId={clientId}
+            scriptLoaded={scriptLoadedSuccessfully}
             theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
-            shape="pill"
             width={loginWidth}
-            itp_support
-            use_fedcm_for_button
-            cancel_on_tap_outside={false}
-            click_listener={() => startGoogleInteraction("button")}
+            onClick={startGoogleButtonInteraction}
           />
         </div>
       )}
@@ -648,6 +618,40 @@ export function useAuth() {
     throw new Error("useAuth must be used within AuthProvider");
   }
   return ctx;
+}
+
+function GoogleSignInButton({
+  clientId,
+  scriptLoaded,
+  theme,
+  width,
+  onClick,
+}: {
+  clientId: string;
+  scriptLoaded: boolean;
+  theme: "filled_black" | "outline";
+  width: string;
+  onClick: () => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!scriptLoaded || !container) {
+      return;
+    }
+    initializeGoogleIdentity(clientId)?.renderButton?.(container, {
+      type: "standard",
+      theme,
+      size: "large",
+      text: "signin_with",
+      shape: "pill",
+      width,
+      click_listener: onClick,
+    });
+  }, [clientId, onClick, scriptLoaded, theme, width]);
+
+  return <div ref={containerRef} style={{ height: 40 }} />;
 }
 
 function PublicAuthProvider({ children }: { children: ReactNode }) {
