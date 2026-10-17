@@ -141,7 +141,7 @@ function mockMatchMedia(matchesByQuery: Record<string, boolean>) {
 
 describe("AuthProvider", () => {
   beforeEach(() => {
-    vi.mocked(fetchUserProfile).mockRejectedValue(new Error("No active session"));
+    vi.mocked(fetchUserProfile).mockResolvedValue(null);
     vi.mocked(loginWithGoogleCredential).mockReset();
     vi.mocked(acceptUserLegalAgreement).mockReset();
     vi.mocked(logoutSession).mockResolvedValue(undefined);
@@ -451,6 +451,19 @@ describe("AuthProvider", () => {
 
     expect(await screen.findByText("Sign-in failed. Try again.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /google login/i })).toBeInTheDocument();
+    expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
+  });
+
+  it("falls back to signed out when the profile check fails", async () => {
+    vi.mocked(fetchUserProfile).mockRejectedValue(new Error("Request failed with status 401"));
+
+    render(
+      <AuthProvider>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    expect(await screen.findByRole("button", { name: /google login/i })).toBeInTheDocument();
     expect(screen.getByTestId("auth-user")).toHaveTextContent("none");
   });
 

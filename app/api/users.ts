@@ -16,8 +16,10 @@ export async function fetchUserTradeHistory(userId: string) {
   return request<TradeHistory[]>(`/admin/users/${userId}/trade-history`);
 }
 
+// Resolves to null when signed out: the endpoint answers 204 rather than 401.
 export async function fetchUserProfile() {
-  return request<UserProfile>("/users/me");
+  const profile = await request<UserProfile | undefined>("/users/me");
+  return profile ?? null;
 }
 
 export async function acceptUserLegalAgreement() {
