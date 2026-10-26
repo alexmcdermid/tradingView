@@ -88,6 +88,8 @@ describe("TradesTable", () => {
       });
       expect(onTradeDragStart).toHaveBeenCalledWith("trade-1");
       expect(row).toHaveClass("Mui-selected");
+      const ghostChip = screen.getAllByText("AAPL").find((el) => el.closest("[aria-hidden]"));
+      expect(ghostChip?.closest(".MuiChip-root")).toHaveClass("MuiChip-colorSuccess");
 
       const move = createEvent.touchMove(row, { changedTouches: touchAt(50, 40) });
       fireEvent(row, move);

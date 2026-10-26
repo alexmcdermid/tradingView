@@ -484,7 +484,14 @@ export function TradesTable({
           >
             <Chip
               label={touchDraggedTrade?.symbol ?? "Trade"}
-              color="secondary"
+              // Match the row's Side chip so the ghost isn't mistaken for a different trade.
+              color={
+                !touchDraggedTrade
+                  ? "default"
+                  : touchDraggedTrade.direction === "LONG"
+                    ? "success"
+                    : "warning"
+              }
               size="small"
               sx={{ transform: "translate(-50%, -48px)", boxShadow: 3 }}
             />
