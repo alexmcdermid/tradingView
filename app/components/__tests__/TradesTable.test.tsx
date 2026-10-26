@@ -122,6 +122,61 @@ describe("TradesTable", () => {
       expect(onTradeTouchDrop).not.toHaveBeenCalled();
     });
 
+    it("scrolls toward the edge the finger is held at and retargets the day under it", () => {
+      const { row, onTradeTouchDropTargetChange, onTradeTouchDrop } = renderTable();
+      let scrolledIntoView = false;
+      const scrollBy = vi.spyOn(window, "scrollBy").mockImplementation(() => {
+        scrolledIntoView = true;
+      });
+      document.elementFromPoint = vi.fn(() => (scrolledIntoView ? dropTarget : document.body));
+
+      try {
+        fireEvent.touchStart(row, { touches: touchAt(50, 300) });
+        act(() => {
+          vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS);
+        });
+        fireEvent.touchMove(row, { changedTouches: touchAt(50, 10) });
+        expect(onTradeTouchDropTargetChange).not.toHaveBeenCalledWith("2024-05-03");
+
+        act(() => {
+          vi.advanceTimersByTime(50);
+        });
+        expect(scrollBy).toHaveBeenCalledWith(0, expect.any(Number));
+        expect(scrollBy.mock.calls[0][1]).toBeLessThan(0);
+        expect(onTradeTouchDropTargetChange).toHaveBeenLastCalledWith("2024-05-03");
+
+        fireEvent.touchEnd(row, { changedTouches: touchAt(50, 10) });
+        expect(onTradeTouchDrop).toHaveBeenCalledWith("trade-1", "2024-05-03");
+        const callsAtDrop = scrollBy.mock.calls.length;
+        act(() => {
+          vi.advanceTimersByTime(100);
+        });
+        expect(scrollBy).toHaveBeenCalledTimes(callsAtDrop);
+      } finally {
+        scrollBy.mockRestore();
+      }
+    });
+
+    it("doesn't scroll when a row near the bottom edge is picked up", () => {
+      const { row } = renderTable();
+      const scrollBy = vi.spyOn(window, "scrollBy").mockImplementation(() => {});
+      const nearBottom = window.innerHeight - 10;
+
+      try {
+        fireEvent.touchStart(row, { touches: touchAt(50, nearBottom) });
+        act(() => {
+          vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS + 100);
+        });
+        fireEvent.touchMove(row, { changedTouches: touchAt(50, nearBottom - 20) });
+        act(() => {
+          vi.advanceTimersByTime(100);
+        });
+        expect(scrollBy).not.toHaveBeenCalled();
+      } finally {
+        scrollBy.mockRestore();
+      }
+    });
+
     it("cancels the browser's native drag while a finger is on the row", () => {
       const { row, onTradeDragStart } = renderTable();
       const dataTransfer = { setData: vi.fn(), effectAllowed: "none" };

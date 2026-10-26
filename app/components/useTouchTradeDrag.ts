@@ -6,6 +6,10 @@ import { useCallback, useEffect, useRef, useState, type TouchEvent as ReactTouch
 const TRADE_DROP_DATE_ATTRIBUTE = "data-trade-drop-date";
 export const TOUCH_DRAG_DELAY_MS = 400;
 const TOUCH_DRAG_SLOP_PX = 10;
+// Holding a drag this close to the top or bottom of the screen scrolls the page,
+// faster the closer the finger gets, so off-screen calendar days can be reached.
+const AUTO_SCROLL_EDGE_PX = 72;
+const AUTO_SCROLL_MAX_STEP_PX = 14;
 
 interface TouchDragState {
   tradeId: string;
@@ -17,6 +21,7 @@ interface TouchDragState {
   active: boolean;
   dropDate: string | null;
   timer?: ReturnType<typeof setTimeout>;
+  scrollFrame?: number;
 }
 
 interface TouchTradeDragOptions {
@@ -36,6 +41,23 @@ function findDropDate(x: number, y: number) {
     .elementFromPoint(x, y)
     ?.closest<HTMLElement>(`[${TRADE_DROP_DATE_ATTRIBUTE}]`);
   return target?.getAttribute(TRADE_DROP_DATE_ATTRIBUTE) ?? null;
+}
+
+function autoScrollStep({ y, startY }: TouchDragState) {
+  const fromBottom = window.innerHeight - y;
+  const scrollUp = y < fromBottom;
+  // Only scroll the way the finger has moved since pickup, so picking up a row that
+  // already sits near an edge doesn't scroll the page out from under it.
+  if (scrollUp ? y >= startY : y <= startY) {
+    return 0;
+  }
+  const edgeDistance = scrollUp ? y : fromBottom;
+  if (edgeDistance >= AUTO_SCROLL_EDGE_PX) {
+    return 0;
+  }
+  const closeness = Math.min(1, (AUTO_SCROLL_EDGE_PX - edgeDistance) / AUTO_SCROLL_EDGE_PX);
+  const step = Math.ceil(closeness * AUTO_SCROLL_MAX_STEP_PX);
+  return scrollUp ? -step : step;
 }
 
 export function useTouchTradeDrag({
@@ -60,6 +82,9 @@ export function useTouchTradeDrag({
       return;
     }
     clearTimeout(state.timer);
+    if (state.scrollFrame !== undefined) {
+      cancelAnimationFrame(state.scrollFrame);
+    }
     if (state.active) {
       if (state.dropDate) {
         callbacksRef.current.onDropTargetChange?.(null);
@@ -69,18 +94,44 @@ export function useTouchTradeDrag({
     }
   }, []);
 
-  const moveTo = useCallback((state: TouchDragState, x: number, y: number) => {
-    state.x = x;
-    state.y = y;
-    if (ghostRef.current) {
-      ghostRef.current.style.transform = `translate(${x}px, ${y}px)`;
-    }
-    const date = findDropDate(x, y);
+  const updateDropTarget = useCallback((state: TouchDragState) => {
+    const date = findDropDate(state.x, state.y);
     if (date !== state.dropDate) {
       state.dropDate = date;
       callbacksRef.current.onDropTargetChange?.(date);
     }
   }, []);
+
+  // Runs every frame while the finger rests near an edge, since touchmove stops firing
+  // when the finger is still. The page moves under the finger, so re-check the target.
+  const autoScroll = useCallback(
+    (state: TouchDragState) => {
+      state.scrollFrame = undefined;
+      const step = autoScrollStep(state);
+      if (stateRef.current !== state || step === 0) {
+        return;
+      }
+      window.scrollBy(0, step);
+      updateDropTarget(state);
+      state.scrollFrame = requestAnimationFrame(() => autoScroll(state));
+    },
+    [updateDropTarget]
+  );
+
+  const moveTo = useCallback(
+    (state: TouchDragState, x: number, y: number) => {
+      state.x = x;
+      state.y = y;
+      if (ghostRef.current) {
+        ghostRef.current.style.transform = `translate(${x}px, ${y}px)`;
+      }
+      updateDropTarget(state);
+      if (state.scrollFrame === undefined && autoScrollStep(state) !== 0) {
+        state.scrollFrame = requestAnimationFrame(() => autoScroll(state));
+      }
+    },
+    [autoScroll, updateDropTarget]
+  );
 
   const handleRowTouchStart = useCallback(
     (event: ReactTouchEvent<HTMLElement>, tradeId: string) => {
@@ -168,7 +219,15 @@ export function useTouchTradeDrag({
     };
   }, [body, finish, moveTo]);
 
-  useEffect(() => () => clearTimeout(stateRef.current?.timer), []);
+  useEffect(
+    () => () => {
+      clearTimeout(stateRef.current?.timer);
+      if (stateRef.current?.scrollFrame !== undefined) {
+        cancelAnimationFrame(stateRef.current.scrollFrame);
+      }
+    },
+    []
+  );
 
   return {
     bodyRef: setBody,
