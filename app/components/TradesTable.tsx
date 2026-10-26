@@ -10,6 +10,7 @@ import {
   IconButton,
   MenuItem,
   Paper,
+  Portal,
   Select,
   Skeleton,
   Stack,
@@ -25,6 +26,7 @@ import {
 } from "@mui/material";
 import type { Trade, TradeSortDirection, TradeSortField } from "../api/types";
 import { computeMarginFee } from "../utils/tradeMath";
+import { useTouchTradeDrag } from "./useTouchTradeDrag";
 
 const TRADE_DRAG_MIME = "application/x-trade-id";
 const TRADE_DRAG_PREFIX = "trade:";
@@ -37,6 +39,8 @@ interface TradesTableProps {
   onDelete: (trade: Trade) => void;
   onTradeDragStart?: (tradeId: string) => void;
   onTradeDragEnd?: () => void;
+  onTradeTouchDropTargetChange?: (date: string | null) => void;
+  onTradeTouchDrop?: (tradeId: string, date: string) => void;
   page?: number;
   pageSize?: number;
   totalElements?: number;
@@ -162,6 +166,8 @@ export function TradesTable({
   onDelete,
   onTradeDragStart,
   onTradeDragEnd,
+  onTradeTouchDropTargetChange,
+  onTradeTouchDrop,
   page,
   pageSize,
   totalElements,
@@ -180,6 +186,17 @@ export function TradesTable({
     totalElements !== undefined &&
     onPageChange !== undefined &&
     onPageSizeChange !== undefined;
+
+  const touchDrag = useTouchTradeDrag({
+    enabled: Boolean(onTradeTouchDrop),
+    onDragStart: onTradeDragStart,
+    onDragEnd: onTradeDragEnd,
+    onDropTargetChange: onTradeTouchDropTargetChange,
+    onDrop: onTradeTouchDrop,
+  });
+  const touchDraggedTrade = touchDrag.touchDrag
+    ? trades.find((trade) => trade.id === touchDrag.touchDrag?.tradeId)
+    : undefined;
 
   const handleSortChange = (field: TradeSortField) => {
     if (!onSortChange) {
@@ -275,7 +292,7 @@ export function TradesTable({
             <TableCell align="right" sx={{ whiteSpace: "nowrap" }}>Actions</TableCell>
           </TableRow>
         </TableHead>
-        <TableBody>
+        <TableBody ref={touchDrag.bodyRef}>
           {loading ? (
             Array.from({ length: 5 }).map((_, idx) => (
               <TableRow key={idx}>
@@ -311,10 +328,17 @@ export function TradesTable({
                 <TableRow
                   key={trade.id}
                   hover
+                  selected={touchDrag.touchDrag?.tradeId === trade.id}
                   draggable
+                  onTouchStart={(event) => touchDrag.handleRowTouchStart(event, trade.id)}
+                  onContextMenu={(event) => {
+                    if (touchDrag.isTouchTracking()) {
+                      event.preventDefault();
+                    }
+                  }}
                   onDragStart={(event) => {
                     const target = event.target as HTMLElement;
-                    if (target.closest("button")) {
+                    if (target.closest("button") || touchDrag.isTouchTracking()) {
                       event.preventDefault();
                       return;
                     }
@@ -325,7 +349,15 @@ export function TradesTable({
                   }}
                   onDragEnd={() => onTradeDragEnd?.()}
                   onClick={() => onEdit(trade)}
-                  sx={{ cursor: "grab" }}
+                  sx={{
+                    cursor: "grab",
+                    // A long-press on a row starts a touch drag, so keep it from selecting text.
+                    "@media (any-pointer: coarse)": {
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
+                      WebkitTouchCallout: "none",
+                    },
+                  }}
                 >
                 <TableCell sx={{ minWidth: 120, maxWidth: 180, whiteSpace: "normal" }}>
                   <Typography variant="body2" fontWeight={700}>
@@ -436,6 +468,62 @@ export function TradesTable({
         </TableBody>
         </Table>
       </TableContainer>
+      {touchDrag.touchDrag && (
+        <Portal>
+          <Box
+            ref={touchDrag.ghostRef}
+            aria-hidden
+            sx={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              zIndex: (theme) => theme.zIndex.tooltip,
+              pointerEvents: "none",
+            }}
+            style={{ transform: `translate(${touchDrag.touchDrag.x}px, ${touchDrag.touchDrag.y}px)` }}
+          >
+            <Chip
+              label={
+                touchDraggedTrade ? (
+                  <>
+                    <Box component="span" sx={{ display: "block", fontWeight: 700 }}>
+                      {touchDraggedTrade.symbol}
+                      {touchDraggedTrade.optionType && touchDraggedTrade.strikePrice
+                        ? ` ${touchDraggedTrade.optionType} ${touchDraggedTrade.strikePrice.toFixed(2)}`
+                        : ""}
+                    </Box>
+                    <Box component="span" sx={{ display: "block", fontSize: "0.7rem" }}>
+                      {`${formatQuantity(touchDraggedTrade.quantity)} · ${formatNumber(
+                        touchDraggedTrade.realizedPnl,
+                        2
+                      )} ${touchDraggedTrade.currency} · ${formatDate(touchDraggedTrade.closedAt)}`}
+                    </Box>
+                  </>
+                ) : (
+                  "Trade"
+                )
+              }
+              // Match the row's Side chip so the ghost isn't mistaken for a different trade.
+              color={
+                !touchDraggedTrade
+                  ? "default"
+                  : touchDraggedTrade.direction === "LONG"
+                    ? "success"
+                    : "warning"
+              }
+              size="small"
+              sx={{
+                // Sit above the finger so it isn't hidden under it.
+                transform: "translate(-50%, calc(-100% - 24px))",
+                boxShadow: 3,
+                height: "auto",
+                py: 0.5,
+                "& .MuiChip-label": { whiteSpace: "nowrap", textAlign: "center" },
+              }}
+            />
+          </Box>
+        </Portal>
+      )}
       {paginationEnabled && (
         <Box
           sx={{

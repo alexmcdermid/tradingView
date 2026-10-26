@@ -989,6 +989,7 @@ export default function Home() {
   const [tradeHistorySubject, setTradeHistorySubject] = useState<Trade | null>(null);
   const [loadingTradeHistory, setLoadingTradeHistory] = useState(false);
   const [draggingTradeId, setDraggingTradeId] = useState<string | null>(null);
+  const [touchDropTargetDate, setTouchDropTargetDate] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tradeToDelete, setTradeToDelete] = useState<Trade | null>(null);
   const [deletingTrade, setDeletingTrade] = useState(false);
@@ -3000,6 +3001,7 @@ export default function Home() {
                 onDateSelect={handleDateSelect}
                 draggingTradeId={draggingTradeId}
                 onTradeDrop={handleDropTradeToDate}
+                touchDropTargetDate={touchDropTargetDate}
                 valueMode={calendarValueMode}
                 marginMode={calendarMarginMode}
               />
@@ -3109,6 +3111,8 @@ export default function Home() {
               onDelete={handleDeleteTrade}
               onTradeDragStart={setDraggingTradeId}
               onTradeDragEnd={() => setDraggingTradeId(null)}
+              onTradeTouchDropTargetChange={setTouchDropTargetDate}
+              onTradeTouchDrop={handleDropTradeToDate}
               sortBy={user && token ? tradeSort.sortBy : undefined}
               sortDirection={user && token ? tradeSort.sortDirection : undefined}
               onSortChange={user && token ? handleTradeSortChange : undefined}
