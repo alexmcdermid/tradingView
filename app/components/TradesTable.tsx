@@ -483,7 +483,26 @@ export function TradesTable({
             style={{ transform: `translate(${touchDrag.touchDrag.x}px, ${touchDrag.touchDrag.y}px)` }}
           >
             <Chip
-              label={touchDraggedTrade?.symbol ?? "Trade"}
+              label={
+                touchDraggedTrade ? (
+                  <>
+                    <Box component="span" sx={{ display: "block", fontWeight: 700 }}>
+                      {touchDraggedTrade.symbol}
+                      {touchDraggedTrade.optionType && touchDraggedTrade.strikePrice
+                        ? ` ${touchDraggedTrade.optionType} ${touchDraggedTrade.strikePrice.toFixed(2)}`
+                        : ""}
+                    </Box>
+                    <Box component="span" sx={{ display: "block", fontSize: "0.7rem" }}>
+                      {`${formatQuantity(touchDraggedTrade.quantity)} · ${formatNumber(
+                        touchDraggedTrade.realizedPnl,
+                        2
+                      )} ${touchDraggedTrade.currency} · ${formatDate(touchDraggedTrade.closedAt)}`}
+                    </Box>
+                  </>
+                ) : (
+                  "Trade"
+                )
+              }
               // Match the row's Side chip so the ghost isn't mistaken for a different trade.
               color={
                 !touchDraggedTrade
@@ -493,7 +512,14 @@ export function TradesTable({
                     : "warning"
               }
               size="small"
-              sx={{ transform: "translate(-50%, -48px)", boxShadow: 3 }}
+              sx={{
+                // Sit above the finger so it isn't hidden under it.
+                transform: "translate(-50%, calc(-100% - 24px))",
+                boxShadow: 3,
+                height: "auto",
+                py: 0.5,
+                "& .MuiChip-label": { whiteSpace: "nowrap", textAlign: "center" },
+              }}
             />
           </Box>
         </Portal>

@@ -90,6 +90,7 @@ describe("TradesTable", () => {
       expect(row).toHaveClass("Mui-selected");
       const ghostChip = screen.getAllByText("AAPL").find((el) => el.closest("[aria-hidden]"));
       expect(ghostChip?.closest(".MuiChip-root")).toHaveClass("MuiChip-colorSuccess");
+      expect(ghostChip?.closest(".MuiChip-root")).toHaveTextContent("10 · 100.00 USD · 2024/05/01");
 
       const move = createEvent.touchMove(row, { changedTouches: touchAt(50, 40) });
       fireEvent(row, move);
