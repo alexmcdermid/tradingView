@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
+import { act, render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import React from "react";
@@ -8,6 +8,7 @@ import type { Trade } from "../api/types";
 import { ApiError } from "../api/client";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { ColorModeContext } from "../theme/colorMode";
+import { TOUCH_DRAG_DELAY_MS } from "../components/useTouchTradeDrag";
 
 type AuthState = {
   user: { sub: string; email?: string | null; name?: string | null } | null;
@@ -703,6 +704,49 @@ describe("Home (authenticated)", () => {
     fireEvent.dragStart(tradeRow as HTMLElement, { dataTransfer });
     fireEvent.dragOver(targetDay, { dataTransfer });
     fireEvent.drop(targetDay, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockUpdateTrade).toHaveBeenCalledWith(
+        "1",
+        expect.objectContaining({ closedAt: targetDate })
+      );
+    });
+  });
+
+  it("updates trade closed date when touch-dragging a table row onto a calendar day", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(1);
+    });
+
+    const editButton = await screen.findByRole("button", { name: /edit/i });
+    const tradeRow = editButton.closest("tr") as HTMLElement;
+    const targetDay = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    })[0];
+    const targetDate = targetDay.getAttribute("data-trade-drop-date");
+    expect(targetDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    const originalElementFromPoint = document.elementFromPoint;
+    document.elementFromPoint = vi.fn(() => targetDay);
+    try {
+      const touches = [{ identifier: 1, clientX: 20, clientY: 20 }];
+      fireEvent.touchStart(tradeRow, { touches });
+      await act(() => new Promise((resolve) => setTimeout(resolve, TOUCH_DRAG_DELAY_MS + 20)));
+      fireEvent.touchMove(tradeRow, { changedTouches: touches });
+      expect(targetDay).toHaveAttribute("data-drop-target", "true");
+      fireEvent.touchEnd(tradeRow, { changedTouches: touches });
+    } finally {
+      document.elementFromPoint = originalElementFromPoint;
+    }
 
     await waitFor(() => {
       expect(mockUpdateTrade).toHaveBeenCalledWith(

@@ -29,6 +29,7 @@ interface MonthlyCalendarProps {
   onDateSelect?: (date: string) => void;
   draggingTradeId?: string | null;
   onTradeDrop?: (tradeId: string, date: string) => void;
+  touchDropTargetDate?: string | null; // day under the finger during a touch drag
   readOnly?: boolean;
   holidays?: string[];
   valueMode?: "pnl" | "percent";
@@ -331,6 +332,7 @@ export function MonthlyCalendar({
   onDateSelect,
   draggingTradeId,
   onTradeDrop,
+  touchDropTargetDate,
   readOnly = false,
   holidays,
   valueMode = "pnl",
@@ -638,7 +640,10 @@ export function MonthlyCalendar({
 
           const selectable = onDateSelect && !readOnly;
           const dropEnabled = Boolean(onTradeDrop) && !readOnly;
-          const isDropTarget = dropEnabled && dropTargetDate === date && Boolean(draggingTradeId);
+          const isDropTarget =
+            dropEnabled &&
+            (touchDropTargetDate ?? dropTargetDate) === date &&
+            Boolean(draggingTradeId);
           const formatPnlValue = (value: number | null) =>
             value == null
               ? "—"
@@ -744,6 +749,7 @@ export function MonthlyCalendar({
               aria-pressed={selectable ? isSelected : undefined}
               data-calendar-date={selectable ? date : undefined}
               data-drop-target={isDropTarget ? "true" : undefined}
+              data-trade-drop-date={dropEnabled ? date : undefined}
               sx={{
                 borderRadius: 1,
                 p: { xs: 0.5, sm: 0.75 },

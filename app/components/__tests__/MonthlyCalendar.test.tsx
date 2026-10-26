@@ -258,4 +258,24 @@ describe("MonthlyCalendar", () => {
 
     expect(onTradeDrop).toHaveBeenCalledWith("trade-123", "2024-05-03");
   });
+
+  it("highlights the day under the finger during a touch drag", () => {
+    render(
+      <MonthlyCalendar
+        daily={daily}
+        initialMonth="2024-05-01"
+        onDateSelect={vi.fn()}
+        draggingTradeId="trade-123"
+        onTradeDrop={vi.fn()}
+        touchDropTargetDate="2024-05-03"
+      />
+    );
+
+    const day = screen.getByRole("button", { name: /select 2024-05-03/i });
+    expect(day).toHaveAttribute("data-trade-drop-date", "2024-05-03");
+    expect(day).toHaveAttribute("data-drop-target", "true");
+    expect(screen.getByRole("button", { name: /select 2024-05-04/i })).not.toHaveAttribute(
+      "data-drop-target"
+    );
+  });
 });
