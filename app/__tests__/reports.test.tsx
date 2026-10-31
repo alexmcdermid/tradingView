@@ -331,6 +331,64 @@ describe("Reports route", () => {
       expect(mockFetchAnnualSummary).not.toHaveBeenCalled();
     });
 
+    it("locks every year and unlock button while checkout is starting", async () => {
+      let resolveCheckout: (response: TaxYearCheckoutResponse) => void = () => {};
+      mockStartTaxYearCheckout.mockImplementation(
+        () => new Promise<TaxYearCheckoutResponse>((resolve) => (resolveCheckout = resolve))
+      );
+      const user = userEvent.setup({ pointerEventsCheck: 0 });
+
+      renderReports("/reports?year=2025");
+      await user.click(await screen.findByRole("button", { name: "Unlock 2025" }));
+
+      const tile2026 = screen.getByRole("button", { name: /^2026 / });
+      expect(tile2026).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^2025 / })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeDisabled();
+      await user.click(tile2026);
+      expect(screen.getByRole("region", { name: "Unlock 2025" })).toBeInTheDocument();
+      expect(mockStartTaxYearCheckout).toHaveBeenCalledTimes(1);
+
+      const checkoutUrl = "https://buy.stripe.com/test_abc?client_reference_id=pass-2025";
+      await act(async () => resolveCheckout({ checkoutUrl }));
+
+      expect(assign).toHaveBeenCalledWith(checkoutUrl);
+      expect(window.sessionStorage.getItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY)).toBe("2025");
+    });
+
+    it("stays on the app when the user leaves while checkout is starting", async () => {
+      let resolveCheckout: (response: TaxYearCheckoutResponse) => void = () => {};
+      mockStartTaxYearCheckout.mockImplementation(
+        () => new Promise<TaxYearCheckoutResponse>((resolve) => (resolveCheckout = resolve))
+      );
+      const user = userEvent.setup();
+
+      renderReports("/reports?year=2025");
+      await user.click(await screen.findByRole("button", { name: "Unlock 2025" }));
+      await user.click(screen.getByRole("link", { name: "Back to app" }));
+      expect(await screen.findByText("Home page")).toBeInTheDocument();
+
+      await act(async () => resolveCheckout({ checkoutUrl: "https://buy.stripe.com/test_abc" }));
+
+      expect(assign).not.toHaveBeenCalled();
+      expect(window.sessionStorage.getItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY)).toBeNull();
+    });
+
+    it("lets the user start again when the Stripe page never loads", async () => {
+      const user = useFakeTimersWithUser();
+      mockStartTaxYearCheckout.mockResolvedValue({ checkoutUrl: "https://buy.stripe.com/test_abc" });
+
+      renderReports("/reports?year=2025");
+      await user.click(await screen.findByRole("button", { name: "Unlock 2025" }));
+      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeDisabled();
+
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+
+      expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: /^2026 / })).toBeEnabled();
+    });
+
     it("omits the price when none is configured", async () => {
       mockFetchTaxYearOverview.mockResolvedValue(buildOverview({ price: null }));
 

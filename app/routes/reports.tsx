@@ -63,6 +63,8 @@ export const EXPORT_DISCLOSURE =
 
 const CHECKOUT_POLL_INTERVAL_MS = 2_000;
 const CHECKOUT_POLL_MAX_ATTEMPTS = 30;
+// A navigation to Stripe that the user stops (Esc) never unloads the page, so let them start again.
+const CHECKOUT_REDIRECT_RECOVERY_MS = 10_000;
 // paidAt is server time, so the window also absorbs a skewed device clock in either direction.
 const RECENT_PAYMENT_WINDOW_MS = 5 * 60_000;
 const SYMBOLS_INPUT_DEBOUNCE_MS = 400;
@@ -344,6 +346,8 @@ export default function Reports() {
   const downloadsInFlightRef = useRef(new Set<TaxYearReportType>());
   const overviewRequestIdRef = useRef(0);
   const passesRequestIdRef = useRef(0);
+  const unmountedRef = useRef(false);
+  const checkoutRecoveryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const [accountIds, setAccountIds] = useState<string[]>([]);
   const [includeUnassigned, setIncludeUnassigned] = useState(true);
@@ -550,6 +554,14 @@ export default function Reports() {
     return () => window.removeEventListener("pageshow", handlePageShow);
   }, []);
 
+  useEffect(() => {
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      clearTimeout(checkoutRecoveryTimerRef.current);
+    };
+  }, []);
+
   const handleReportError = useCallback(
     async (error: unknown, taxYear: number) => {
       if (isUnauthorized(error)) {
@@ -617,11 +629,19 @@ export default function Reports() {
     setCheckoutStartingYear(taxYear);
     try {
       const { checkoutUrl } = await startTaxYearCheckout(taxYear);
+      if (unmountedRef.current) {
+        // The user left this page while checkout was starting, so don't send them to Stripe.
+        return;
+      }
       if (!isHttpsUrl(checkoutUrl)) {
         throw new Error("Checkout link is invalid. Try again later.");
       }
       writePendingCheckoutYear(taxYear);
       window.location.assign(checkoutUrl);
+      checkoutRecoveryTimerRef.current = setTimeout(
+        () => setCheckoutStartingYear(null),
+        CHECKOUT_REDIRECT_RECOVERY_MS
+      );
     } catch (error) {
       setCheckoutStartingYear(null);
       if (isUnauthorized(error)) {
@@ -754,6 +774,8 @@ export default function Reports() {
                       key={item.taxYear}
                       item={item}
                       selected={item.taxYear === selectedTaxYear}
+                      // Stripe's page doesn't name the year, so keep the started year on screen.
+                      disabled={checkoutStartingYear !== null}
                       onSelect={handleSelectYear}
                     />
                   ))}
@@ -804,7 +826,7 @@ export default function Reports() {
                   <UnlockPanel
                     item={selectedItem}
                     overview={overview}
-                    starting={checkoutStartingYear === selectedItem.taxYear}
+                    checkoutStartingYear={checkoutStartingYear}
                     confirming={confirmingTaxYear === selectedItem.taxYear}
                     error={checkoutError}
                     onUnlock={(taxYear) => void handleUnlock(taxYear)}
@@ -824,10 +846,12 @@ export default function Reports() {
 function TaxYearTile({
   item,
   selected,
+  disabled,
   onSelect,
 }: {
   item: TaxYearOverviewItem;
   selected: boolean;
+  disabled: boolean;
   onSelect: (taxYear: number) => void;
 }) {
   const processing = !item.unlocked && item.passStatus === "PROCESSING";
@@ -844,6 +868,7 @@ function TaxYearTile({
     <ToggleButton
       value={item.taxYear}
       selected={selected}
+      disabled={disabled}
       onChange={() => onSelect(item.taxYear)}
       color="primary"
       sx={{
@@ -875,18 +900,19 @@ function TaxYearTile({
 function UnlockPanel({
   item,
   overview,
-  starting,
+  checkoutStartingYear,
   confirming,
   error,
   onUnlock,
 }: {
   item: TaxYearOverviewItem;
   overview: TaxYearOverview;
-  starting: boolean;
+  checkoutStartingYear: number | null;
   confirming: boolean;
   error: string | null;
   onUnlock: (taxYear: number) => void;
 }) {
+  const starting = checkoutStartingYear === item.taxYear;
   const price = overview.price
     ? formatMinorUnits(overview.price.amountCents, overview.price.currency)
     : null;
@@ -963,7 +989,7 @@ function UnlockPanel({
           <Button
             variant="contained"
             onClick={() => onUnlock(item.taxYear)}
-            disabled={!item.purchasable || starting || confirming}
+            disabled={!item.purchasable || checkoutStartingYear !== null || confirming}
             startIcon={starting ? <CircularProgress size={18} color="inherit" /> : <LockOpenIcon />}
           >
             Unlock {item.taxYear}
