@@ -566,18 +566,18 @@ describe("Reports route", () => {
       await act(async () => {
         pendingDownloads[0]({
           blob: new Blob(["trade_id\r\n"], { type: "text/csv" }),
-          filename: "tradelog-2025-trade-ledger.csv",
+          filename: "tradelog-2025-trade-ledger-server.csv",
         });
         pendingDownloads[1]({
           blob: new Blob(["trade_id\r\n"], { type: "text/csv" }),
-          filename: "tradelog-2025-dispositions.csv",
+          filename: "tradelog-2025-dispositions-server.csv",
         });
       });
 
       await waitFor(() =>
         expect(savedFiles).toEqual([
-          { href: "blob:tradelog-export", download: "tradelog-2025-trade-ledger.csv" },
-          { href: "blob:tradelog-export", download: "tradelog-2025-dispositions.csv" },
+          { href: "blob:tradelog-export", download: "tradelog-2025-trade-ledger-server.csv" },
+          { href: "blob:tradelog-export", download: "tradelog-2025-dispositions-server.csv" },
         ])
       );
       expect(ledgerButton).toBeEnabled();

@@ -90,7 +90,7 @@ Keep browser session auth same-site. The intended topology is `https://dev.trade
 
 The page needs the backend billing and reports API (`/api/v1/billing/tax-year-passes`, `/api/v1/reports/tax-years`). When the backend has no Payment Link configured, every year stays locked and the page shows "Checkout is not available yet".
 
-Downloads use the server's `Content-Disposition` filename only when the API exposes that header to the browser through CORS (`Access-Control-Expose-Headers`). Otherwise they fall back to the same `tradelog-<year>-<report>.csv` name.
+Downloads take their filename from the server's `Content-Disposition` header, which the API exposes to the browser through CORS (`Access-Control-Expose-Headers`). A response without that header falls back to the same `tradelog-<year>-<report>.csv` name.
 
 The Stripe setup, the local webhook flow with `stripe listen`, test cards, and a SQL snippet that unlocks a year without Stripe are in the backend repo at `transaction-api/docs/tax-year-pass.md`.
 

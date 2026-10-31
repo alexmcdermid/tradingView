@@ -31,8 +31,8 @@ export async function downloadTaxYearExport(taxYear: number, exportRequest: TaxY
     // JSON stays acceptable so error responses keep their message.
     headers: { Accept: "text/csv, application/json" },
     body: JSON.stringify(exportRequest),
-    // Browsers hide Content-Disposition on cross-origin responses unless the API exposes it,
-    // so the fallback repeats the server's own naming scheme.
+    // The API exposes Content-Disposition through CORS, so the server names the file. The fallback
+    // repeats its naming scheme for a response that arrives without the header.
     fallbackFilename: `tradelog-${taxYear}-${EXPORT_FILENAME_SLUGS[exportRequest.reportType]}.csv`,
   });
 }
