@@ -63,6 +63,8 @@ export const EXPORT_DISCLOSURE =
 
 const CHECKOUT_POLL_INTERVAL_MS = 2_000;
 const CHECKOUT_POLL_MAX_ATTEMPTS = 30;
+// paidAt is server time, so the window also absorbs a skewed device clock in either direction.
+const RECENT_PAYMENT_WINDOW_MS = 5 * 60_000;
 const SYMBOLS_INPUT_DEBOUNCE_MS = 400;
 // Safari can cancel a download whose object URL is revoked in the same task as the click.
 const OBJECT_URL_REVOKE_DELAY_MS = 10_000;
@@ -177,7 +179,7 @@ function writePendingCheckoutYear(taxYear: number) {
   try {
     window.sessionStorage.setItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY, String(taxYear));
   } catch {
-    // Without storage the return flow falls back to the newest unsettled pass.
+    // Without storage the return flow waits for a recently paid pass instead.
   }
 }
 
@@ -189,11 +191,18 @@ function clearPendingCheckoutYear() {
   }
 }
 
-function newestUnsettledPassYear(passes: TaxYearPass[]) {
-  const unsettled = passes
-    .filter((pass) => pass.status === "PENDING" || pass.status === "PROCESSING")
-    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
-  return unsettled[0]?.taxYear ?? null;
+// Checkout reuses an older PENDING or FAILED pass for the year, so createdAt can't tell which pass
+// was just bought. A pass Stripe marked PAID moments ago can.
+function recentlyPaidPassYear(passes: TaxYearPass[], now: number) {
+  const recentlyPaid = passes
+    .filter(
+      (pass): pass is TaxYearPass & { paidAt: string } =>
+        pass.status === "PAID" &&
+        pass.paidAt !== null &&
+        Math.abs(now - Date.parse(pass.paidAt)) <= RECENT_PAYMENT_WINDOW_MS
+    )
+    .sort((left, right) => Date.parse(right.paidAt) - Date.parse(left.paidAt));
+  return recentlyPaid[0]?.taxYear ?? null;
 }
 
 function resolveSelectedTaxYear(
@@ -456,43 +465,44 @@ export default function Reports() {
       new Promise<void>((resolve) => {
         pollTimer = setTimeout(resolve, CHECKOUT_POLL_INTERVAL_MS);
       });
-    const finishCheckoutReturn = () => {
+    const finishCheckoutReturn = (taxYear: number | null) => {
       clearPendingCheckoutYear();
       const remainingParams = new URLSearchParams(searchParams);
       remainingParams.delete("checkout");
       remainingParams.delete("session_id");
+      if (taxYear !== null) {
+        // A reload, which the timeout alert asks for, must reopen this year, not the default one.
+        remainingParams.set("year", String(taxYear));
+      }
       const search = remainingParams.toString();
       navigate({ search: search ? `?${search}` : "" }, { replace: true });
     };
 
     const confirmCheckout = async () => {
-      setCheckoutReturn({ phase: "confirming", taxYear: null });
       let taxYear = readPendingCheckoutYear();
-      if (taxYear === null) {
-        try {
-          taxYear = newestUnsettledPassYear(await fetchTaxYearPasses());
-        } catch (error) {
-          if (cancelled) return;
-          if (isUnauthorized(error)) {
-            handleUnauthorized();
-            return;
-          }
-        }
-      }
-      if (cancelled) return;
-      if (taxYear === null) {
-        setCheckoutReturn(null);
-        finishCheckoutReturn();
-        return;
-      }
-
-      setSelectedYear(taxYear);
       setCheckoutReturn({ phase: "confirming", taxYear });
+      if (taxYear !== null) {
+        setSelectedYear(taxYear);
+      }
       for (let attempt = 1; attempt <= CHECKOUT_POLL_MAX_ATTEMPTS; attempt += 1) {
         if (attempt > 1) {
           await waitForNextPoll();
         }
         if (cancelled) return;
+        if (taxYear === null) {
+          // Checkout started in another tab or origin, so wait until a pass shows up as just paid.
+          try {
+            taxYear = recentlyPaidPassYear(await fetchTaxYearPasses(), Date.now());
+          } catch (error) {
+            if (cancelled) return;
+            if (isUnauthorized(error)) {
+              handleUnauthorized();
+              return;
+            }
+          }
+          if (cancelled) return;
+          if (taxYear === null) continue;
+        }
         const latest = await loadOverview();
         if (cancelled) return;
         const passStatus = latest?.years.find((item) => item.taxYear === taxYear)?.passStatus;
@@ -500,13 +510,13 @@ export default function Reports() {
           // PROCESSING can take days to clear, so stop polling; the unlock panel explains it.
           setSelectedYear(taxYear);
           setCheckoutReturn(passStatus === "PAID" ? { phase: "paid", taxYear } : null);
-          finishCheckoutReturn();
+          finishCheckoutReturn(taxYear);
           void loadPasses();
           return;
         }
       }
       setCheckoutReturn({ phase: "timeout" });
-      finishCheckoutReturn();
+      finishCheckoutReturn(taxYear);
     };
 
     void confirmCheckout();

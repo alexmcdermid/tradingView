@@ -755,7 +755,7 @@ describe("Reports route", () => {
         screen.getByText("Your 2025 tax year pass is active. Reports and exports are unlocked.")
       ).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /^2025 / })).toHaveAttribute("aria-pressed", "true");
-      expect(router.state.location.search).toBe("");
+      expect(router.state.location.search).toBe("?year=2025");
       expect(window.sessionStorage.getItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY)).toBeNull();
       expect(mockFetchAnnualSummary).toHaveBeenCalledWith(2025, DEFAULT_FILTERS);
 
@@ -764,38 +764,138 @@ describe("Reports route", () => {
       expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(callsAfterPaid);
     });
 
-    it("falls back to the newest pending pass when session storage is empty", async () => {
-      mockFetchTaxYearPasses.mockResolvedValue([
-        {
-          id: "pass-new",
-          taxYear: 2025,
-          status: "PENDING",
-          amountTotal: null,
-          currency: null,
-          paidAt: null,
-          refundedAt: null,
-          createdAt: "2026-03-01T12:00:00Z",
-        },
-        {
-          id: "pass-old",
-          taxYear: 2026,
-          status: "PENDING",
-          amountTotal: null,
-          currency: null,
-          paidAt: null,
-          refundedAt: null,
-          createdAt: "2026-01-01T12:00:00Z",
-        },
-      ]);
-      mockFetchTaxYearOverview.mockResolvedValue(unlockedOverview());
+    describe("without the stored pending year", () => {
+      const returnedAt = new Date("2026-02-01T18:00:00Z");
+      const buildPass = (overrides: Partial<TaxYearPass>): TaxYearPass => ({
+        id: "pass-2025",
+        taxYear: 2025,
+        status: "PENDING",
+        amountTotal: null,
+        currency: null,
+        paidAt: null,
+        refundedAt: null,
+        createdAt: "2026-01-10T12:00:00Z",
+        ...overrides,
+      });
+      // Checkout reused the older 2025 pass, so the abandoned 2026 attempt has the newer createdAt.
+      const abandoned2026Pass = buildPass({
+        id: "pass-2026",
+        taxYear: 2026,
+        createdAt: "2026-01-20T12:00:00Z",
+      });
+      const paid2025Pass = buildPass({
+        status: "PAID",
+        amountTotal: 3900,
+        currency: "CAD",
+        paidAt: "2026-02-01T17:59:58Z",
+      });
+      const bothPendingOverview = () =>
+        buildOverview({
+          years: [
+            yearItem(2026, { closedTradeCount: 120, passStatus: "PENDING" }),
+            yearItem(2025, { closedTradeCount: 412, passStatus: "PENDING" }),
+          ],
+        });
+      const paid2025Overview = () =>
+        buildOverview({
+          years: [
+            yearItem(2026, { closedTradeCount: 120, passStatus: "PENDING" }),
+            yearItem(2025, {
+              closedTradeCount: 412,
+              passStatus: "PAID",
+              unlocked: true,
+              purchasable: false,
+            }),
+          ],
+        });
 
-      const router = renderReports("/reports?checkout=success");
-      await act(() => vi.advanceTimersByTimeAsync(0));
+      beforeEach(() => {
+        vi.setSystemTime(returnedAt);
+      });
 
-      expect(
-        screen.getByText("Your 2025 tax year pass is active. Reports and exports are unlocked.")
-      ).toBeInTheDocument();
-      expect(router.state.location.search).toBe("");
+      it("confirms the pass Stripe just marked PAID instead of the newest unsettled pass", async () => {
+        mockFetchTaxYearPasses.mockResolvedValue([abandoned2026Pass, paid2025Pass]);
+        mockFetchTaxYearOverview.mockResolvedValue(paid2025Overview());
+
+        const router = renderReports("/reports?checkout=success&session_id=cs_test_123");
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(
+          screen.getByText("Your 2025 tax year pass is active. Reports and exports are unlocked.")
+        ).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /^2025 / })).toHaveAttribute("aria-pressed", "true");
+        expect(router.state.location.search).toBe("?year=2025");
+      });
+
+      it("waits for a pass to be paid instead of guessing between unsettled years", async () => {
+        let paid = false;
+        mockFetchTaxYearPasses.mockImplementation(async () => [
+          abandoned2026Pass,
+          paid ? { ...paid2025Pass, paidAt: new Date().toISOString() } : buildPass({}),
+        ]);
+        mockFetchTaxYearOverview.mockImplementation(async () =>
+          paid ? paid2025Overview() : bothPendingOverview()
+        );
+
+        const router = renderReports("/reports?checkout=success&session_id=cs_test_123");
+        await act(() => vi.advanceTimersByTimeAsync(4_000));
+
+        expect(screen.getByText(/payment received — confirming/i)).toBeInTheDocument();
+        expect(screen.queryByText("Confirming your payment…")).not.toBeInTheDocument();
+        expect(router.state.location.search).toBe("?checkout=success&session_id=cs_test_123");
+
+        paid = true;
+        await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+        expect(
+          screen.getByText("Your 2025 tax year pass is active. Reports and exports are unlocked.")
+        ).toBeInTheDocument();
+        expect(router.state.location.search).toBe("?year=2025");
+      });
+
+      it("ignores a pass paid long ago and gives up without picking a year", async () => {
+        mockFetchTaxYearPasses.mockResolvedValue([
+          abandoned2026Pass,
+          { ...paid2025Pass, paidAt: "2026-01-15T09:00:00Z" },
+        ]);
+        mockFetchTaxYearOverview.mockResolvedValue(paid2025Overview());
+
+        const router = renderReports("/reports?checkout=success&session_id=cs_test_123");
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        expect(screen.getByText(/payment received — confirming/i)).toBeInTheDocument();
+        expect(screen.queryByText("Confirming your payment…")).not.toBeInTheDocument();
+
+        await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+        expect(screen.getByText("Still confirming — refresh in a minute.")).toBeInTheDocument();
+        expect(screen.queryByText(/tax year pass is active/i)).not.toBeInTheDocument();
+        expect(router.state.location.search).toBe("");
+      });
+
+      it("keeps confirming when the passes request fails", async () => {
+        let passesAvailable = false;
+        mockFetchTaxYearPasses.mockImplementation(async () => {
+          if (!passesAvailable) {
+            throw new ApiError("Service unavailable", 503);
+          }
+          return [paid2025Pass];
+        });
+        mockFetchTaxYearOverview.mockResolvedValue(paid2025Overview());
+
+        const router = renderReports("/reports?checkout=success&session_id=cs_test_123");
+        await act(() => vi.advanceTimersByTimeAsync(0));
+
+        expect(screen.getByText(/payment received — confirming/i)).toBeInTheDocument();
+        expect(router.state.location.search).toBe("?checkout=success&session_id=cs_test_123");
+
+        passesAvailable = true;
+        await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+        expect(
+          screen.getByText("Your 2025 tax year pass is active. Reports and exports are unlocked.")
+        ).toBeInTheDocument();
+        expect(router.state.location.search).toBe("?year=2025");
+      });
     });
 
     it("stops polling on PROCESSING and shows the processing alert", async () => {
@@ -816,13 +916,13 @@ describe("Reports route", () => {
         screen.getByText("Payment processing — reports unlock when your payment clears.")
       ).toBeInTheDocument();
       expect(screen.queryByText(/confirming your tax year pass/i)).not.toBeInTheDocument();
-      expect(router.state.location.search).toBe("");
+      expect(router.state.location.search).toBe("?year=2025");
       const callsAfterProcessing = mockFetchTaxYearOverview.mock.calls.length;
       await act(() => vi.advanceTimersByTimeAsync(10_000));
       expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(callsAfterProcessing);
     });
 
-    it("gives up after about a minute with a refresh hint", async () => {
+    it("gives up after about a minute with a refresh hint that reopens the year", async () => {
       window.sessionStorage.setItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY, "2025");
       mockFetchTaxYearOverview.mockImplementation(async () => pendingOverview());
 
@@ -831,8 +931,17 @@ describe("Reports route", () => {
 
       expect(screen.getByText("Still confirming — refresh in a minute.")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeEnabled();
-      expect(router.state.location.search).toBe("");
+      expect(router.state.location.search).toBe("?year=2025");
       expect(window.sessionStorage.getItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY)).toBeNull();
+
+      cleanup();
+      renderReports(`/reports${router.state.location.search}`);
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(screen.getByRole("button", { name: /^2025 / })).toHaveAttribute("aria-pressed", "true");
+      expect(
+        screen.getByText("Already paid? Confirmation can take a minute, so refresh before paying again.")
+      ).toBeInTheDocument();
     });
 
     it("ignores unknown checkout values", async () => {
