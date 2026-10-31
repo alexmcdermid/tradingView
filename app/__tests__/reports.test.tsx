@@ -468,6 +468,7 @@ describe("Reports route", () => {
         await within(panel).findByText("A payment for tax year 2025 is still processing")
       ).toBeInTheDocument();
       await waitFor(() => expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(mockFetchTaxYearPasses).toHaveBeenCalledTimes(2));
       expect(assign).not.toHaveBeenCalled();
     });
 
@@ -698,9 +699,21 @@ describe("Reports route", () => {
       expect(mockDownloadTaxYearExport).toHaveBeenCalledTimes(1);
     });
 
-    it("refetches the overview and shows the unlock panel when an export returns 403", async () => {
+    it("refetches the overview and passes and shows the unlock panel when an export returns 403", async () => {
+      const paidPass: TaxYearPass = {
+        id: "pass-2025",
+        taxYear: 2025,
+        status: "PAID",
+        amountTotal: 3900,
+        currency: "CAD",
+        paidAt: "2026-02-03T18:22:11Z",
+        refundedAt: null,
+        createdAt: "2026-02-03T18:20:40Z",
+      };
       let overview = unlockedOverview();
+      let passes = [paidPass];
       mockFetchTaxYearOverview.mockImplementation(async () => overview);
+      mockFetchTaxYearPasses.mockImplementation(async () => passes);
       mockDownloadTaxYearExport.mockImplementation(async () => {
         overview = buildOverview({
           years: [
@@ -708,16 +721,90 @@ describe("Reports route", () => {
             yearItem(2025, { closedTradeCount: 412, passStatus: "REFUNDED" }),
           ],
         });
+        passes = [{ ...paidPass, status: "REFUNDED", refundedAt: "2026-03-01T12:00:00Z" }];
         throw new ApiError("Tax year pass required for 2025", 403);
       });
 
       renderReports();
+      const history = await screen.findByRole("table", { name: "Purchase history" });
+      const passRow = () => within(history).getAllByRole("row")[1];
+      expect(passRow()).toHaveTextContent("Paid");
       await userEvent.click(await screen.findByRole("button", { name: "Download Trade ledger CSV" }));
 
       expect(await screen.findByRole("button", { name: "Unlock 2025" })).toBeEnabled();
       expect(screen.getByText("Your 2025 tax year pass was refunded.")).toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "USD totals" })).not.toBeInTheDocument();
+      expect(screen.queryByText("Tax year pass required for 2025")).not.toBeInTheDocument();
+      await waitFor(() => expect(passRow()).toHaveTextContent("Refunded"));
       expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(2);
+      expect(mockFetchTaxYearPasses).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a 403 message when the overview can't be refetched", async () => {
+      mockFetchTaxYearOverview
+        .mockResolvedValueOnce(unlockedOverview())
+        .mockRejectedValue(new ApiError("Service unavailable", 503));
+      mockFetchAnnualSummary.mockRejectedValue(new ApiError("Account access denied", 403));
+
+      renderReports();
+
+      const summarySection = await screen.findByRole("region", { name: "2025 summary" });
+      expect(await within(summarySection).findByText("Account access denied")).toBeInTheDocument();
+      expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps a failed summary with a retry while downloads succeed", async () => {
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+      mockFetchAnnualSummary
+        .mockRejectedValueOnce(new ApiError("Reports are unavailable", 500))
+        .mockResolvedValue(buildSummary());
+      const user = userEvent.setup();
+
+      renderReports();
+      const summarySection = await screen.findByRole("region", { name: "2025 summary" });
+      expect(await within(summarySection).findByText("Reports are unavailable")).toBeInTheDocument();
+
+      const downloadButton = screen.getByRole("button", { name: "Download Trade ledger CSV" });
+      await user.click(downloadButton);
+      await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1));
+      expect(within(summarySection).getByText("Reports are unavailable")).toBeInTheDocument();
+
+      await user.click(within(summarySection).getByRole("button", { name: "Retry" }));
+
+      expect(await screen.findByRole("region", { name: "USD totals" })).toBeInTheDocument();
+      expect(screen.queryByText("Reports are unavailable")).not.toBeInTheDocument();
+      expect(mockFetchAnnualSummary).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows a failed download with its own year after a year switch", async () => {
+      const unlocked = { passStatus: "PAID", unlocked: true, purchasable: false } as const;
+      mockFetchTaxYearOverview.mockResolvedValue(
+        buildOverview({
+          years: [
+            yearItem(2026, { closedTradeCount: 120, ...unlocked }),
+            yearItem(2025, { closedTradeCount: 412, ...unlocked }),
+          ],
+        })
+      );
+      mockFetchAnnualSummary.mockImplementation(async (taxYear) => buildSummary({ taxYear }));
+      let rejectDownload: (error: Error) => void = () => {};
+      mockDownloadTaxYearExport.mockImplementation(
+        () => new Promise<BlobDownload>((_, reject) => (rejectDownload = reject))
+      );
+      const user = userEvent.setup();
+
+      renderReports("/reports?year=2025");
+      await user.click(await screen.findByRole("button", { name: "Download Trade ledger CSV" }));
+      await user.click(screen.getByRole("button", { name: /^2026 / }));
+      expect(await screen.findByRole("heading", { name: "2026 summary" })).toBeInTheDocument();
+      await act(async () => rejectDownload(new ApiError("Export failed", 500)));
+
+      expect(screen.queryByText("Export failed")).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /^2025 / }));
+      const exportsPanel = await screen.findByRole("region", { name: "Exports" });
+      expect(within(exportsPanel).getByText("Export failed")).toBeInTheDocument();
+      expect(mockFetchTaxYearOverview).toHaveBeenCalledTimes(1);
     });
 
     it("keeps the report view and shows the message when a 403 is not about the pass", async () => {
@@ -1069,6 +1156,7 @@ describe("Reports route", () => {
       expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeEnabled();
       expect(router.state.location.search).toBe("?year=2025");
       expect(window.sessionStorage.getItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY)).toBeNull();
+      expect(mockFetchTaxYearPasses).toHaveBeenCalledTimes(2);
 
       cleanup();
       renderReports(`/reports${router.state.location.search}`);

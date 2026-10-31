@@ -350,7 +350,12 @@ export default function Reports() {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [summary, setSummary] = useState<AnnualSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [summaryReloadCount, setSummaryReloadCount] = useState(0);
+  // Tagged with its year, so a download that fails after a year switch stays with its own year.
+  const [downloadError, setDownloadError] = useState<{ taxYear: number; message: string } | null>(
+    null
+  );
   const [downloadingReportTypes, setDownloadingReportTypes] = useState<TaxYearReportType[]>([]);
   const downloadsInFlightRef = useRef(new Set<TaxYearReportType>());
   const overviewRequestIdRef = useRef(0);
@@ -536,6 +541,7 @@ export default function Reports() {
       }
       setCheckoutReturn({ phase: "timeout" });
       finishCheckoutReturn(taxYear);
+      void loadPasses();
     };
 
     void confirmCheckout();
@@ -571,29 +577,33 @@ export default function Reports() {
     };
   }, []);
 
-  const handleReportError = useCallback(
+  // Resolves to the message to show for a failed report request, or null when there is none.
+  const resolveReportError = useCallback(
     async (error: unknown, taxYear: number) => {
       if (isUnauthorized(error)) {
         handleUnauthorized();
-        return;
+        return null;
       }
       if (error instanceof ApiError && error.status === 403) {
         // Either the pass is gone (refund) or a filtered account is not the caller's.
+        void loadPasses();
         const latest = await loadOverview();
         const stillUnlocked = latest?.years.some(
           (item) => item.taxYear === taxYear && item.unlocked
         );
-        if (!stillUnlocked) {
-          setReportError(null);
-          return;
+        // The unlock panel replaces the report and explains a lost pass. A failed or superseded
+        // refetch proves nothing, so the message stays.
+        if (latest && !stillUnlocked) {
+          return null;
         }
       }
-      setReportError(errorMessage(error, "The report could not be loaded."));
+      return errorMessage(error, "The report could not be loaded.");
     },
-    [handleUnauthorized, loadOverview]
+    [handleUnauthorized, loadOverview, loadPasses]
   );
 
   useEffect(() => {
+    setSummaryError(null);
     if (!isSignedIn || selectedTaxYear === null || !selectedYearUnlocked) {
       setSummary(null);
       return;
@@ -601,17 +611,20 @@ export default function Reports() {
     let active = true;
     const taxYear = selectedTaxYear;
     setSummaryLoading(true);
-    setReportError(null);
     fetchAnnualSummary(taxYear, JSON.parse(summaryFiltersKey) as ReportFilters)
       .then((loadedSummary) => {
         if (active) {
           setSummary(loadedSummary);
         }
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
+        if (!active) {
+          return;
+        }
+        setSummary(null);
+        const message = await resolveReportError(error, taxYear);
         if (active) {
-          setSummary(null);
-          void handleReportError(error, taxYear);
+          setSummaryError(message);
         }
       })
       .finally(() => {
@@ -622,12 +635,18 @@ export default function Reports() {
     return () => {
       active = false;
     };
-  }, [handleReportError, isSignedIn, selectedTaxYear, selectedYearUnlocked, summaryFiltersKey]);
+  }, [
+    isSignedIn,
+    resolveReportError,
+    selectedTaxYear,
+    selectedYearUnlocked,
+    summaryFiltersKey,
+    summaryReloadCount,
+  ]);
 
   const handleSelectYear = (taxYear: number) => {
     setSelectedYear(taxYear);
     setCheckoutError(null);
-    setReportError(null);
   };
 
   const handleUnlock = async (taxYear: number) => {
@@ -660,6 +679,7 @@ export default function Reports() {
       setCheckoutError(errorMessage(error, "Checkout could not be started."));
       if (error instanceof ApiError && error.status === 409) {
         void loadOverview();
+        void loadPasses();
       }
     }
   };
@@ -671,7 +691,7 @@ export default function Reports() {
     const taxYear = selectedTaxYear;
     downloadsInFlightRef.current.add(reportType);
     setDownloadingReportTypes(Array.from(downloadsInFlightRef.current));
-    setReportError(null);
+    setDownloadError(null);
     try {
       const { blob, filename } = await downloadTaxYearExport(taxYear, {
         reportType,
@@ -680,7 +700,10 @@ export default function Reports() {
       });
       saveBlob(blob, filename);
     } catch (error) {
-      await handleReportError(error, taxYear);
+      const message = await resolveReportError(error, taxYear);
+      if (message !== null) {
+        setDownloadError({ taxYear, message });
+      }
     } finally {
       downloadsInFlightRef.current.delete(reportType);
       setDownloadingReportTypes(Array.from(downloadsInFlightRef.current));
@@ -688,6 +711,8 @@ export default function Reports() {
   };
 
   const visibleSummary = summary && summary.taxYear === selectedTaxYear ? summary : null;
+  const visibleDownloadError =
+    downloadError && downloadError.taxYear === selectedTaxYear ? downloadError.message : null;
   const purchaseHistory = passes.filter(isPurchaseHistoryPass);
 
   return (
@@ -810,15 +835,12 @@ export default function Reports() {
                       directions={directions}
                       onDirectionsChange={setDirections}
                     />
-                    {reportError && (
-                      <Alert severity="error" onClose={() => setReportError(null)}>
-                        {reportError}
-                      </Alert>
-                    )}
                     <SummaryOverview
                       taxYear={selectedItem.taxYear}
                       summary={visibleSummary}
                       loading={summaryLoading}
+                      error={summaryError}
+                      onRetry={() => setSummaryReloadCount((count) => count + 1)}
                     />
                     <ExportsPanel
                       taxYear={selectedItem.taxYear}
@@ -826,6 +848,8 @@ export default function Reports() {
                       includeNotes={includeNotes}
                       onIncludeNotesChange={setIncludeNotes}
                       onDownload={(reportType) => void handleDownload(reportType)}
+                      error={visibleDownloadError}
+                      onDismissError={() => setDownloadError(null)}
                     />
                     {visibleSummary && visibleSummary.tradeCount > 0 && (
                       <SummaryBreakdowns summary={visibleSummary} />
@@ -1261,10 +1285,14 @@ function SummaryOverview({
   taxYear,
   summary,
   loading,
+  error,
+  onRetry,
 }: {
   taxYear: number;
   summary: AnnualSummary | null;
   loading: boolean;
+  error: string | null;
+  onRetry: () => void;
 }) {
   const repurchaseFlagCount = summary?.repurchaseFlagCount ?? 0;
   return (
@@ -1281,6 +1309,19 @@ function SummaryOverview({
         </Typography>
       )}
       {loading && <LinearProgress aria-label="Loading summary" sx={{ mt: 1.5 }} />}
+      {error && (
+        <Alert
+          severity="error"
+          sx={{ mt: 1.5 }}
+          action={
+            <Button color="inherit" size="small" onClick={onRetry}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
       {summary && summary.tradeCount === 0 && (
         <Alert severity="info" sx={{ mt: 1.5 }}>
           No closed trades in {taxYear} match these filters.
@@ -1348,12 +1389,16 @@ function ExportsPanel({
   includeNotes,
   onIncludeNotesChange,
   onDownload,
+  error,
+  onDismissError,
 }: {
   taxYear: number;
   downloadingReportTypes: TaxYearReportType[];
   includeNotes: boolean;
   onIncludeNotesChange: (value: boolean) => void;
   onDownload: (reportType: TaxYearReportType) => void;
+  error: string | null;
+  onDismissError: () => void;
 }) {
   return (
     <Paper
@@ -1415,6 +1460,11 @@ function ExportsPanel({
           );
         })}
       </Stack>
+      {error && (
+        <Alert severity="error" onClose={onDismissError} sx={{ mt: 1 }}>
+          {error}
+        </Alert>
+      )}
       <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
         {EXPORT_DISCLOSURE}
       </Alert>
