@@ -391,6 +391,9 @@ export default function Reports() {
   const selectedYearUnlocked = selectedItem?.unlocked ?? false;
   const confirmingTaxYear =
     checkoutReturn?.phase === "confirming" ? checkoutReturn.taxYear : null;
+  // A retried FAILED pass stays FAILED until its webhook lands, so don't call that payment failed yet.
+  const awaitingCheckoutConfirmation =
+    checkoutReturn?.phase === "confirming" || checkoutReturn?.phase === "timeout";
 
   const handleUnauthorized = useCallback(() => {
     setSessionExpired(true);
@@ -863,6 +866,7 @@ export default function Reports() {
                     overview={overview}
                     checkoutStartingYear={checkoutStartingYear}
                     confirming={confirmingTaxYear === selectedItem.taxYear}
+                    awaitingCheckoutConfirmation={awaitingCheckoutConfirmation}
                     error={checkoutError}
                     onUnlock={(taxYear) => void handleUnlock(taxYear)}
                   />
@@ -942,6 +946,7 @@ function UnlockPanel({
   overview,
   checkoutStartingYear,
   confirming,
+  awaitingCheckoutConfirmation,
   error,
   onUnlock,
 }: {
@@ -949,6 +954,7 @@ function UnlockPanel({
   overview: TaxYearOverview;
   checkoutStartingYear: number | null;
   confirming: boolean;
+  awaitingCheckoutConfirmation: boolean;
   error: string | null;
   onUnlock: (taxYear: number) => void;
 }) {
@@ -1032,7 +1038,7 @@ function UnlockPanel({
             Payment processing — reports unlock when your payment clears.
           </Alert>
         )}
-        {item.passStatus === "FAILED" && !confirming && (
+        {item.passStatus === "FAILED" && !awaitingCheckoutConfirmation && (
           <Alert severity="warning">
             Your last payment for {item.taxYear} did not go through. You can try again.
           </Alert>
@@ -1065,7 +1071,7 @@ function UnlockPanel({
               Confirming your payment…
             </Typography>
           )}
-          {item.passStatus === "PENDING" && !confirming && (
+          {(item.passStatus === "PENDING" || item.passStatus === "FAILED") && !confirming && (
             <Typography variant="body2" color="text.secondary">
               Already paid? Confirmation can take a minute, so refresh before paying again.
             </Typography>

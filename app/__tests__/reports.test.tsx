@@ -552,6 +552,24 @@ describe("Reports route", () => {
       expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeDisabled();
       expect(screen.getByRole("button", { name: /^2025 / })).toHaveTextContent("Processing");
     });
+
+    it("offers a retry after a failed payment and warns before paying again", async () => {
+      mockFetchTaxYearOverview.mockResolvedValue(
+        buildOverview({
+          years: [yearItem(2026), yearItem(2025, { closedTradeCount: 412, passStatus: "FAILED" })],
+        })
+      );
+
+      renderReports("/reports?year=2025");
+
+      expect(
+        await screen.findByText("Your last payment for 2025 did not go through. You can try again.")
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Already paid? Confirmation can take a minute, so refresh before paying again.")
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Unlock 2025" })).toBeEnabled();
+    });
   });
 
   describe("unlocked year", () => {
@@ -1206,6 +1224,32 @@ describe("Reports route", () => {
       await act(() => vi.advanceTimersByTimeAsync(0));
 
       expect(screen.getByRole("button", { name: /^2025 / })).toHaveAttribute("aria-pressed", "true");
+      expect(
+        screen.getByText("Already paid? Confirmation can take a minute, so refresh before paying again.")
+      ).toBeInTheDocument();
+    });
+
+    it("doesn't call a retried FAILED payment failed while it is unconfirmed", async () => {
+      window.sessionStorage.setItem(PENDING_CHECKOUT_YEAR_STORAGE_KEY, "2025");
+      mockFetchTaxYearOverview.mockResolvedValue(
+        buildOverview({
+          years: [
+            yearItem(2026, { closedTradeCount: 120 }),
+            yearItem(2025, { closedTradeCount: 412, passStatus: "FAILED" }),
+          ],
+        })
+      );
+
+      renderReports("/reports?checkout=success&session_id=cs_test_123");
+      await act(() => vi.advanceTimersByTimeAsync(0));
+
+      expect(screen.getByText(/payment received — confirming/i)).toBeInTheDocument();
+      expect(screen.queryByText(/did not go through/)).not.toBeInTheDocument();
+
+      await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+      expect(screen.getByText("Still confirming — refresh in a minute.")).toBeInTheDocument();
+      expect(screen.queryByText(/did not go through/)).not.toBeInTheDocument();
       expect(
         screen.getByText("Already paid? Confirmation can take a minute, so refresh before paying again.")
       ).toBeInTheDocument();
