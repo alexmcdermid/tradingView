@@ -377,8 +377,10 @@ describe("Home (authenticated)", () => {
       </ColorModeContext.Provider>
     );
 
-    const headerLinks = await screen.findAllByRole("link", { name: /tax reports/i });
-    expect(headerLinks.length).toBeGreaterThan(0);
+    // jsdom ignores the min-width media queries that swap the desktop button and the mobile icon,
+    // so the desktop button computes to display: none and is only found with hidden elements.
+    const headerLinks = await screen.findAllByRole("link", { name: "Tax reports", hidden: true });
+    expect(headerLinks.map((link) => link.textContent)).toEqual(["Tax reports", ""]);
     headerLinks.forEach((link) => expect(link).toHaveAttribute("href", "/reports"));
 
     const user = userEvent.setup();
