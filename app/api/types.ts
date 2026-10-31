@@ -299,3 +299,92 @@ export interface ShareLinkResponse {
   accessCount: number;
   createdAt: string;
 }
+
+export type TaxYearPassStatus = "PENDING" | "PROCESSING" | "PAID" | "FAILED" | "REFUNDED";
+
+export interface TaxYearPass {
+  id: string;
+  taxYear: number;
+  status: TaxYearPassStatus;
+  // Minor units and upper-case ISO currency, as charged by Stripe. Null until Stripe reports a charge.
+  amountTotal: number | null;
+  currency: string | null;
+  paidAt: string | null;
+  refundedAt: string | null;
+  createdAt: string;
+}
+
+export interface TaxYearCheckoutResponse {
+  checkoutUrl: string;
+}
+
+export interface TaxYearPrice {
+  amountCents: number;
+  currency: string;
+}
+
+export interface TaxYearOverviewItem {
+  taxYear: number;
+  closedTradeCount: number;
+  passStatus: TaxYearPassStatus | null;
+  unlocked: boolean;
+  purchasable: boolean;
+}
+
+export interface TaxYearOverview {
+  currentTaxYear: number;
+  checkoutEnabled: boolean;
+  price: TaxYearPrice | null;
+  years: TaxYearOverviewItem[];
+}
+
+export interface ReportFilters {
+  accountIds?: string[];
+  includeUnassigned?: boolean;
+  symbols?: string[];
+  assetTypes?: AssetType[];
+  currencies?: Currency[];
+  directions?: TradeDirection[];
+}
+
+export type TaxYearReportType =
+  | "TRADE_LEDGER"
+  | "DISPOSITIONS"
+  | "ANNUAL_SUMMARY"
+  | "REPURCHASE_REVIEW";
+
+export interface TaxYearExportRequest {
+  reportType: TaxYearReportType;
+  filters?: ReportFilters;
+  includeNotes?: boolean;
+}
+
+export interface SummaryRow {
+  key: string;
+  label: string;
+  currency: Currency;
+  taxFree: boolean | null;
+  tradeCount: number;
+  winningTrades: number;
+  losingTrades: number;
+  gains: number;
+  losses: number;
+  fees: number;
+  marginInterest: number;
+  netRealizedPnl: number;
+}
+
+export interface AnnualSummary {
+  taxYear: number;
+  tradeCount: number;
+  // Null when no closed trade matches the filters.
+  firstClosedOn: string | null;
+  lastClosedOn: string | null;
+  repurchaseFlagCount: number;
+  totals: SummaryRow[];
+  months: SummaryRow[];
+  accounts: SummaryRow[];
+  symbols: SummaryRow[];
+  assetTypes: SummaryRow[];
+  taxTreatment: SummaryRow[];
+}
