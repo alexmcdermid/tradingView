@@ -367,6 +367,29 @@ describe("Home (authenticated)", () => {
     expect(await screen.findByRole("menuitem", { name: /^admin$/i })).toBeInTheDocument();
   });
 
+  it("links to tax reports from the header and the account menu", async () => {
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const headerLinks = await screen.findAllByRole("link", { name: /tax reports/i });
+    expect(headerLinks.length).toBeGreaterThan(0);
+    headerLinks.forEach((link) => expect(link).toHaveAttribute("href", "/reports"));
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /user menu/i }));
+
+    expect(await screen.findByRole("menuitem", { name: /tax reports/i })).toHaveAttribute(
+      "href",
+      "/reports"
+    );
+  });
+
   it("passes account and ticker filters to the paged trade fetch", async () => {
     mockListUserAccounts.mockResolvedValue([
       {

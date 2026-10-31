@@ -4,6 +4,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
 import ShareIcon from "@mui/icons-material/Share";
 import TuneIcon from "@mui/icons-material/Tune";
 import {
@@ -2852,6 +2853,27 @@ export default function Home() {
             alignItems="center"
             sx={{ flexWrap: "wrap", rowGap: 1, justifyContent: { xs: "flex-start", sm: "flex-end" } }}
           >
+            <Button
+              component={RouterLink}
+              to="/reports"
+              variant="outlined"
+              size="small"
+              startIcon={<ReceiptLongIcon />}
+              sx={{ display: { xs: "none", sm: "inline-flex" }, whiteSpace: "nowrap" }}
+            >
+              Tax reports
+            </Button>
+            <Tooltip title="Tax reports">
+              <IconButton
+                component={RouterLink}
+                to="/reports"
+                size="small"
+                aria-label="Tax reports"
+                sx={{ display: { xs: "inline-flex", sm: "none" } }}
+              >
+                <ReceiptLongIcon />
+              </IconButton>
+            </Tooltip>
             {user ? (
               <>
                 <IconButton
@@ -2882,6 +2904,13 @@ export default function Home() {
                       Admin
                     </MenuItem>
                   )}
+                  <MenuItem
+                    component={RouterLink}
+                    to="/reports"
+                    onClick={() => setMenuAnchor(null)}
+                  >
+                    Tax reports
+                  </MenuItem>
                   <MenuItem onClick={handleOpenPreferencesDialog}>
                     Preferences
                   </MenuItem>
