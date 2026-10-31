@@ -112,16 +112,18 @@ const TAX_YEAR_EXPORTS: { reportType: TaxYearReportType; name: string; descripti
   },
 ];
 
-const PASS_STATUS_LABELS: Record<TaxYearPassStatus, string> = {
-  PENDING: "Pending",
+// A checkout the user abandoned stays PENDING, so it is not a purchase.
+type PurchaseHistoryStatus = Exclude<TaxYearPassStatus, "PENDING">;
+type PurchaseHistoryPass = TaxYearPass & { status: PurchaseHistoryStatus };
+
+const PASS_STATUS_LABELS: Record<PurchaseHistoryStatus, string> = {
   PROCESSING: "Processing",
   PAID: "Paid",
   FAILED: "Failed",
   REFUNDED: "Refunded",
 };
 
-const PASS_STATUS_COLORS: Record<TaxYearPassStatus, "default" | "info" | "success" | "error" | "warning"> = {
-  PENDING: "default",
+const PASS_STATUS_COLORS: Record<PurchaseHistoryStatus, "info" | "success" | "error" | "warning"> = {
   PROCESSING: "info",
   PAID: "success",
   FAILED: "error",
@@ -203,6 +205,10 @@ function recentlyPaidPassYear(passes: TaxYearPass[], now: number) {
     )
     .sort((left, right) => Date.parse(right.paidAt) - Date.parse(left.paidAt));
   return recentlyPaid[0]?.taxYear ?? null;
+}
+
+function isPurchaseHistoryPass(pass: TaxYearPass): pass is PurchaseHistoryPass {
+  return pass.status !== "PENDING";
 }
 
 function resolveSelectedTaxYear(
@@ -653,6 +659,7 @@ export default function Reports() {
   };
 
   const visibleSummary = summary && summary.taxYear === selectedTaxYear ? summary : null;
+  const purchaseHistory = passes.filter(isPurchaseHistoryPass);
 
   return (
     <>
@@ -807,7 +814,7 @@ export default function Reports() {
           )}
 
           {isSignedIn && passesError && <Alert severity="warning">{passesError}</Alert>}
-          {isSignedIn && passes.length > 0 && <PurchaseHistory passes={passes} />}
+          {isSignedIn && purchaseHistory.length > 0 && <PurchaseHistory passes={purchaseHistory} />}
         </Stack>
       </Container>
     </>
@@ -1467,7 +1474,7 @@ function SummaryBreakdowns({ summary }: { summary: AnnualSummary }) {
   );
 }
 
-function PurchaseHistory({ passes }: { passes: TaxYearPass[] }) {
+function PurchaseHistory({ passes }: { passes: PurchaseHistoryPass[] }) {
   return (
     <Paper
       variant="outlined"

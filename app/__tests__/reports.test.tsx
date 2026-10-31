@@ -666,55 +666,93 @@ describe("Reports route", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
-  it("renders the purchase history and hides it when empty", async () => {
-    mockFetchTaxYearPasses.mockResolvedValue([
-      {
-        id: "pass-2",
-        taxYear: 2025,
-        status: "PAID",
-        amountTotal: 3900,
-        currency: "CAD",
-        paidAt: "2026-02-03T18:22:11Z",
-        refundedAt: null,
-        createdAt: "2026-02-03T18:20:40Z",
-      },
-      {
-        id: "pass-1",
-        taxYear: 2024,
-        status: "PENDING",
-        amountTotal: null,
-        currency: null,
-        paidAt: null,
-        refundedAt: null,
-        createdAt: "2026-01-10T10:00:00Z",
-      },
-    ]);
+  describe("purchase history", () => {
+    const historyPass = (overrides: Partial<TaxYearPass> & Pick<TaxYearPass, "id">): TaxYearPass => ({
+      taxYear: 2025,
+      status: "PAID",
+      amountTotal: 3900,
+      currency: "CAD",
+      paidAt: "2026-02-03T18:22:11Z",
+      refundedAt: null,
+      createdAt: "2026-02-03T18:20:40Z",
+      ...overrides,
+    });
+    const abandonedCheckout = historyPass({
+      id: "pass-pending",
+      taxYear: 2026,
+      status: "PENDING",
+      amountTotal: null,
+      currency: null,
+      paidAt: null,
+      createdAt: "2026-03-01T10:00:00Z",
+    });
 
-    renderReports();
+    it("lists every pass except abandoned checkouts", async () => {
+      mockFetchTaxYearPasses.mockResolvedValue([
+        abandonedCheckout,
+        historyPass({ id: "pass-paid" }),
+        historyPass({ id: "pass-processing", taxYear: 2024, status: "PROCESSING", paidAt: null }),
+        historyPass({
+          id: "pass-refunded",
+          taxYear: 2023,
+          status: "REFUNDED",
+          refundedAt: "2026-02-10T09:00:00Z",
+        }),
+        historyPass({
+          id: "pass-failed",
+          taxYear: 2022,
+          status: "FAILED",
+          amountTotal: null,
+          currency: null,
+          paidAt: null,
+        }),
+      ]);
 
-    const history = await screen.findByRole("table", { name: "Purchase history" });
-    const [, paidRow, pendingRow] = within(history).getAllByRole("row");
-    expect(paidRow).toHaveTextContent("2025");
-    expect(paidRow).toHaveTextContent("Paid");
-    expect(paidRow).toHaveTextContent(
-      new Intl.NumberFormat(undefined, { style: "currency", currency: "CAD" }).format(39)
-    );
-    expect(paidRow).toHaveTextContent(
-      new Date("2026-02-03T18:22:11Z").toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
-    );
-    expect(pendingRow).toHaveTextContent("2024");
-    expect(pendingRow).toHaveTextContent("Pending");
-    expect(within(pendingRow).getAllByText("—")).toHaveLength(2);
+      renderReports();
 
-    cleanup();
-    mockFetchTaxYearPasses.mockResolvedValue([]);
-    renderReports();
-    await screen.findByRole("button", { name: "Unlock 2026" });
-    expect(screen.queryByRole("table", { name: "Purchase history" })).not.toBeInTheDocument();
+      const history = await screen.findByRole("table", { name: "Purchase history" });
+      const [, paidRow, processingRow, refundedRow, failedRow, ...otherRows] =
+        within(history).getAllByRole("row");
+      expect(otherRows).toHaveLength(0);
+      expect(within(history).queryByText("Pending")).not.toBeInTheDocument();
+      expect(within(history).queryByText("2026")).not.toBeInTheDocument();
+      expect(paidRow).toHaveTextContent("2025");
+      expect(paidRow).toHaveTextContent("Paid");
+      expect(paidRow).toHaveTextContent(
+        new Intl.NumberFormat(undefined, { style: "currency", currency: "CAD" }).format(39)
+      );
+      expect(paidRow).toHaveTextContent(
+        new Date("2026-02-03T18:22:11Z").toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
+      );
+      expect(processingRow).toHaveTextContent("2024");
+      expect(processingRow).toHaveTextContent("Processing");
+      expect(within(processingRow).getAllByText("—")).toHaveLength(1);
+      expect(refundedRow).toHaveTextContent("2023");
+      expect(refundedRow).toHaveTextContent("Refunded");
+      expect(failedRow).toHaveTextContent("2022");
+      expect(failedRow).toHaveTextContent("Failed");
+      expect(within(failedRow).getAllByText("—")).toHaveLength(2);
+    });
+
+    it.each<[string, TaxYearPass[]]>([
+      ["only abandoned checkouts remain", [abandonedCheckout]],
+      ["there are no passes", []],
+    ])("is hidden when %s", async (_, loadedPasses) => {
+      let resolvePasses: (passes: TaxYearPass[]) => void = () => {};
+      mockFetchTaxYearPasses.mockImplementation(
+        () => new Promise<TaxYearPass[]>((resolve) => (resolvePasses = resolve))
+      );
+
+      renderReports();
+      await screen.findByRole("heading", { name: /^Unlock 20\d\d$/ });
+      await act(async () => resolvePasses(loadedPasses));
+
+      expect(screen.queryByRole("region", { name: "Purchase history" })).not.toBeInTheDocument();
+    });
   });
 
   describe("checkout return", () => {
