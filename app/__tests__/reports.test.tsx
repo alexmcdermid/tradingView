@@ -435,6 +435,31 @@ describe("Reports route", () => {
       expect(screen.getByRole("button", { name: /^2026 / })).toBeEnabled();
     });
 
+    it("resets checkout on a back navigation from Stripe without a stale recovery timer", async () => {
+      const user = useFakeTimersWithUser();
+      mockStartTaxYearCheckout
+        .mockResolvedValueOnce({ checkoutUrl: "https://buy.stripe.com/test_abc" })
+        .mockImplementationOnce(() => new Promise<TaxYearCheckoutResponse>(() => {}));
+
+      renderReports("/reports?year=2025");
+      await user.click(await screen.findByRole("button", { name: "Unlock 2025" }));
+      await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+      await act(() => vi.advanceTimersByTimeAsync(2_000));
+
+      act(() => {
+        window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      });
+      const unlockButton = screen.getByRole("button", { name: "Unlock 2025" });
+      expect(unlockButton).toBeEnabled();
+      await user.click(unlockButton);
+      expect(unlockButton).toBeDisabled();
+
+      await act(() => vi.advanceTimersByTimeAsync(9_000));
+
+      expect(unlockButton).toBeDisabled();
+      expect(mockStartTaxYearCheckout).toHaveBeenCalledTimes(2);
+    });
+
     it("omits the price when none is configured", async () => {
       mockFetchTaxYearOverview.mockResolvedValue(buildOverview({ price: null }));
 

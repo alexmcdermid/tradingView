@@ -563,6 +563,7 @@ export default function Reports() {
   useEffect(() => {
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
+        clearTimeout(checkoutRecoveryTimerRef.current);
         setCheckoutStartingYear(null);
       }
     };
