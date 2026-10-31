@@ -912,6 +912,11 @@ function TaxYearTile({
         p: 1.5,
         textAlign: "left",
         textTransform: "none",
+        // The selected tint alone is about 1.4:1 against the dark background, so outline it too.
+        "&.Mui-selected": {
+          borderColor: "primary.main",
+          boxShadow: (theme) => `inset 0 0 0 1px ${theme.palette.primary.main}`,
+        },
       }}
     >
       <Stack component="span" direction="row" spacing={1} alignItems="center" sx={{ width: "100%" }}>
@@ -1369,7 +1374,7 @@ function SummaryOverview({
             </Paper>
           ))}
           {repurchaseFlagCount > 0 && (
-            <Alert severity="warning" variant="outlined">
+            <Alert severity="warning" variant="outlined" role="note">
               {repurchaseFlagCount === 1
                 ? "1 loss has"
                 : `${repurchaseFlagCount.toLocaleString()} losses have`}{" "}
@@ -1446,11 +1451,12 @@ function ExportsPanel({
               <Button
                 variant="outlined"
                 size="small"
-                aria-label={`Download ${report.name} CSV`}
+                aria-label={`Download CSV: ${report.name}`}
                 startIcon={
                   downloading ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />
                 }
-                disabled={downloading}
+                // Not disabled, which would drop keyboard focus; the download handler ignores repeats.
+                aria-disabled={downloading}
                 onClick={() => onDownload(report.reportType)}
                 sx={{ whiteSpace: "nowrap", flexShrink: 0 }}
               >
@@ -1465,7 +1471,7 @@ function ExportsPanel({
           {error}
         </Alert>
       )}
-      <Alert severity="info" variant="outlined" sx={{ mt: 2 }}>
+      <Alert severity="info" variant="outlined" role="note" sx={{ mt: 2 }}>
         {EXPORT_DISCLOSURE}
       </Alert>
     </Paper>

@@ -285,6 +285,8 @@ describe("Reports route", () => {
       "2025412 closed tradesUnlocked",
     ]);
     expect(tiles[1]).toHaveAttribute("aria-pressed", "true");
+    expect(window.getComputedStyle(tiles[1]).boxShadow).toMatch(/^inset 0 0 0 1px /);
+    expect(window.getComputedStyle(tiles[0]).boxShadow).toBe("");
     expect(await screen.findByRole("heading", { name: "2025 summary" })).toBeInTheDocument();
   });
 
@@ -559,6 +561,12 @@ describe("Reports route", () => {
         "Repurchase review"
       );
       expect(screen.getByText(EXPORT_DISCLOSURE)).toBeInTheDocument();
+      // Static notes, so screen readers don't announce them as alerts on every year switch.
+      expect(screen.getAllByRole("note").map((note) => note.textContent)).toEqual([
+        expect.stringContaining("7 losses have a same-symbol position"),
+        EXPORT_DISCLOSURE,
+      ]);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
       expect(mockFetchAnnualSummary).toHaveBeenCalledWith(2025, DEFAULT_FILTERS);
     });
 
@@ -582,7 +590,10 @@ describe("Reports route", () => {
 
       expect(await screen.findByText("No closed trades in 2025 match these filters.")).toBeInTheDocument();
       expect(screen.queryByRole("table", { name: "By month" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Download Trade ledger CSV" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Download CSV: Trade ledger" })).toHaveAttribute(
+        "aria-disabled",
+        "false"
+      );
     });
 
     it("serializes filters into the documented request shape", async () => {
@@ -593,7 +604,7 @@ describe("Reports route", () => {
       renderReports();
       await screen.findByRole("region", { name: "USD totals" });
 
-      await user.click(screen.getByRole("button", { name: "Download Dispositions CSV" }));
+      await user.click(screen.getByRole("button", { name: "Download CSV: Dispositions" }));
       await waitFor(() =>
         expect(mockDownloadTaxYearExport).toHaveBeenLastCalledWith(2025, {
           reportType: "DISPOSITIONS",
@@ -616,7 +627,7 @@ describe("Reports route", () => {
         includeUnassigned: false,
         symbols: ["AAPL", "MSFT"],
       };
-      await user.click(screen.getByRole("button", { name: "Download Trade ledger CSV" }));
+      await user.click(screen.getByRole("button", { name: "Download CSV: Trade ledger" }));
       await waitFor(() =>
         expect(mockDownloadTaxYearExport).toHaveBeenLastCalledWith(2025, {
           reportType: "TRADE_LEDGER",
@@ -624,7 +635,7 @@ describe("Reports route", () => {
           includeNotes: true,
         })
       );
-      await user.click(screen.getByRole("button", { name: "Download Annual summary CSV" }));
+      await user.click(screen.getByRole("button", { name: "Download CSV: Annual summary" }));
       await waitFor(() =>
         expect(mockDownloadTaxYearExport).toHaveBeenLastCalledWith(2025, {
           reportType: "ANNUAL_SUMMARY",
@@ -653,14 +664,14 @@ describe("Reports route", () => {
       );
 
       renderReports();
-      const ledgerButton = await screen.findByRole("button", { name: "Download Trade ledger CSV" });
-      const dispositionsButton = screen.getByRole("button", { name: "Download Dispositions CSV" });
+      const ledgerButton = await screen.findByRole("button", { name: "Download CSV: Trade ledger" });
+      const dispositionsButton = screen.getByRole("button", { name: "Download CSV: Dispositions" });
       await user.click(ledgerButton);
 
-      expect(ledgerButton).toBeDisabled();
-      expect(dispositionsButton).toBeEnabled();
+      expect(ledgerButton).toHaveAttribute("aria-disabled", "true");
+      expect(dispositionsButton).toHaveAttribute("aria-disabled", "false");
       await user.click(dispositionsButton);
-      expect(dispositionsButton).toBeDisabled();
+      expect(dispositionsButton).toHaveAttribute("aria-disabled", "true");
 
       await act(async () => {
         pendingDownloads[0]({
@@ -679,23 +690,26 @@ describe("Reports route", () => {
           { href: "blob:tradelog-export", download: "tradelog-2025-dispositions-server.csv" },
         ])
       );
-      expect(ledgerButton).toBeEnabled();
+      expect(ledgerButton).toHaveAttribute("aria-disabled", "false");
       expect(URL.revokeObjectURL).not.toHaveBeenCalled();
       await act(() => vi.advanceTimersByTimeAsync(10_000));
       expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
       expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:tradelog-export");
     });
 
-    it("blocks duplicate clicks while an export is downloading", async () => {
-      const user = userEvent.setup({ pointerEventsCheck: 0 });
+    it("ignores repeat clicks on an export that is downloading without disabling it", async () => {
+      const user = userEvent.setup();
       mockDownloadTaxYearExport.mockImplementation(() => new Promise<BlobDownload>(() => {}));
 
       renderReports();
-      const downloadButton = await screen.findByRole("button", { name: "Download Trade ledger CSV" });
+      const downloadButton = await screen.findByRole("button", { name: "Download CSV: Trade ledger" });
       await user.click(downloadButton);
+      expect(downloadButton).toHaveAttribute("aria-disabled", "true");
+      expect(downloadButton).not.toBeDisabled();
       await user.click(downloadButton);
+      await user.keyboard("{Enter}");
 
-      expect(downloadButton).toBeDisabled();
+      expect(downloadButton).toHaveFocus();
       expect(mockDownloadTaxYearExport).toHaveBeenCalledTimes(1);
     });
 
@@ -729,7 +743,7 @@ describe("Reports route", () => {
       const history = await screen.findByRole("table", { name: "Purchase history" });
       const passRow = () => within(history).getAllByRole("row")[1];
       expect(passRow()).toHaveTextContent("Paid");
-      await userEvent.click(await screen.findByRole("button", { name: "Download Trade ledger CSV" }));
+      await userEvent.click(await screen.findByRole("button", { name: "Download CSV: Trade ledger" }));
 
       expect(await screen.findByRole("button", { name: "Unlock 2025" })).toBeEnabled();
       expect(screen.getByText("Your 2025 tax year pass was refunded.")).toBeInTheDocument();
@@ -764,7 +778,7 @@ describe("Reports route", () => {
       const summarySection = await screen.findByRole("region", { name: "2025 summary" });
       expect(await within(summarySection).findByText("Reports are unavailable")).toBeInTheDocument();
 
-      const downloadButton = screen.getByRole("button", { name: "Download Trade ledger CSV" });
+      const downloadButton = screen.getByRole("button", { name: "Download CSV: Trade ledger" });
       await user.click(downloadButton);
       await waitFor(() => expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1));
       expect(within(summarySection).getByText("Reports are unavailable")).toBeInTheDocument();
@@ -794,7 +808,7 @@ describe("Reports route", () => {
       const user = userEvent.setup();
 
       renderReports("/reports?year=2025");
-      await user.click(await screen.findByRole("button", { name: "Download Trade ledger CSV" }));
+      await user.click(await screen.findByRole("button", { name: "Download CSV: Trade ledger" }));
       await user.click(screen.getByRole("button", { name: /^2026 / }));
       expect(await screen.findByRole("heading", { name: "2026 summary" })).toBeInTheDocument();
       await act(async () => rejectDownload(new ApiError("Export failed", 500)));
