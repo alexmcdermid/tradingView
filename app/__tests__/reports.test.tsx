@@ -288,6 +288,46 @@ describe("Reports route", () => {
     expect(await screen.findByRole("heading", { name: "2025 summary" })).toBeInTheDocument();
   });
 
+  it("defaults to the newest finished year with trades when nothing is unlocked", async () => {
+    mockFetchTaxYearOverview.mockResolvedValue(
+      buildOverview({
+        currentTaxYear: 2027,
+        years: [
+          yearItem(2027),
+          yearItem(2026, { closedTradeCount: 120 }),
+          yearItem(2025, { closedTradeCount: 412 }),
+        ],
+      })
+    );
+
+    renderReports();
+
+    expect(await screen.findByRole("button", { name: "Unlock 2026" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^2026 / })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("120 closed trades recorded in 2026.")).toBeInTheDocument();
+    expect(screen.queryByText(/still in progress/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the current year and says it is still in progress", async () => {
+    mockFetchTaxYearOverview.mockResolvedValue(
+      buildOverview({ currentTaxYear: 2027, years: [yearItem(2027)] })
+    );
+
+    renderReports();
+
+    expect(await screen.findByRole("button", { name: "Unlock 2027" })).toBeEnabled();
+    expect(screen.getByText("0 closed trades recorded in 2027 so far.")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The 2027 tax year is still in progress. The pass also covers trades you add later."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "No closed trades are recorded in 2027 yet. A 2027 pass does not unlock any other tax year."
+    );
+  });
+
   describe("locked year", () => {
     const originalLocation = Object.getOwnPropertyDescriptor(window, "location");
     const assign = vi.fn();

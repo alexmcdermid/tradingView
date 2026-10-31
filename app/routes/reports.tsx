@@ -226,7 +226,16 @@ function resolveSelectedTaxYear(
   if (isListed(requestedYear)) {
     return requestedYear;
   }
-  return overview.years.find((item) => item.unlocked)?.taxYear ?? overview.currentTaxYear;
+  // The current year is still in progress, so a user who hasn't bought a year most likely wants
+  // the newest finished one. A pass for one year never unlocks another.
+  const newestFinishedYearWithTrades = overview.years.find(
+    (item) => item.taxYear < overview.currentTaxYear && item.closedTradeCount > 0
+  )?.taxYear;
+  return (
+    overview.years.find((item) => item.unlocked)?.taxYear ??
+    newestFinishedYearWithTrades ??
+    overview.currentTaxYear
+  );
 }
 
 function isUnauthorized(error: unknown) {
@@ -913,6 +922,7 @@ function UnlockPanel({
   onUnlock: (taxYear: number) => void;
 }) {
   const starting = checkoutStartingYear === item.taxYear;
+  const inProgress = item.taxYear === overview.currentTaxYear;
   const price = overview.price
     ? formatMinorUnits(overview.price.amountCents, overview.price.currency)
     : null;
@@ -951,9 +961,24 @@ function UnlockPanel({
             One-time payment for the {item.taxYear} tax year pass. No subscription and no renewal.
           </Typography>
         </Box>
-        <Typography>
-          {formatClosedTradeCount(item.closedTradeCount)} recorded in {item.taxYear}.
-        </Typography>
+        <Box>
+          <Typography>
+            {formatClosedTradeCount(item.closedTradeCount)} recorded in {item.taxYear}
+            {inProgress ? " so far" : ""}.
+          </Typography>
+          {inProgress && (
+            <Typography variant="body2" color="text.secondary">
+              The {item.taxYear} tax year is still in progress. The pass also covers trades you add
+              later.
+            </Typography>
+          )}
+        </Box>
+        {item.closedTradeCount === 0 && (
+          <Alert severity="warning" role="note">
+            No closed trades are recorded in {item.taxYear} yet. A {item.taxYear} pass does not
+            unlock any other tax year.
+          </Alert>
+        )}
 
         <Box>
           <Typography variant="subtitle2" component="h3">
