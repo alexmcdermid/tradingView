@@ -15,6 +15,7 @@ import {
   Divider,
   FormControlLabel,
   LinearProgress,
+  Link,
   List,
   ListItem,
   ListItemIcon,
@@ -1074,7 +1075,11 @@ function UnlockPanel({
             </Alert>
           )}
           <Typography variant="caption" color="text.secondary">
-            Payments are processed by Stripe.
+            Payments are processed by Stripe. Refunds and other tax year pass terms are in the{" "}
+            <Link component={RouterLink} to="/terms-of-service">
+              Terms of Service
+            </Link>
+            .
           </Typography>
         </Stack>
 

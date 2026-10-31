@@ -364,6 +364,10 @@ describe("Reports route", () => {
       expect(screen.getByText("Annual summary CSV")).toBeInTheDocument();
       expect(screen.getByText("Repurchase review CSV")).toBeInTheDocument();
       expect(screen.getByText(EXPORT_DISCLOSURE)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Terms of Service" })).toHaveAttribute(
+        "href",
+        "/terms-of-service"
+      );
 
       await userEvent.click(unlockButton);
 

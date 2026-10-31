@@ -1,6 +1,6 @@
 import { LegalDocument, type LegalSection } from "../components/LegalDocument";
 
-const UPDATED_AT = "May 17, 2026";
+const UPDATED_AT = "October 31, 2026";
 
 const intro = [
   'tradelog ("we," "us," or "our") provides a day trading journal for recording trades, reviewing profit and loss, and sharing selected snapshots. This Privacy Policy explains what information we collect, how we use it, and the choices available to you.',
@@ -15,6 +15,7 @@ const sections: LegalSection[] = [
       "Account information, including your Google account identifier, name, and email address when you sign in.",
       "Trade journal information you enter, including trades, account labels, notes, dates, prices, quantities, fees, margin settings, preferences, and generated performance summaries.",
       "Share link information when you create a public or restricted snapshot, including the selected trade data, generated link metadata, and optional expiration settings.",
+      "Tax year pass purchase information, including the tax year, payment status, amount and currency charged, payment and refund dates, and Stripe identifiers for the checkout session, payment, and customer. We do not receive or store your card number or other payment card details.",
       "Technical and usage information, such as IP address, browser type, device information, pages viewed, request times, and diagnostic logs.",
       "Session cookies and CSRF tokens used to authenticate browser requests and protect unsafe actions.",
       "Local storage data, including theme settings, cached preferences, and guest-mode trade data stored in your browser. Google sign-in tokens are not stored in local storage.",
@@ -27,6 +28,7 @@ const sections: LegalSection[] = [
       "We use Google Sign-In only for authentication and account identification. We do not use Google account information for advertising, sale, or unrelated purposes.",
       "To store, display, update, and delete your trade journal records.",
       "To calculate statistics, summaries, calendar views, and shareable snapshots.",
+      "To process tax year pass purchases, unlock the tax reports and exports you paid for, and handle refunds and payment support.",
       "To remember preferences such as theme, display mode, and table sorting.",
       "To monitor reliability, protect the service, troubleshoot issues, and improve the product.",
       "To respond to support requests or legal obligations.",
@@ -41,6 +43,7 @@ const sections: LegalSection[] = [
       "Google services may process information for authentication and related account functionality. Google's privacy policy applies to Google's handling of that information.",
       "Amazon Web Services (AWS) provides hosting, compute, storage, networking, logging, and related cloud infrastructure used to operate the application and API. AWS may process data necessary to provide those services under its own privacy, security, and service terms.",
       "Neon provides the managed PostgreSQL database infrastructure used by the service. Neon may store and process account, journal, share link, and application data as needed to provide database services under its own privacy, security, and service terms.",
+      "Stripe processes tax year pass payments. When you start checkout, we send Stripe a purchase reference and your account email address, which prefills Stripe's checkout page. You enter your payment details directly with Stripe, and Stripe tells us the outcome of the payment and of any refund. Stripe's privacy policy applies to Stripe's handling of that information.",
       "Personal information may be stored or processed in Canada, the United States, or other locations where our service providers operate.",
       "Information included in a share link may be visible to anyone who has access to that link, depending on the settings you choose.",
       "We may disclose information if required by law or if necessary to protect the security, rights, property, or safety of users, the service, or others.",
@@ -49,8 +52,8 @@ const sections: LegalSection[] = [
   {
     title: "Third-Party Provider Responsibility",
     body: [
-      "AWS and Neon are independent third-party service providers. We remain responsible for our configuration and use of those services and for personal information under our control. These providers operate their own systems and services under their own terms, privacy, and security practices.",
-      "You can review AWS's Privacy Notice at https://aws.amazon.com/privacy/ and Neon's Privacy Policy at https://neon.com/privacy-guide.",
+      "AWS, Neon, and Stripe are independent third-party service providers. We remain responsible for our configuration and use of those services and for personal information under our control. These providers operate their own systems and services under their own terms, privacy, and security practices.",
+      "You can review AWS's Privacy Notice at https://aws.amazon.com/privacy/, Neon's Privacy Policy at https://neon.com/privacy-guide, and Stripe's Privacy Policy at https://stripe.com/privacy.",
     ],
   },
   {
@@ -64,7 +67,7 @@ const sections: LegalSection[] = [
     body: [
       "We use reasonable administrative, technical, and organizational safeguards to protect information. No system can be guaranteed to be perfectly secure.",
       "If we become aware of a privacy or security incident involving personal information, we will assess and respond to it in accordance with applicable law, including any required notices to affected individuals or regulators.",
-      "We retain account and journal information while your account is active or as needed to provide the service, comply with legal obligations, resolve disputes, prevent abuse, or enforce our terms.",
+      "We retain account, journal, and purchase information while your account is active or as needed to provide the service, comply with legal obligations, resolve disputes, prevent abuse, or enforce our terms.",
     ],
   },
   {
