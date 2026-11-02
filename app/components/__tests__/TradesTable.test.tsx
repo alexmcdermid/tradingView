@@ -44,6 +44,21 @@ describe("TradesTable", () => {
     expect(screen.queryByText("1-0 of 0")).not.toBeInTheDocument();
   });
 
+  it("shows the margin charged in the viewed month with the total on hover", () => {
+    const marginTrade: Trade = {
+      ...trade,
+      marginRate: 36.5,
+      openedAt: "2024-01-15",
+      closedAt: "2024-03-10",
+    };
+
+    render(
+      <TradesTable trades={[marginTrade]} marginMonth="2024-03" onEdit={vi.fn()} onDelete={vi.fn()} />
+    );
+
+    expect(screen.getByLabelText("Total margin: 55.00 USD")).toHaveTextContent("9.00");
+  });
+
   describe("touch drag", () => {
     const originalElementFromPoint = document.elementFromPoint;
     let dropTarget: HTMLElement;

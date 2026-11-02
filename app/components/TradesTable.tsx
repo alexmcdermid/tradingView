@@ -25,7 +25,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { Trade, TradeSortDirection, TradeSortField } from "../api/types";
-import { computeMarginFee } from "../utils/tradeMath";
+import { computeMarginFee, computeMonthlyMarginCharges, sumMarginCharges } from "../utils/tradeMath";
 import { useTouchTradeDrag } from "./useTouchTradeDrag";
 
 const TRADE_DRAG_MIME = "application/x-trade-id";
@@ -52,6 +52,8 @@ interface TradesTableProps {
   showDetailedTradeTimes?: boolean;
   emptyMessage?: string;
   toolbar?: React.ReactNode;
+  // YYYY-MM: show each trade's margin charged in this month, with the total on hover.
+  marginMonth?: string;
 }
 
 function TablePaginationActions({
@@ -179,6 +181,7 @@ export function TradesTable({
   showDetailedTradeTimes = false,
   emptyMessage = "No trades yet. Log a trade to see it here.",
   toolbar,
+  marginMonth,
 }: TradesTableProps) {
   const paginationEnabled =
     page !== undefined &&
@@ -314,14 +317,10 @@ export function TradesTable({
           ) : (
             trades.map((trade) => {
               const percent = computeTradePnlPercent(trade);
-              const marginFee = computeMarginFee({
-                entryPrice: trade.entryPrice,
-                quantity: trade.quantity,
-                assetType: trade.assetType,
-                marginRate: trade.marginRate ?? 0,
-                openedAt: trade.openedAt,
-                closedAt: trade.closedAt,
-              });
+              const totalMarginFee = computeMarginFee(trade);
+              const marginFee = marginMonth
+                ? sumMarginCharges(computeMonthlyMarginCharges(trade), marginMonth)
+                : totalMarginFee;
               const percentLabel =
                 percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
               return (
@@ -409,7 +408,15 @@ export function TradesTable({
                   )}
                 </TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
-                <TableCell align="right">{formatNumber(marginFee, 2)}</TableCell>
+                <TableCell align="right">
+                  {marginMonth && totalMarginFee > 0 ? (
+                    <Tooltip title={`Total margin: ${formatNumber(totalMarginFee, 2)} ${trade.currency}`}>
+                      <span>{formatNumber(marginFee, 2)}</span>
+                    </Tooltip>
+                  ) : (
+                    formatNumber(marginFee, 2)
+                  )}
+                </TableCell>
                 <TableCell>
                   {renderTradeDate(
                     trade.openedAt,

@@ -93,7 +93,12 @@ import { TradesTable } from "../components/TradesTable";
 import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
-import { computeMarginFee, computeRealizedPnl } from "../utils/tradeMath";
+import {
+  computeMarginFee,
+  computeMonthlyMarginCharges,
+  computeRealizedPnl,
+  sumMarginCharges,
+} from "../utils/tradeMath";
 import {
   buildSharePayload,
   buildTradesSharePayload,
@@ -383,6 +388,7 @@ const convertUsdStats = (
   return {
     ...stats,
     totalPnl: convertUsdAmount(stats.totalPnl, displayCurrency, rate) ?? stats.totalPnl,
+    marginFee: convertUsdAmount(stats.marginFee, displayCurrency, rate),
     bestDay: convertUsdBucket(stats.bestDay, displayCurrency, rate),
     bestMonth: convertUsdBucket(stats.bestMonth, displayCurrency, rate),
     displayCurrency,
@@ -1307,22 +1313,20 @@ export default function Home() {
     });
   }, [accounts, token, user]);
 
-  const computeSummary = useCallback((list: Trade[], month?: string, rate?: number, fxDate?: string): PnlSummary => {
+  // Mirrors the API summary: with chargeMarginMonthly, margin moves from the close date to monthly charges.
+  const computeSummary = useCallback((
+    list: Trade[],
+    month?: string,
+    rate?: number,
+    fxDate?: string,
+    { chargeMarginMonthly = true }: { chargeMarginMonthly?: boolean } = {}
+  ): PnlSummary => {
     const cadToUsd = resolveCadToUsdRate(rate);
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
-    const toUsd = (trade: Trade) =>
-      trade.currency === "CAD" ? trade.realizedPnl * cadToUsd : trade.realizedPnl;
-    const toUsdMarginFee = (trade: Trade) => {
-      const marginFee = computeMarginFee({
-        entryPrice: trade.entryPrice,
-        quantity: trade.quantity,
-        assetType: trade.assetType,
-        marginRate: trade.marginRate ?? 0,
-        openedAt: trade.openedAt,
-        closedAt: trade.closedAt,
-      });
-      return trade.currency === "CAD" ? marginFee * cadToUsd : marginFee;
-    };
+    const toUsdAmount = (trade: Trade, amount: number) =>
+      trade.currency === "CAD" ? amount * cadToUsd : amount;
+    const toUsd = (trade: Trade) => toUsdAmount(trade, trade.realizedPnl);
+    const toUsdMarginFee = (trade: Trade) => toUsdAmount(trade, computeMarginFee(trade));
     const toUsdNotional = (trade: Trade) => {
       const multiplier = trade.assetType === "OPTION" ? 100 : 1;
       const notional = trade.entryPrice * trade.quantity * multiplier;
@@ -1332,37 +1336,55 @@ export default function Home() {
     const filtered = month
       ? list.filter((trade) => trade.closedAt.startsWith(month))
       : list;
-    const totalPnl = filtered.reduce((acc, trade) => acc + toUsd(trade), 0);
     const totalNotional = filtered.reduce((acc, trade) => {
       const multiplier = trade.assetType === "OPTION" ? 100 : 1;
       const notional = trade.entryPrice * trade.quantity * multiplier;
       const usdNotional = trade.currency === "CAD" ? notional * cadToUsd : notional;
       return acc + Math.abs(usdNotional);
     }, 0);
+    const dailyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
+    const monthlyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
+    const addToBucket = (
+      map: typeof dailyMap,
+      period: string,
+      values: { pnl: number; trades: number; notional: number; marginFee: number }
+    ) => {
+      const existing = map.get(period);
+      map.set(period, {
+        pnl: (existing?.pnl || 0) + values.pnl,
+        trades: (existing?.trades || 0) + values.trades,
+        notional: (existing?.notional || 0) + values.notional,
+        marginFee: (existing?.marginFee || 0) + values.marginFee,
+      });
+    };
+
+    filtered.forEach((trade) => {
+      const marginFee = toUsdMarginFee(trade);
+      const values = {
+        pnl: chargeMarginMonthly ? toUsd(trade) + marginFee : toUsd(trade),
+        trades: 1,
+        notional: toUsdNotional(trade),
+        marginFee: chargeMarginMonthly ? 0 : marginFee,
+      };
+      addToBucket(dailyMap, trade.closedAt.slice(0, 10), values);
+      addToBucket(monthlyMap, trade.closedAt.slice(0, 7), values);
+    });
+    if (chargeMarginMonthly) {
+      list.forEach((trade) => {
+        computeMonthlyMarginCharges(trade)
+          .filter((charge) => !month || charge.chargedOn.startsWith(month))
+          .forEach((charge) => {
+            const marginFee = toUsdAmount(trade, charge.amount);
+            const values = { pnl: -marginFee, trades: 0, notional: 0, marginFee };
+            addToBucket(dailyMap, charge.chargedOn, values);
+            addToBucket(monthlyMap, charge.chargedOn.slice(0, 7), values);
+          });
+      });
+    }
+    const totalPnl = Array.from(monthlyMap.values()).reduce((acc, bucket) => acc + bucket.pnl, 0);
     const pnlPercent = totalNotional > 0
       ? Number(((totalPnl / totalNotional) * 100).toFixed(2))
       : undefined;
-    const dailyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
-    const monthlyMap = new Map<string, { pnl: number; trades: number; notional: number; marginFee: number }>();
-
-    filtered.forEach((trade) => {
-      const day = trade.closedAt.slice(0, 10);
-      const month = trade.closedAt.slice(0, 7);
-      const notional = toUsdNotional(trade);
-      const marginFee = toUsdMarginFee(trade);
-      dailyMap.set(day, {
-        pnl: (dailyMap.get(day)?.pnl || 0) + toUsd(trade),
-        trades: (dailyMap.get(day)?.trades || 0) + 1,
-        notional: (dailyMap.get(day)?.notional || 0) + notional,
-        marginFee: (dailyMap.get(day)?.marginFee || 0) + marginFee,
-      });
-      monthlyMap.set(month, {
-        pnl: (monthlyMap.get(month)?.pnl || 0) + toUsd(trade),
-        trades: (monthlyMap.get(month)?.trades || 0) + 1,
-        notional: (monthlyMap.get(month)?.notional || 0) + notional,
-        marginFee: (monthlyMap.get(month)?.marginFee || 0) + marginFee,
-      });
-    });
 
     const daily: PnlBucket[] = Array.from(dailyMap.entries())
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
@@ -1431,7 +1453,12 @@ export default function Home() {
     ): AggregateStats => {
       const scopedYear = year
         ?? (day ? Number(day.slice(0, 4)) : month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
-      const scoped = computeSummary(list, String(scopedYear), rate, fxDate);
+      const scoped = computeSummary(list, String(scopedYear), rate, fxDate, { chargeMarginMonthly: false });
+      const cadToUsd = resolveCadToUsdRate(rate);
+      const marginFee = list.reduce((total, trade) => {
+        const tradeMarginFee = sumMarginCharges(computeMonthlyMarginCharges(trade), String(scopedYear));
+        return total + (trade.currency === "CAD" ? tradeMarginFee * cadToUsd : tradeMarginFee);
+      }, 0);
       const bestMonth = pickBestBucket(scoped.monthly);
       const scopedMonth = month ?? (day ? day.slice(0, 7) : bestMonth?.period ?? null);
       const bestDay = day
@@ -1451,6 +1478,7 @@ export default function Home() {
         year: scopedYear,
         month: scopedMonth,
         day: day ?? null,
+        marginFee: Number(marginFee.toFixed(2)),
       };
     },
     [computeSummary, pickBestBucket, resolveLatestTradeYear]
@@ -2686,6 +2714,7 @@ export default function Home() {
             value={displayAggregateStats?.totalPnl}
             trades={displayAggregateStats?.tradeCount}
             percent={displayAggregateStats?.pnlPercent}
+            marginFee={displayAggregateStats?.marginFee}
             currency={displayCurrency}
             loading={loadingStats}
           />
@@ -2800,6 +2829,8 @@ export default function Home() {
     return { id: widgetId, node: null };
   });
 
+  const calendarMonthMarginFee =
+    displaySummary?.monthly.find((bucket) => bucket.period === calendarMonth)?.marginFee ?? 0;
   const monthlyColor = useMemo(() => {
     if (!displaySummary) return undefined;
     if (displaySummary.totalPnl > 0) return "success.main";
@@ -2960,6 +2991,11 @@ export default function Home() {
                         }`
                       : ""}
                   </Typography>
+                  {calendarMonthMarginFee > 0 && (
+                    <Typography variant="body2" color="warning.main" fontWeight={700}>
+                      Margin: {formatMoney(calendarMonthMarginFee, displayCurrency)}
+                    </Typography>
+                  )}
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", rowGap: 1 }}>
                   {selectedDate && (
@@ -3106,6 +3142,7 @@ export default function Home() {
             <TradesTable
               trades={filteredTrades}
               accountNamesById={accountNamesById}
+              marginMonth={user && token ? calendarMonth : undefined}
               loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
@@ -4063,6 +4100,7 @@ function StatCard({
   value,
   trades,
   percent,
+  marginFee,
   currency,
   loading,
 }: {
@@ -4070,6 +4108,7 @@ function StatCard({
   value?: number;
   trades?: number;
   percent?: number;
+  marginFee?: number | null;
   currency: Currency;
   loading?: boolean;
 }) {
@@ -4101,6 +4140,11 @@ function StatCard({
                 ? `${percentLabel} return`
                 : "No trades"}
         </Typography>
+        {!loading && marginFee != null && marginFee > 0 && (
+          <Typography variant="body2" color="warning.main">
+            Margin charged: {formatMoney(marginFee, currency)}
+          </Typography>
+        )}
       </CardContent>
     </Card>
   );
