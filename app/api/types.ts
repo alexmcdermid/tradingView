@@ -139,6 +139,8 @@ export interface AggregateStats {
   year?: number | null;
   month?: string | null;
   day?: string | null;
+  // Margin charged during the scoped year, including positions still open at year end.
+  marginFee?: number | null;
 }
 
 export interface TaxablePnl {
