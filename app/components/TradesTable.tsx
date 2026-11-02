@@ -317,10 +317,10 @@ export function TradesTable({
           ) : (
             trades.map((trade) => {
               const percent = computeTradePnlPercent(trade);
-              const totalMarginFee = computeMarginFee(trade);
-              const marginFee = marginMonth
+              const marginFee = computeMarginFee(trade);
+              const monthMarginFee = marginMonth
                 ? sumMarginCharges(computeMonthlyMarginCharges(trade), marginMonth)
-                : totalMarginFee;
+                : marginFee;
               const percentLabel =
                 percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
               return (
@@ -409,13 +409,19 @@ export function TradesTable({
                 </TableCell>
                 <TableCell align="right">{formatNumber(trade.fees, 2)}</TableCell>
                 <TableCell align="right">
-                  {marginMonth && totalMarginFee > 0 ? (
-                    <Tooltip title={`Total margin: ${formatNumber(totalMarginFee, 2)} ${trade.currency}`}>
-                      <span>{formatNumber(marginFee, 2)}</span>
-                    </Tooltip>
-                  ) : (
-                    formatNumber(marginFee, 2)
-                  )}
+                  <Stack spacing={0}>
+                    <Typography variant="body2">{formatNumber(marginFee, 2)}</Typography>
+                    {monthMarginFee !== marginFee ? (
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ lineHeight: 1.2, whiteSpace: "nowrap" }}
+                      >
+                        {formatNumber(monthMarginFee, 2)} this month
+                      </Typography>
+                    ) : null}
+                  </Stack>
                 </TableCell>
                 <TableCell>
                   {renderTradeDate(

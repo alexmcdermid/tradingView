@@ -44,7 +44,7 @@ describe("TradesTable", () => {
     expect(screen.queryByText("1-0 of 0")).not.toBeInTheDocument();
   });
 
-  it("shows the margin charged in the viewed month with the total on hover", () => {
+  it("shows the total margin with the viewed month's share beneath", () => {
     const marginTrade: Trade = {
       ...trade,
       marginRate: 36.5,
@@ -56,7 +56,24 @@ describe("TradesTable", () => {
       <TradesTable trades={[marginTrade]} marginMonth="2024-03" onEdit={vi.fn()} onDelete={vi.fn()} />
     );
 
-    expect(screen.getByLabelText("Total margin: 55.00 USD")).toHaveTextContent("9.00");
+    expect(screen.getByText("55.00")).toBeInTheDocument();
+    expect(screen.getByText("9.00 this month")).toBeInTheDocument();
+  });
+
+  it("shows only the total margin when the trade is held within the viewed month", () => {
+    const marginTrade: Trade = {
+      ...trade,
+      marginRate: 36.5,
+      openedAt: "2024-03-01",
+      closedAt: "2024-03-10",
+    };
+
+    render(
+      <TradesTable trades={[marginTrade]} marginMonth="2024-03" onEdit={vi.fn()} onDelete={vi.fn()} />
+    );
+
+    expect(screen.getByText("9.00")).toBeInTheDocument();
+    expect(screen.queryByText(/this month/)).not.toBeInTheDocument();
   });
 
   describe("touch drag", () => {
