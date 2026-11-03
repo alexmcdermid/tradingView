@@ -113,7 +113,16 @@ async function main() {
   const systemPrompt = `You are a senior engineer reviewing a GitHub pull request.\n\n${tier.reviewFocus}\n\n${REVIEW_FORMAT_RULES}`;
 
   const pullRequest = await githubRequest("GET", `/repos/${repository}/pulls/${pullRequestNumber}`);
-  const reviewContext = await buildReviewContext(pullRequest, await listChangedFiles(), tier);
+  const changedFiles = await listChangedFiles();
+  // The files endpoint always returns the latest diff, while file contents and the review are pinned to
+  // pullRequest.head.sha. A push in between would mix two revisions, so stop and ask for a re-run.
+  const latestPullRequest = await githubRequest("GET", `/repos/${repository}/pulls/${pullRequestNumber}`);
+  if (latestPullRequest.head.sha !== pullRequest.head.sha) {
+    const message = "New commits were pushed while the review was starting, so it was skipped. Comment `/ai-review` again.";
+    await postPullRequestComment(`⚠️ ${message}`);
+    throw new Error(message);
+  }
+  const reviewContext = await buildReviewContext(pullRequest, changedFiles, tier);
   console.log(`Reviewing #${pullRequestNumber} at ${tierName} tier with ${providers.join(" and ")}: ${reviewContext.prompt.length} prompt characters`);
 
   const results = await Promise.allSettled(providers.map(async (provider) => {
@@ -248,7 +257,13 @@ async function reviewWithAnthropic(tier, modelConfig, systemPrompt, prompt) {
   // After a fallback, the answer is the text that follows the last fallback marker.
   const lastFallbackIndex = message.content.findLastIndex((block) => block.type === "fallback");
   const reviewJson = message.content.slice(lastFallbackIndex + 1).filter((block) => block.type === "text").map((block) => block.text).join("");
-  return { review: JSON.parse(reviewJson), modelUsed: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+  return {
+    review: JSON.parse(reviewJson),
+    modelUsed: message.model,
+    servedByFallbackModel: Boolean(message.usage.iterations?.some((iteration) => iteration.type === "fallback_message")),
+    inputTokens: message.usage.input_tokens,
+    outputTokens: message.usage.output_tokens,
+  };
 }
 
 async function reviewWithOpenAI(tier, modelConfig, systemPrompt, prompt) {
@@ -325,12 +340,16 @@ function buildReviewBody(tierName, modelConfig, modelResult, reviewContext, inli
   }
 
   const estimatedCostUsd = (modelResult.inputTokens * modelConfig.usdPerMillionInputTokens + modelResult.outputTokens * modelConfig.usdPerMillionOutputTokens) / 1_000_000;
+  // A fallback model bills at its own rates, and usage then covers only its attempt, so the table price would mislead.
+  const costEstimate = modelResult.servedByFallbackModel
+    ? "cost not estimated (served by fallback model)"
+    : `≈ ${estimatedCostUsd < 0.01 ? "<$0.01" : `$${estimatedCostUsd.toFixed(2)}`}`;
   const tier = REVIEW_TIERS[tierName];
   sections.push([
     `<sub>\`${modelResult.modelUsed}\` · effort ${tier.effort}`,
     `${reviewContext.reviewedFileCount} diffs${tier.includeFullFileContents ? ` + ${reviewContext.fullFileCount} full files` : ""}`,
     `${modelResult.inputTokens.toLocaleString("en-US")} in / ${modelResult.outputTokens.toLocaleString("en-US")} out tokens`,
-    `≈ ${estimatedCostUsd < 0.01 ? "<$0.01" : `$${estimatedCostUsd.toFixed(2)}`}`,
+    costEstimate,
     `[run](${workflowRunUrl})<br>Re-run with \`${REVIEW_COMMAND_USAGE}\`</sub>`,
   ].join(" · "));
 
