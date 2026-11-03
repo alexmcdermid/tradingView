@@ -2,7 +2,8 @@
 name: AI PR Review
 
 # Reviews a PR on demand from a PR comment:
-#   /ai-review [light|standard|deep] [anthropic|openai|both]
+#   /ai-review [light|standard|deep|security] [anthropic|openai|both]
+# The security tier's OpenAI review uses Daybreak Blue, which must be enabled on the OPENAI_API_KEY's project.
 # Comment-triggered workflows run from the default branch, so changes here take effect once merged to main.
 # Tiers, models and prices live in .github/ai-review/review-pull-request.mjs.
 # Secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY.
