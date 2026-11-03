@@ -1,0 +1,58 @@
+# noinspection YAMLSchemaValidation,GithubUnresolvedReference
+name: AI PR Review
+
+# Reviews a PR automatically when it opens or leaves draft, and on demand from a PR comment:
+#   /ai-review [light|standard|deep] [anthropic|openai|both]
+# Tiers, models and prices live in .github/ai-review/review-pull-request.mjs.
+# Secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY.
+# Optional variables: AI_REVIEW_DEFAULT_TIER (standard), AI_REVIEW_DEFAULT_PROVIDERS (both),
+#   AI_REVIEW_ON_PR_OPEN (set to false to only review on demand).
+on:
+  pull_request:
+    branches: [ "main" ]
+    types: [opened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'pull_request'
+        && github.event.pull_request.draft == false
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && vars.AI_REVIEW_ON_PR_OPEN != 'false')
+      || (github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && startsWith(github.event.comment.body, '/ai-review')
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/ai-review
+      - name: Use Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: .github/ai-review/package-lock.json
+      - name: Install
+        run: npm ci --prefix .github/ai-review --ignore-scripts
+      - name: Review pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          REVIEW_COMMAND: ${{ github.event.comment.body }}
+          REVIEW_COMMAND_COMMENT_ID: ${{ github.event.comment.id }}
+          DEFAULT_REVIEW_TIER: ${{ vars.AI_REVIEW_DEFAULT_TIER || 'standard' }}
+          DEFAULT_REVIEW_PROVIDERS: ${{ vars.AI_REVIEW_DEFAULT_PROVIDERS || 'both' }}
+        run: node .github/ai-review/review-pull-request.mjs
