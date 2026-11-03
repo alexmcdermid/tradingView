@@ -228,7 +228,7 @@ function numberPatchLines(patch) {
 }
 
 async function reviewWithAnthropic(tier, modelConfig, systemPrompt, prompt) {
-  const client = new Anthropic({ apiKey: requireEnv("ANTHROPIC_API_KEY") });
+  const client = new Anthropic({ apiKey: requireEnv("ANTHROPIC_REVIEWER_API_KEY") });
   const request = {
     model: modelConfig.model,
     max_tokens: tier.maxOutputTokens,
@@ -252,7 +252,7 @@ async function reviewWithAnthropic(tier, modelConfig, systemPrompt, prompt) {
 }
 
 async function reviewWithOpenAI(tier, modelConfig, systemPrompt, prompt) {
-  const client = new OpenAI({ apiKey: requireEnv("OPENAI_API_KEY"), timeout: 20 * 60 * 1000 });
+  const client = new OpenAI({ apiKey: requireEnv("OPENAI_REVIEWER_API_KEY"), timeout: 20 * 60 * 1000 });
   const response = await client.responses.create({
     model: modelConfig.model,
     instructions: systemPrompt,
@@ -358,7 +358,7 @@ async function githubRequest(method, path, body, accept = "application/vnd.githu
 
 function requireEnv(name) {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not set. API keys go in the repository's Actions secrets.`);
+  if (!value) throw new Error(`${name} is not set. Add it under the repository's Settings > Secrets and variables > Actions.`);
   return value;
 }
 

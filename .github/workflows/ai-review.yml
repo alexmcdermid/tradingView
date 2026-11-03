@@ -3,10 +3,10 @@ name: AI PR Review
 
 # Reviews a PR on demand from a PR comment:
 #   /ai-review [light|standard|deep|security] [anthropic|openai|both]
-# The security tier's OpenAI review uses Daybreak Blue, which must be enabled on the OPENAI_API_KEY's project.
+# The security tier's OpenAI review uses Daybreak Blue, which must be enabled on the OPENAI_REVIEWER_API_KEY's project.
 # Comment-triggered workflows run from the default branch, so changes here take effect once merged to main.
 # Tiers, models and prices live in .github/ai-review/review-pull-request.mjs.
-# Secrets: ANTHROPIC_API_KEY, OPENAI_API_KEY.
+# Secrets: ANTHROPIC_REVIEWER_API_KEY, OPENAI_REVIEWER_API_KEY (dedicated keys, so review spend is tracked apart).
 # Optional variables: AI_REVIEW_DEFAULT_TIER (standard), AI_REVIEW_DEFAULT_PROVIDERS (both).
 on:
   issue_comment:
@@ -41,8 +41,8 @@ jobs:
       - name: Review pull request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_REVIEWER_API_KEY: ${{ secrets.ANTHROPIC_REVIEWER_API_KEY }}
+          OPENAI_REVIEWER_API_KEY: ${{ secrets.OPENAI_REVIEWER_API_KEY }}
           PULL_REQUEST_NUMBER: ${{ github.event.issue.number }}
           REVIEW_COMMAND: ${{ github.event.comment.body }}
           REVIEW_COMMAND_COMMENT_ID: ${{ github.event.comment.id }}
