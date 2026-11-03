@@ -89,6 +89,11 @@ const REVIEW_OUTPUT_SCHEMA = {
   additionalProperties: false,
 };
 
+// Workflow logs and PR comments are public. GitHub masks exact secret values in logs only, not in comments and
+// not partial keys (OpenAI's 401 message echoes a key's first and last characters), so redact both before output.
+const SECRET_ENV_NAMES = ["GITHUB_TOKEN", "ANTHROPIC_REVIEWER_API_KEY", "OPENAI_API_REVIEWER_KEY"];
+const KEY_SHAPED_PATTERN = /\b(?:sk-[\w*.-]{6,}|gh[opsu]_\w{20,}|github_pat_\w{20,})/g;
+
 const repository = process.env.GITHUB_REPOSITORY;
 const pullRequestNumber = process.env.PULL_REQUEST_NUMBER;
 const workflowRunUrl = `${process.env.GITHUB_SERVER_URL}/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`;
@@ -99,13 +104,13 @@ async function main() {
 
   const commandCommentId = requireEnv("REVIEW_COMMAND_COMMENT_ID");
   await githubRequest("POST", `/repos/${repository}/issues/comments/${commandCommentId}/reactions`, { content: "eyes" })
-    .catch((error) => console.warn(`Could not react to the command comment: ${error.message}`));
+    .catch((error) => console.warn(`Could not react to the command comment: ${describeError(error)}`));
 
   let reviewRequest;
   try {
     reviewRequest = parseReviewRequest(requireEnv("REVIEW_COMMAND"), process.env.DEFAULT_REVIEW_TIER, process.env.DEFAULT_REVIEW_PROVIDERS);
   } catch (error) {
-    await postPullRequestComment(`⚠️ ${error.message}`);
+    await postPullRequestComment(`⚠️ ${describeError(error)}`);
     throw error;
   }
   const { tierName, providers } = reviewRequest;
@@ -135,8 +140,8 @@ async function main() {
 
   const failures = results.flatMap((result, index) => (result.status === "rejected" ? [{ provider: providers[index], error: result.reason }] : []));
   for (const { provider, error } of failures) {
-    console.error(`${provider} review failed:`, error);
-    await postPullRequestComment(`⚠️ AI review with ${tier.models[provider].displayName} (${tierName}) failed: ${String(error.message).slice(0, 500)}\n\n[Workflow run](${workflowRunUrl})`);
+    console.error(`${provider} review failed: ${describeError(error)}`);
+    await postPullRequestComment(`⚠️ AI review with ${tier.models[provider].displayName} (${tierName}) failed: ${describeError(error)}\n\n[Workflow run](${workflowRunUrl})`);
   }
   if (failures.length) process.exitCode = 1;
 }
@@ -312,7 +317,7 @@ async function postReview(pullRequest, reviewContext, tierName, modelConfig, mod
   } catch (error) {
     // GitHub rejects the whole review when any inline position is invalid; keep the findings by moving them into the body.
     if (!inlineComments.length) throw error;
-    console.warn(`GitHub rejected the inline comments, posting every finding in the review body instead: ${error.message}`);
+    console.warn(`GitHub rejected the inline comments, posting every finding in the review body instead: ${describeError(error)}`);
     await githubRequest("POST", reviewUrl, {
       commit_id: pullRequest.head.sha,
       event: "COMMENT",
@@ -381,4 +386,21 @@ function requireEnv(name) {
   return value;
 }
 
-await main();
+function redactSecrets(text) {
+  let redacted = String(text);
+  for (const name of SECRET_ENV_NAMES) {
+    if (process.env[name]) redacted = redacted.replaceAll(process.env[name], "[redacted]");
+  }
+  return redacted.replace(KEY_SHAPED_PATTERN, "[redacted key]");
+}
+
+// Only the message and request ID: SDK error objects also carry response headers with account and project IDs.
+function describeError(error) {
+  const requestId = error?.requestID ? ` (request ${error.requestID})` : "";
+  return redactSecrets(`${error?.message ?? error}${requestId}`).slice(0, 500);
+}
+
+await main().catch((error) => {
+  console.error(redactSecrets(error?.stack ?? error));
+  process.exitCode = 1;
+});
