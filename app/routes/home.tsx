@@ -94,10 +94,9 @@ import { MonthlyCalendar } from "../components/MonthlyCalendar";
 import { useAuth } from "../auth/AuthProvider";
 import { ApiError } from "../api/client";
 import {
+  computeClosingMonthMarginFee,
   computeMarginFee,
-  computeMonthlyMarginCharges,
   computeRealizedPnl,
-  sumMarginCharges,
 } from "../utils/tradeMath";
 import {
   buildSharePayload,
@@ -1314,13 +1313,13 @@ export default function Home() {
     });
   }, [accounts, token, user]);
 
-  // Mirrors the API summary: with chargeMarginMonthly, margin moves from the close date to monthly charges.
+  // Mirrors the API summary: with closingMonthMarginOnly, each trade nets only the margin accrued in its closing month.
   const computeSummary = useCallback((
     list: Trade[],
     month?: string,
     rate?: number,
     fxDate?: string,
-    { chargeMarginMonthly = true }: { chargeMarginMonthly?: boolean } = {}
+    { closingMonthMarginOnly = true }: { closingMonthMarginOnly?: boolean } = {}
   ): PnlSummary => {
     const cadToUsd = resolveCadToUsdRate(rate);
     const rateDate = fxDate ?? new Date().toISOString().slice(0, 10);
@@ -1360,28 +1359,19 @@ export default function Home() {
     };
 
     filtered.forEach((trade) => {
-      const marginFee = toUsdMarginFee(trade);
+      const fullMarginFee = toUsdMarginFee(trade);
+      const marginFee = closingMonthMarginOnly
+        ? toUsdAmount(trade, computeClosingMonthMarginFee(trade))
+        : fullMarginFee;
       const values = {
-        pnl: chargeMarginMonthly ? toUsd(trade) + marginFee : toUsd(trade),
+        pnl: toUsd(trade) + fullMarginFee - marginFee,
         trades: 1,
         notional: toUsdNotional(trade),
-        marginFee: chargeMarginMonthly ? 0 : marginFee,
+        marginFee,
       };
       addToBucket(dailyMap, trade.closedAt.slice(0, 10), values);
       addToBucket(monthlyMap, trade.closedAt.slice(0, 7), values);
     });
-    if (chargeMarginMonthly) {
-      list.forEach((trade) => {
-        computeMonthlyMarginCharges(trade)
-          .filter((charge) => !month || charge.chargedOn.startsWith(month))
-          .forEach((charge) => {
-            const marginFee = toUsdAmount(trade, charge.amount);
-            const values = { pnl: -marginFee, trades: 0, notional: 0, marginFee };
-            addToBucket(dailyMap, charge.chargedOn, values);
-            addToBucket(monthlyMap, charge.chargedOn.slice(0, 7), values);
-          });
-      });
-    }
     const totalPnl = Array.from(monthlyMap.values()).reduce((acc, bucket) => acc + bucket.pnl, 0);
     const pnlPercent = totalNotional > 0
       ? Number(((totalPnl / totalNotional) * 100).toFixed(2))
@@ -1454,12 +1444,8 @@ export default function Home() {
     ): AggregateStats => {
       const scopedYear = year
         ?? (day ? Number(day.slice(0, 4)) : month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
-      const scoped = computeSummary(list, String(scopedYear), rate, fxDate, { chargeMarginMonthly: false });
-      const cadToUsd = resolveCadToUsdRate(rate);
-      const marginFee = list.reduce((total, trade) => {
-        const tradeMarginFee = sumMarginCharges(computeMonthlyMarginCharges(trade), String(scopedYear));
-        return total + (trade.currency === "CAD" ? tradeMarginFee * cadToUsd : tradeMarginFee);
-      }, 0);
+      const scoped = computeSummary(list, String(scopedYear), rate, fxDate, { closingMonthMarginOnly: false });
+      const marginFee = scoped.monthly.reduce((total, bucket) => total + (bucket.marginFee ?? 0), 0);
       const bestMonth = pickBestBucket(scoped.monthly);
       const scopedMonth = month ?? (day ? day.slice(0, 7) : bestMonth?.period ?? null);
       const bestDay = day
@@ -3163,7 +3149,7 @@ export default function Home() {
             <TradesTable
               trades={filteredTrades}
               accountNamesById={accountNamesById}
-              marginMonth={user && token ? calendarMonth : undefined}
+              showClosingMonthMargin={Boolean(user && token)}
               loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
