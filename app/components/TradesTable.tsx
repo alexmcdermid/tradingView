@@ -25,7 +25,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { Trade, TradeSortDirection, TradeSortField } from "../api/types";
-import { computeMarginFee, computeMonthlyMarginCharges, sumMarginCharges } from "../utils/tradeMath";
+import { computeClosingMonthMarginFee, computeMarginFee } from "../utils/tradeMath";
 import { useTouchTradeDrag } from "./useTouchTradeDrag";
 
 const TRADE_DRAG_MIME = "application/x-trade-id";
@@ -52,8 +52,8 @@ interface TradesTableProps {
   showDetailedTradeTimes?: boolean;
   emptyMessage?: string;
   toolbar?: React.ReactNode;
-  // YYYY-MM: show each trade's margin charged in this month, with the total on hover.
-  marginMonth?: string;
+  // Rows are trades closed in the viewed month, so the closing month's margin share is "this month".
+  showClosingMonthMargin?: boolean;
 }
 
 function TablePaginationActions({
@@ -181,7 +181,7 @@ export function TradesTable({
   showDetailedTradeTimes = false,
   emptyMessage = "No trades yet. Log a trade to see it here.",
   toolbar,
-  marginMonth,
+  showClosingMonthMargin = false,
 }: TradesTableProps) {
   const paginationEnabled =
     page !== undefined &&
@@ -318,9 +318,7 @@ export function TradesTable({
             trades.map((trade) => {
               const percent = computeTradePnlPercent(trade);
               const marginFee = computeMarginFee(trade);
-              const monthMarginFee = marginMonth
-                ? sumMarginCharges(computeMonthlyMarginCharges(trade), marginMonth)
-                : marginFee;
+              const monthMarginFee = showClosingMonthMargin ? computeClosingMonthMarginFee(trade) : marginFee;
               const percentLabel =
                 percent == null ? "—" : `${percent >= 0 ? "+" : ""}${percent.toFixed(2)}%`;
               return (

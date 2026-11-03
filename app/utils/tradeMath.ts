@@ -41,8 +41,6 @@ type MarginFeeInputs = {
   closedAt?: string | null;
 };
 
-export type MarginCharge = { chargedOn: string; amount: number };
-
 export const computeMarginFee = (inputs: MarginFeeInputs) => {
   const rate = inputs.marginRate ?? 0;
   if (!Number.isFinite(rate) || rate <= 0) return 0;
@@ -55,43 +53,22 @@ export const computeMarginFee = (inputs: MarginFeeInputs) => {
 };
 
 /**
- * Splits a trade's margin fee into monthly charges, matching the API's summary buckets. Each month's share
- * is charged on the close date when the trade closes that month, otherwise on the month's last day.
- * Shares round cumulatively so the charges always add up to the trade's margin fee.
+ * The part of a trade's margin fee accrued in the month it closes, matching the API's summary buckets.
+ * Earlier months' share is rounded on its own and subtracted, so both parts add up to the margin fee.
  */
-export const computeMonthlyMarginCharges = (inputs: MarginFeeInputs): MarginCharge[] => {
+export const computeClosingMonthMarginFee = (inputs: MarginFeeInputs) => {
   const totalMarginFee = computeMarginFee(inputs);
   const openedAt = toUtcMidnight(inputs.openedAt);
   const closedAt = toUtcMidnight(inputs.closedAt);
-  if (totalMarginFee <= 0 || openedAt === null || closedAt === null) return [];
+  if (totalMarginFee <= 0 || openedAt === null || closedAt === null) return totalMarginFee;
+  const closedAtDate = new Date(closedAt);
+  const closingMonthStart = Date.UTC(closedAtDate.getUTCFullYear(), closedAtDate.getUTCMonth(), 1);
+  if (openedAt >= closingMonthStart) return totalMarginFee;
   const daysHeld = (closedAt - openedAt) / MS_PER_DAY;
-  const charges: MarginCharge[] = [];
-  let chargedSoFar = 0;
-  let accrualStart = openedAt;
-  while (accrualStart < closedAt) {
-    const accrualStartDate = new Date(accrualStart);
-    const nextMonthStart = Date.UTC(accrualStartDate.getUTCFullYear(), accrualStartDate.getUTCMonth() + 1, 1);
-    const accrualEnd = Math.min(closedAt, nextMonthStart);
-    const chargedOn = closedAt < nextMonthStart ? closedAt : nextMonthStart - MS_PER_DAY;
-    const daysAccrued = (accrualEnd - openedAt) / MS_PER_DAY;
-    const chargedThroughMonth = Number(((totalMarginFee * daysAccrued) / daysHeld).toFixed(2));
-    const amount = Number((chargedThroughMonth - chargedSoFar).toFixed(2));
-    if (amount > 0) {
-      charges.push({ chargedOn: new Date(chargedOn).toISOString().slice(0, 10), amount });
-    }
-    chargedSoFar = chargedThroughMonth;
-    accrualStart = accrualEnd;
-  }
-  return charges;
+  const daysBeforeClosingMonth = (closingMonthStart - openedAt) / MS_PER_DAY;
+  const chargedBeforeClosingMonth = Number(((totalMarginFee * daysBeforeClosingMonth) / daysHeld).toFixed(2));
+  return Number((totalMarginFee - chargedBeforeClosingMonth).toFixed(2));
 };
-
-export const sumMarginCharges = (charges: MarginCharge[], periodPrefix: string) =>
-  Number(
-    charges
-      .filter((charge) => charge.chargedOn.startsWith(periodPrefix))
-      .reduce((total, charge) => total + charge.amount, 0)
-      .toFixed(2)
-  );
 
 export const computeRealizedPnl = (inputs: {
   entryPrice?: number | null;

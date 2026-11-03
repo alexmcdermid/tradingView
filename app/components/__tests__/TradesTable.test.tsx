@@ -53,7 +53,7 @@ describe("TradesTable", () => {
     };
 
     render(
-      <TradesTable trades={[marginTrade]} marginMonth="2024-03" onEdit={vi.fn()} onDelete={vi.fn()} />
+      <TradesTable trades={[marginTrade]} showClosingMonthMargin onEdit={vi.fn()} onDelete={vi.fn()} />
     );
 
     expect(screen.getByText("55.00")).toBeInTheDocument();
@@ -69,7 +69,7 @@ describe("TradesTable", () => {
     };
 
     render(
-      <TradesTable trades={[marginTrade]} marginMonth="2024-03" onEdit={vi.fn()} onDelete={vi.fn()} />
+      <TradesTable trades={[marginTrade]} showClosingMonthMargin onEdit={vi.fn()} onDelete={vi.fn()} />
     );
 
     expect(screen.getByText("9.00")).toBeInTheDocument();
