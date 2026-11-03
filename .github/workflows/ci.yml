@@ -65,6 +65,7 @@ jobs:
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          mask-aws-account-id: true
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
@@ -116,5 +117,5 @@ jobs:
             }
           }
           EOF
-          aws apprunner update-service --service-arn "${SERVICE_ARN}" --source-configuration file:///tmp/apprunner-frontend.json
+          aws apprunner update-service --service-arn "${SERVICE_ARN}" --source-configuration file:///tmp/apprunner-frontend.json --query "Service.Status" --output text
           bash .github/scripts/apprunner-lifecycle.sh wait-running "${SERVICE_ARN}"

@@ -29,6 +29,7 @@ jobs:
         with:
           aws-region: ${{ secrets.AWS_REGION }}
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          mask-aws-account-id: true
       - name: Count open PRs using shared dev
         id: open-prs
         env:
