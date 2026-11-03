@@ -39,3 +39,5 @@ See [DEV.md](DEV.md) for setup instructions, build commands, and deployment deta
 ## Backend API
 
 This frontend is backed by the companion Spring Boot API: [alexmcdermid/transaction-api](https://github.com/alexmcdermid/transaction-api).
+
+Architecture diagrams for both repos (runtime, sign-in flow, CI/CD, data model) live in [transaction-api/docs/architecture.md](https://github.com/alexmcdermid/transaction-api/blob/main/docs/architecture.md).
