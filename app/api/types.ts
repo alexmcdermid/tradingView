@@ -225,7 +225,8 @@ export type DashboardWidgetId =
   | "TAX_OWED"
   | "ACCOUNT_STATS"
   | "TRADE_COUNTS"
-  | "INFERRED_ACCOUNT_TRADE_COUNTS";
+  | "INFERRED_ACCOUNT_TRADE_COUNTS"
+  | "MARGIN_CHARGED";
 
 export interface UserPreferences {
   themeMode?: ThemeMode | null;

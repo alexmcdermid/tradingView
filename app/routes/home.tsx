@@ -170,6 +170,7 @@ const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> 
   { id: "ACCOUNT_STATS", label: "Account Stats" },
   { id: "TRADE_COUNTS", label: "Trade Counts" },
   { id: "INFERRED_ACCOUNT_TRADE_COUNTS", label: "Inferred Account Trade Counts" },
+  { id: "MARGIN_CHARGED", label: "Margin Charged" },
 ];
 const DASHBOARD_WIDGET_IDS = DASHBOARD_WIDGET_OPTIONS.map((option) => option.id);
 type CalendarMarginMode = "net" | "pnl" | "margin" | "combined";
@@ -2704,6 +2705,11 @@ export default function Home() {
           ? 6
           : 4,
   };
+  const calendarMonthMarginFee =
+    displaySummary?.monthly.find((bucket) => bucket.period === calendarMonth)?.marginFee ?? 0;
+  const selectedDateMarginFee = selectedDate
+    ? displaySummary?.daily.find((bucket) => bucket.period === selectedDate)?.marginFee ?? 0
+    : null;
   const dashboardWidgetCards = selectedDashboardWidgets.map((widgetId) => {
     if (widgetId === "TOTAL_REALIZED") {
       return {
@@ -2714,7 +2720,6 @@ export default function Home() {
             value={displayAggregateStats?.totalPnl}
             trades={displayAggregateStats?.tradeCount}
             percent={displayAggregateStats?.pnlPercent}
-            marginFee={displayAggregateStats?.marginFee}
             currency={displayCurrency}
             loading={loadingStats}
           />
@@ -2826,11 +2831,26 @@ export default function Home() {
         ),
       };
     }
+    if (widgetId === "MARGIN_CHARGED") {
+      return {
+        id: widgetId,
+        node: (
+          <MarginCard
+            title={`Margin Charged (${scopedStatsYear})`}
+            yearMarginFee={displayAggregateStats?.marginFee}
+            month={calendarMonth}
+            monthMarginFee={calendarMonthMarginFee}
+            day={selectedDate}
+            dayMarginFee={selectedDateMarginFee}
+            currency={displayCurrency}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
     return { id: widgetId, node: null };
   });
 
-  const calendarMonthMarginFee =
-    displaySummary?.monthly.find((bucket) => bucket.period === calendarMonth)?.marginFee ?? 0;
   const monthlyColor = useMemo(() => {
     if (!displaySummary) return undefined;
     if (displaySummary.totalPnl > 0) return "success.main";
@@ -2991,8 +3011,9 @@ export default function Home() {
                         }`
                       : ""}
                   </Typography>
-                  {calendarMonthMarginFee > 0 && (
-                    <Typography variant="body2" color="warning.main" fontWeight={700}>
+                  {(calendarMarginMode === "combined" || calendarMarginMode === "margin") &&
+                    calendarMonthMarginFee > 0 && (
+                    <Typography variant="body2" color="warning.main">
                       Margin: {formatMoney(calendarMonthMarginFee, displayCurrency)}
                     </Typography>
                   )}
@@ -4100,7 +4121,6 @@ function StatCard({
   value,
   trades,
   percent,
-  marginFee,
   currency,
   loading,
 }: {
@@ -4108,7 +4128,6 @@ function StatCard({
   value?: number;
   trades?: number;
   percent?: number;
-  marginFee?: number | null;
   currency: Currency;
   loading?: boolean;
 }) {
@@ -4140,11 +4159,6 @@ function StatCard({
                 ? `${percentLabel} return`
                 : "No trades"}
         </Typography>
-        {!loading && marginFee != null && marginFee > 0 && (
-          <Typography variant="body2" color="warning.main">
-            Margin charged: {formatMoney(marginFee, currency)}
-          </Typography>
-        )}
       </CardContent>
     </Card>
   );
@@ -4185,6 +4199,47 @@ function TaxCard({
             ? "Loading…"
             : `${capitalGainsRate.toFixed(2)}% taxable • ${personalRate.toFixed(2)}% rate • ${pnlLabel}`}
         </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarginCard({
+  title,
+  yearMarginFee,
+  month,
+  monthMarginFee,
+  day,
+  dayMarginFee,
+  currency,
+  loading,
+}: {
+  title: string;
+  yearMarginFee?: number | null;
+  month: string;
+  monthMarginFee: number;
+  day: string | null;
+  dayMarginFee: number | null;
+  currency: Currency;
+  loading?: boolean;
+}) {
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Typography variant="overline" color="text.secondary">
+          {title}
+        </Typography>
+        <Typography variant="h5" fontWeight={800} color={yearMarginFee ? "warning.main" : "text.primary"}>
+          {loading ? "…" : yearMarginFee != null ? formatMoney(yearMarginFee, currency) : "—"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {month}: {formatMoney(monthMarginFee, currency)}
+        </Typography>
+        {day && dayMarginFee != null && (
+          <Typography variant="body2" color="text.secondary">
+            {day}: {formatMoney(dayMarginFee, currency)}
+          </Typography>
+        )}
       </CardContent>
     </Card>
   );

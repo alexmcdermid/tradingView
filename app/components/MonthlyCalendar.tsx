@@ -786,7 +786,6 @@ export function MonthlyCalendar({
                 <Typography
                   variant="caption"
                   color={marginFee > 0 ? "warning.main" : "text.secondary"}
-                  fontWeight={700}
                   sx={{ fontSize: { xs: "0.66rem", sm: "0.7rem" }, display: "block", whiteSpace: "nowrap" }}
                 >
                   M {marginDisplayValue}
