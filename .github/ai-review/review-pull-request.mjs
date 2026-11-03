@@ -1,5 +1,5 @@
 // AI pull request review in the style of Copilot's reviewer: one summary review plus inline comments.
-// Run by .github/workflows/ai-review.yml. Each tier trades API spend for depth; models and prices live in REVIEW_TIERS.
+// Run by .github/workflows/ai-review.yml when someone comments /ai-review on a PR. Each tier trades API spend for depth; models and prices live in REVIEW_TIERS.
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
@@ -81,15 +81,13 @@ async function main() {
   requireEnv("GITHUB_REPOSITORY");
   requireEnv("PULL_REQUEST_NUMBER");
 
-  const commandCommentId = process.env.REVIEW_COMMAND_COMMENT_ID;
-  if (commandCommentId) {
-    await githubRequest("POST", `/repos/${repository}/issues/comments/${commandCommentId}/reactions`, { content: "eyes" })
-      .catch((error) => console.warn(`Could not react to the command comment: ${error.message}`));
-  }
+  const commandCommentId = requireEnv("REVIEW_COMMAND_COMMENT_ID");
+  await githubRequest("POST", `/repos/${repository}/issues/comments/${commandCommentId}/reactions`, { content: "eyes" })
+    .catch((error) => console.warn(`Could not react to the command comment: ${error.message}`));
 
   let reviewRequest;
   try {
-    reviewRequest = parseReviewRequest(process.env.REVIEW_COMMAND ?? "", process.env.DEFAULT_REVIEW_TIER, process.env.DEFAULT_REVIEW_PROVIDERS);
+    reviewRequest = parseReviewRequest(requireEnv("REVIEW_COMMAND"), process.env.DEFAULT_REVIEW_TIER, process.env.DEFAULT_REVIEW_PROVIDERS);
   } catch (error) {
     await postPullRequestComment(`⚠️ ${error.message}`);
     throw error;
@@ -121,7 +119,7 @@ function parseReviewRequest(commandText, defaultTierName = "standard", defaultPr
   let tierName = defaultTierName;
   let providersOption = defaultProvidersOption;
   const [command, ...options] = commandText.split("\n")[0].trim().toLowerCase().split(/\s+/);
-  if (commandText && command !== "/ai-review") throw new Error(`Unknown command \`${command}\`. Usage: \`${REVIEW_COMMAND_USAGE}\``);
+  if (command !== "/ai-review") throw new Error(`Unknown command \`${command}\`. Usage: \`${REVIEW_COMMAND_USAGE}\``);
   for (const option of options) {
     if (Object.hasOwn(REVIEW_TIERS, option)) tierName = option;
     else if (Object.hasOwn(PROVIDERS_BY_OPTION, option)) providersOption = option;
