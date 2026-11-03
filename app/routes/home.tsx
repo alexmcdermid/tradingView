@@ -97,7 +97,6 @@ import {
   computeMarginFee,
   computeMonthlyMarginCharges,
   computeRealizedPnl,
-  sumMarginCharges,
 } from "../utils/tradeMath";
 import {
   buildSharePayload,
@@ -388,7 +387,6 @@ const convertUsdStats = (
   return {
     ...stats,
     totalPnl: convertUsdAmount(stats.totalPnl, displayCurrency, rate) ?? stats.totalPnl,
-    marginFee: convertUsdAmount(stats.marginFee, displayCurrency, rate),
     bestDay: convertUsdBucket(stats.bestDay, displayCurrency, rate),
     bestMonth: convertUsdBucket(stats.bestMonth, displayCurrency, rate),
     displayCurrency,
@@ -1454,11 +1452,6 @@ export default function Home() {
       const scopedYear = year
         ?? (day ? Number(day.slice(0, 4)) : month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
       const scoped = computeSummary(list, String(scopedYear), rate, fxDate, { chargeMarginMonthly: false });
-      const cadToUsd = resolveCadToUsdRate(rate);
-      const marginFee = list.reduce((total, trade) => {
-        const tradeMarginFee = sumMarginCharges(computeMonthlyMarginCharges(trade), String(scopedYear));
-        return total + (trade.currency === "CAD" ? tradeMarginFee * cadToUsd : tradeMarginFee);
-      }, 0);
       const bestMonth = pickBestBucket(scoped.monthly);
       const scopedMonth = month ?? (day ? day.slice(0, 7) : bestMonth?.period ?? null);
       const bestDay = day
@@ -1478,7 +1471,6 @@ export default function Home() {
         year: scopedYear,
         month: scopedMonth,
         day: day ?? null,
-        marginFee: Number(marginFee.toFixed(2)),
       };
     },
     [computeSummary, pickBestBucket, resolveLatestTradeYear]
@@ -2714,7 +2706,6 @@ export default function Home() {
             value={displayAggregateStats?.totalPnl}
             trades={displayAggregateStats?.tradeCount}
             percent={displayAggregateStats?.pnlPercent}
-            marginFee={displayAggregateStats?.marginFee}
             currency={displayCurrency}
             loading={loadingStats}
           />
@@ -2991,8 +2982,9 @@ export default function Home() {
                         }`
                       : ""}
                   </Typography>
-                  {calendarMonthMarginFee > 0 && (
-                    <Typography variant="body2" color="warning.main" fontWeight={700}>
+                  {(calendarMarginMode === "combined" || calendarMarginMode === "margin") &&
+                    calendarMonthMarginFee > 0 && (
+                    <Typography variant="body2" color="warning.main">
                       Margin: {formatMoney(calendarMonthMarginFee, displayCurrency)}
                     </Typography>
                   )}
@@ -4100,7 +4092,6 @@ function StatCard({
   value,
   trades,
   percent,
-  marginFee,
   currency,
   loading,
 }: {
@@ -4108,7 +4099,6 @@ function StatCard({
   value?: number;
   trades?: number;
   percent?: number;
-  marginFee?: number | null;
   currency: Currency;
   loading?: boolean;
 }) {
@@ -4140,11 +4130,6 @@ function StatCard({
                 ? `${percentLabel} return`
                 : "No trades"}
         </Typography>
-        {!loading && marginFee != null && marginFee > 0 && (
-          <Typography variant="body2" color="warning.main">
-            Margin charged: {formatMoney(marginFee, currency)}
-          </Typography>
-        )}
       </CardContent>
     </Card>
   );
