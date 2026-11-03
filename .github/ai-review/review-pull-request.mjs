@@ -252,7 +252,7 @@ async function reviewWithAnthropic(tier, modelConfig, systemPrompt, prompt) {
 }
 
 async function reviewWithOpenAI(tier, modelConfig, systemPrompt, prompt) {
-  const client = new OpenAI({ apiKey: requireEnv("OPENAI_REVIEWER_API_KEY"), timeout: 20 * 60 * 1000 });
+  const client = new OpenAI({ apiKey: requireEnv("OPENAI_API_REVIEWER_KEY"), timeout: 20 * 60 * 1000 });
   const response = await client.responses.create({
     model: modelConfig.model,
     instructions: systemPrompt,
