@@ -97,6 +97,7 @@ import {
   computeMarginFee,
   computeMonthlyMarginCharges,
   computeRealizedPnl,
+  sumMarginCharges,
 } from "../utils/tradeMath";
 import {
   buildSharePayload,
@@ -169,6 +170,7 @@ const DASHBOARD_WIDGET_OPTIONS: Array<{ id: DashboardWidgetId; label: string }> 
   { id: "ACCOUNT_STATS", label: "Account Stats" },
   { id: "TRADE_COUNTS", label: "Trade Counts" },
   { id: "INFERRED_ACCOUNT_TRADE_COUNTS", label: "Inferred Account Trade Counts" },
+  { id: "MARGIN_CHARGED", label: "Margin Charged" },
 ];
 const DASHBOARD_WIDGET_IDS = DASHBOARD_WIDGET_OPTIONS.map((option) => option.id);
 type CalendarMarginMode = "net" | "pnl" | "margin" | "combined";
@@ -387,6 +389,7 @@ const convertUsdStats = (
   return {
     ...stats,
     totalPnl: convertUsdAmount(stats.totalPnl, displayCurrency, rate) ?? stats.totalPnl,
+    marginFee: convertUsdAmount(stats.marginFee, displayCurrency, rate),
     bestDay: convertUsdBucket(stats.bestDay, displayCurrency, rate),
     bestMonth: convertUsdBucket(stats.bestMonth, displayCurrency, rate),
     displayCurrency,
@@ -1452,6 +1455,11 @@ export default function Home() {
       const scopedYear = year
         ?? (day ? Number(day.slice(0, 4)) : month ? Number(month.slice(0, 4)) : resolveLatestTradeYear(list));
       const scoped = computeSummary(list, String(scopedYear), rate, fxDate, { chargeMarginMonthly: false });
+      const cadToUsd = resolveCadToUsdRate(rate);
+      const marginFee = list.reduce((total, trade) => {
+        const tradeMarginFee = sumMarginCharges(computeMonthlyMarginCharges(trade), String(scopedYear));
+        return total + (trade.currency === "CAD" ? tradeMarginFee * cadToUsd : tradeMarginFee);
+      }, 0);
       const bestMonth = pickBestBucket(scoped.monthly);
       const scopedMonth = month ?? (day ? day.slice(0, 7) : bestMonth?.period ?? null);
       const bestDay = day
@@ -1471,6 +1479,7 @@ export default function Home() {
         year: scopedYear,
         month: scopedMonth,
         day: day ?? null,
+        marginFee: Number(marginFee.toFixed(2)),
       };
     },
     [computeSummary, pickBestBucket, resolveLatestTradeYear]
@@ -2696,6 +2705,11 @@ export default function Home() {
           ? 6
           : 4,
   };
+  const calendarMonthMarginFee =
+    displaySummary?.monthly.find((bucket) => bucket.period === calendarMonth)?.marginFee ?? 0;
+  const selectedDateMarginFee = selectedDate
+    ? displaySummary?.daily.find((bucket) => bucket.period === selectedDate)?.marginFee ?? 0
+    : null;
   const dashboardWidgetCards = selectedDashboardWidgets.map((widgetId) => {
     if (widgetId === "TOTAL_REALIZED") {
       return {
@@ -2817,11 +2831,26 @@ export default function Home() {
         ),
       };
     }
+    if (widgetId === "MARGIN_CHARGED") {
+      return {
+        id: widgetId,
+        node: (
+          <MarginCard
+            title={`Margin Charged (${scopedStatsYear})`}
+            yearMarginFee={displayAggregateStats?.marginFee}
+            month={calendarMonth}
+            monthMarginFee={calendarMonthMarginFee}
+            day={selectedDate}
+            dayMarginFee={selectedDateMarginFee}
+            currency={displayCurrency}
+            loading={loadingStats}
+          />
+        ),
+      };
+    }
     return { id: widgetId, node: null };
   });
 
-  const calendarMonthMarginFee =
-    displaySummary?.monthly.find((bucket) => bucket.period === calendarMonth)?.marginFee ?? 0;
   const monthlyColor = useMemo(() => {
     if (!displaySummary) return undefined;
     if (displaySummary.totalPnl > 0) return "success.main";
@@ -4170,6 +4199,47 @@ function TaxCard({
             ? "Loading…"
             : `${capitalGainsRate.toFixed(2)}% taxable • ${personalRate.toFixed(2)}% rate • ${pnlLabel}`}
         </Typography>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MarginCard({
+  title,
+  yearMarginFee,
+  month,
+  monthMarginFee,
+  day,
+  dayMarginFee,
+  currency,
+  loading,
+}: {
+  title: string;
+  yearMarginFee?: number | null;
+  month: string;
+  monthMarginFee: number;
+  day: string | null;
+  dayMarginFee: number | null;
+  currency: Currency;
+  loading?: boolean;
+}) {
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent>
+        <Typography variant="overline" color="text.secondary">
+          {title}
+        </Typography>
+        <Typography variant="h5" fontWeight={800} color={yearMarginFee ? "warning.main" : "text.primary"}>
+          {loading ? "…" : yearMarginFee != null ? formatMoney(yearMarginFee, currency) : "—"}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {month}: {formatMoney(monthMarginFee, currency)}
+        </Typography>
+        {day && dayMarginFee != null && (
+          <Typography variant="body2" color="text.secondary">
+            {day}: {formatMoney(dayMarginFee, currency)}
+          </Typography>
+        )}
       </CardContent>
     </Card>
   );

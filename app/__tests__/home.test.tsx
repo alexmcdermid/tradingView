@@ -504,6 +504,45 @@ describe("Home (authenticated)", () => {
     expect(screen.queryByText(/Best Month/i)).not.toBeInTheDocument();
   });
 
+  it("renders the margin charged widget for the year and the calendar month", async () => {
+    const calendarMonth = new Date().toISOString().slice(0, 7);
+    authState.preferences = {
+      themeMode: "LIGHT",
+      pnlDisplayMode: "PNL",
+      dashboardWidgets: ["MARGIN_CHARGED"],
+    };
+    mockFetchSummary.mockResolvedValue({
+      totalPnl: 2,
+      tradeCount: 1,
+      daily: [{ period: `${calendarMonth}-02`, pnl: 2, trades: 1, marginFee: 20.25 }],
+      monthly: [{ period: calendarMonth, pnl: 2, trades: 1, marginFee: 20.25 }],
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+    });
+    mockFetchAggregateStats.mockResolvedValue({
+      totalPnl: 1234.56,
+      tradeCount: 1,
+      tradedDays: 1,
+      bestDay: null,
+      bestMonth: null,
+      cadToUsdRate: 0.732,
+      fxDate: "2024-01-01",
+      marginFee: 120.5,
+    });
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    expect(await screen.findByText(/Margin Charged \(\d{4}\)/)).toBeInTheDocument();
+    expect(await screen.findByText("120.50 USD")).toBeInTheDocument();
+    expect(await screen.findByText(`${calendarMonth}: 20.25 USD`)).toBeInTheDocument();
+  });
+
   it("calculates the tax widget from taxable P/L only", async () => {
     authState.preferences = {
       themeMode: "LIGHT",

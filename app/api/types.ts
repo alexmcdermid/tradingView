@@ -139,6 +139,8 @@ export interface AggregateStats {
   year?: number | null;
   month?: string | null;
   day?: string | null;
+  // Margin charged during the scoped year, including positions still open at year end.
+  marginFee?: number | null;
 }
 
 export interface TaxablePnl {
@@ -223,7 +225,8 @@ export type DashboardWidgetId =
   | "TAX_OWED"
   | "ACCOUNT_STATS"
   | "TRADE_COUNTS"
-  | "INFERRED_ACCOUNT_TRADE_COUNTS";
+  | "INFERRED_ACCOUNT_TRADE_COUNTS"
+  | "MARGIN_CHARGED";
 
 export interface UserPreferences {
   themeMode?: ThemeMode | null;
