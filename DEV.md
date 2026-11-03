@@ -308,7 +308,7 @@ Comment on a PR to get an AI code review: a summary plus inline comments, like C
 | `security` | Claude Opus 5.5 | GPT-6 Sol (Daybreak Blue) | diff + full changed files, security-focused prompt |
 
 - Defaults to `standard` with both providers. Override with the repo variables `AI_REVIEW_DEFAULT_TIER` and `AI_REVIEW_DEFAULT_PROVIDERS`.
-- Only the repo owner, members, and collaborators can trigger it. Each review's footer shows the model, tokens, and estimated cost.
+- Only the repo owner can trigger it. Comments from anyone else, collaborators and bots included, are ignored. Each review's footer shows the model, tokens, and estimated cost.
 - Secrets: `ANTHROPIC_REVIEWER_API_KEY` and `OPENAI_API_REVIEWER_KEY`. They are dedicated keys, so review spend shows separately in each provider's usage console. The security tier's OpenAI review needs Daybreak Blue enabled on that key's OpenAI project.
 - Comment-triggered workflows run from `main`, so workflow changes take effect after merge. Tiers, models, and prices live in `.github/ai-review/review-pull-request.mjs`.
 

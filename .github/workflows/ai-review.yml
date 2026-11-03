@@ -1,7 +1,7 @@
 # noinspection YAMLSchemaValidation,GithubUnresolvedReference
 name: AI PR Review
 
-# Reviews a PR on demand from a PR comment:
+# Reviews a PR on demand when the repo owner comments:
 #   /ai-review [light|standard|deep|security] [anthropic|openai|both]
 # The security tier's OpenAI review uses Daybreak Blue, which must be enabled on the OPENAI_API_REVIEWER_KEY's project.
 # Comment-triggered workflows run from the default branch, so changes here take effect once merged to main.
@@ -14,10 +14,12 @@ on:
 
 jobs:
   review:
+    # Reviews spend API credits, so only the repo owner (the only admin of a personal repo) can trigger one.
+    # Comments from anyone else, collaborators and bots included, skip the job.
     if: >-
       github.event.issue.pull_request
       && startsWith(github.event.comment.body, '/ai-review')
-      && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      && github.event.comment.author_association == 'OWNER'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
