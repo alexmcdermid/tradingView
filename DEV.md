@@ -84,6 +84,16 @@ Local header auth is still available only when `VITE_USE_HEADER_AUTH=true`; prod
 
 Keep browser session auth same-site. The intended topology is `https://dev.tradelog.ca` or `https://www.tradelog.ca` calling an API on another `*.tradelog.ca` hostname. If the API moves to a different registrable domain, the backend must use `APP_SESSION_COOKIE_SAME_SITE=none` with `APP_SESSION_COOKIE_SECURE=true`.
 
+## Tax reports
+
+`/reports` (`app/routes/reports.tsx`) is the tax year pass workspace. A tax year pass is a one-time Stripe purchase per calendar tax year, with no subscription. The page lists tax years, starts checkout for a locked year through the backend's Stripe Payment Link, confirms the purchase on return (`/reports?checkout=success`), then shows the annual summary and the four CSV exports for an unlocked year. Entry points are the **Tax reports** header button and account menu item on the home page.
+
+The page needs the backend billing and reports API (`/api/v1/billing/tax-year-passes`, `/api/v1/reports/tax-years`). When the backend has no Payment Link configured, every year stays locked and the page shows "Checkout is not available yet".
+
+Downloads take their filename from the server's `Content-Disposition` header, which the API exposes to the browser through CORS (`Access-Control-Expose-Headers`). A response without that header falls back to the same `tradelog-<year>-<report>.csv` name.
+
+The Stripe setup, the local webhook flow with `stripe listen`, test cards, and a SQL snippet that unlocks a year without Stripe are in the backend repo at `transaction-api/docs/tax-year-pass.md`.
+
 ## SSR Security
 
 SSR requests are rejected unless the request host matches `VITE_PUBLIC_ORIGIN` or `VITE_PUBLIC_HOST_ALLOWLIST`. OpenGraph and Twitter image URLs are built from `VITE_PUBLIC_ORIGIN`, not from `Host` or `X-Forwarded-*` headers.
@@ -101,6 +111,8 @@ app/
 ├── api/              # API client functions and types
 │   ├── client.ts     # Fetch client, session credentials, CSRF handling
 │   ├── auth.ts       # Session login/logout API calls
+│   ├── billing.ts    # Tax year pass purchases and checkout
+│   ├── reports.ts    # Tax year overview, summary and CSV exports
 │   ├── trades.ts     # Trade API calls
 │   ├── users.ts      # User API calls
 │   └── types.ts      # TypeScript interfaces
@@ -116,6 +128,7 @@ app/
 ├── routes/           # Page components
 │   ├── home.tsx      # Main trading journal page
 │   ├── admin.tsx     # Admin panel
+│   ├── reports.tsx   # Tax reports and tax year pass checkout
 │   └── share.tsx     # Shared trade view
 ├── utils/            # Utility functions
 │   └── shareLink.ts

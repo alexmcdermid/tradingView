@@ -1,6 +1,6 @@
 import { LegalDocument, type LegalSection } from "../components/LegalDocument";
 
-const UPDATED_AT = "May 17, 2026";
+const UPDATED_AT = "October 31, 2026";
 
 const intro = [
   'These Terms of Service ("Terms") govern your access to and use of tradelog, a day trading journal for recording trades, reviewing performance, and sharing selected snapshots.',
@@ -50,6 +50,15 @@ const sections: LegalSection[] = [
     ],
   },
   {
+    title: "Tax Year Passes",
+    body: [
+      "Tax reports and CSV exports for a calendar tax year require a tax year pass. A tax year pass is a one-time payment that unlocks those features for that tax year only. It is not a subscription, it does not renew, and it does not unlock any other tax year.",
+      "The total price, including any applicable taxes, is shown on Stripe's checkout page before you pay. Payments are processed by Stripe, and we do not receive or store your payment card details.",
+      "Refund requests can be sent to camcreativesolutions@gmail.com. If a payment is fully refunded, the tax year pass ends and that year's tax reports and exports are locked again.",
+      "Tax reports and exports summarize the trades you recorded. They are not official tax slips, tax filings, or tax advice, and amounts stay in each trade's recorded currency with no exchange-rate conversion.",
+    ],
+  },
+  {
     title: "Prohibited Conduct",
     items: [
       "Using the service for unlawful, abusive, fraudulent, or unauthorized purposes.",
@@ -76,9 +85,9 @@ const sections: LegalSection[] = [
   {
     title: "Third-Party Services",
     body: [
-      "The service relies on third-party services, including Google authentication, Amazon Web Services (AWS) cloud infrastructure, and Neon managed PostgreSQL database infrastructure.",
+      "The service relies on third-party services, including Google authentication, Stripe payment processing, Amazon Web Services (AWS) cloud infrastructure, and Neon managed PostgreSQL database infrastructure.",
       "We remain responsible for our configuration and use of those services and for personal information under our control. These providers operate their own systems and services under their own terms, privacy, and security practices.",
-      "Your use of the service may involve data being processed by these providers as necessary to operate authentication, hosting, storage, database, logging, networking, and application infrastructure.",
+      "Your use of the service may involve data being processed by these providers as necessary to operate authentication, payments, hosting, storage, database, logging, networking, and application infrastructure.",
       "Personal information may be stored or processed in Canada, the United States, or other locations where our service providers operate.",
     ],
   },
