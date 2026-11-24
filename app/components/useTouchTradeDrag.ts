@@ -19,6 +19,8 @@ interface TouchDragState {
   x: number;
   y: number;
   active: boolean;
+  // Whether the finger moved after the hold started the drag; a still hold is a long press.
+  moved: boolean;
   dropDate: string | null;
   timer?: ReturnType<typeof setTimeout>;
   scrollFrame?: number;
@@ -30,6 +32,8 @@ interface TouchTradeDragOptions {
   onDragEnd?: () => void;
   onDropTargetChange?: (date: string | null) => void;
   onDrop?: (tradeId: string, date: string) => void;
+  // A row held past the drag delay and released without moving, in place of a drop.
+  onLongPress?: (tradeId: string) => void;
 }
 
 function findTouch(list: TouchList, touchId: number) {
@@ -66,14 +70,15 @@ export function useTouchTradeDrag({
   onDragEnd,
   onDropTargetChange,
   onDrop,
+  onLongPress,
 }: TouchTradeDragOptions) {
   const stateRef = useRef<TouchDragState | null>(null);
   const ghostRef = useRef<HTMLDivElement | null>(null);
   const [touchDrag, setTouchDrag] = useState<{ tradeId: string; x: number; y: number } | null>(
     null
   );
-  const callbacksRef = useRef({ onDragStart, onDragEnd, onDropTargetChange, onDrop });
-  callbacksRef.current = { onDragStart, onDragEnd, onDropTargetChange, onDrop };
+  const callbacksRef = useRef({ onDragStart, onDragEnd, onDropTargetChange, onDrop, onLongPress });
+  callbacksRef.current = { onDragStart, onDragEnd, onDropTargetChange, onDrop, onLongPress };
 
   const finish = useCallback(() => {
     const state = stateRef.current;
@@ -149,6 +154,7 @@ export function useTouchTradeDrag({
         x: touch.clientX,
         y: touch.clientY,
         active: false,
+        moved: false,
         dropDate: null,
       };
       state.timer = setTimeout(() => {
@@ -189,6 +195,9 @@ export function useTouchTradeDrag({
         return;
       }
       event.preventDefault();
+      if (Math.hypot(touch.clientX - state.startX, touch.clientY - state.startY) > TOUCH_DRAG_SLOP_PX) {
+        state.moved = true;
+      }
       moveTo(state, touch.clientX, touch.clientY);
     };
     const handleTouchEnd = (event: TouchEvent) => {
@@ -207,6 +216,8 @@ export function useTouchTradeDrag({
       finish();
       if (date) {
         callbacksRef.current.onDrop?.(state.tradeId, date);
+      } else if (!state.moved) {
+        callbacksRef.current.onLongPress?.(state.tradeId);
       }
     };
     body.addEventListener("touchmove", handleTouchMove, { passive: false });

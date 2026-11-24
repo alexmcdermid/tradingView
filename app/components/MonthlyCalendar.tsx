@@ -19,6 +19,7 @@ import {
   type TouchEvent,
 } from "react";
 import type { PnlBucket } from "../api/types";
+import { readTradeIdsFromDataTransfer } from "./tradeDragData";
 
 interface MonthlyCalendarProps {
   daily: PnlBucket[];
@@ -27,8 +28,8 @@ interface MonthlyCalendarProps {
   onMonthChange?: (month: string, options?: { preserveSelection?: boolean }) => void;
   selectedDate?: string | null;
   onDateSelect?: (date: string) => void;
-  draggingTradeId?: string | null;
-  onTradeDrop?: (tradeId: string, date: string) => void;
+  draggingTradeIds?: string[]; // trades being dragged from the table, if any
+  onTradeDrop?: (tradeIds: string[], date: string) => void;
   touchDropTargetDate?: string | null; // day under the finger during a touch drag
   readOnly?: boolean;
   holidays?: string[];
@@ -320,8 +321,6 @@ const parseHolidayString = (holiday: string) => {
 
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const SWIPE_MIN_DISTANCE_PX = 48;
-const TRADE_DRAG_MIME = "application/x-trade-id";
-const TRADE_DRAG_PREFIX = "trade:";
 
 export function MonthlyCalendar({
   daily,
@@ -330,7 +329,7 @@ export function MonthlyCalendar({
   onMonthChange,
   selectedDate,
   onDateSelect,
-  draggingTradeId,
+  draggingTradeIds,
   onTradeDrop,
   touchDropTargetDate,
   readOnly = false,
@@ -343,6 +342,7 @@ export function MonthlyCalendar({
   const keyboardFocusDateRef = useRef<string | null>(null);
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
+  const isDraggingTrades = Boolean(draggingTradeIds?.length);
 
   useEffect(() => {
     if (month) {
@@ -372,10 +372,10 @@ export function MonthlyCalendar({
   }, [activeMonth, selectedDate, daily]);
 
   useEffect(() => {
-    if (!draggingTradeId) {
+    if (!isDraggingTrades) {
       setDropTargetDate(null);
     }
-  }, [draggingTradeId]);
+  }, [isDraggingTrades]);
 
   const bucketByDate = useMemo(() => {
     const map = new Map<string, PnlBucket>();
@@ -493,18 +493,6 @@ export function MonthlyCalendar({
     }
 
     changeMonth(deltaX < 0 ? 1 : -1);
-  };
-
-  const parseTradeIdFromDrop = (event: DragEvent<HTMLElement>) => {
-    const byMime = event.dataTransfer.getData(TRADE_DRAG_MIME);
-    if (byMime) {
-      return byMime;
-    }
-    const plain = event.dataTransfer.getData("text/plain");
-    if (!plain) {
-      return null;
-    }
-    return plain.startsWith(TRADE_DRAG_PREFIX) ? plain.slice(TRADE_DRAG_PREFIX.length) : null;
   };
 
   return (
@@ -643,7 +631,7 @@ export function MonthlyCalendar({
           const isDropTarget =
             dropEnabled &&
             (touchDropTargetDate ?? dropTargetDate) === date &&
-            Boolean(draggingTradeId);
+            isDraggingTrades;
           const formatPnlValue = (value: number | null) =>
             value == null
               ? "—"
@@ -714,7 +702,7 @@ export function MonthlyCalendar({
                   ? (event: DragEvent<HTMLButtonElement>) => {
                       event.preventDefault();
                       event.dataTransfer.dropEffect = "move";
-                      if (draggingTradeId && dropTargetDate !== date) {
+                      if (isDraggingTrades && dropTargetDate !== date) {
                         setDropTargetDate(date);
                       }
                     }
@@ -733,12 +721,13 @@ export function MonthlyCalendar({
                 dropEnabled
                   ? (event: DragEvent<HTMLButtonElement>) => {
                       event.preventDefault();
-                      const tradeId = parseTradeIdFromDrop(event) || draggingTradeId;
+                      const droppedTradeIds = readTradeIdsFromDataTransfer(event.dataTransfer);
+                      const tradeIds = droppedTradeIds.length > 0 ? droppedTradeIds : draggingTradeIds ?? [];
                       setDropTargetDate(null);
-                      if (!tradeId) {
+                      if (tradeIds.length === 0) {
                         return;
                       }
-                      onTradeDrop?.(tradeId, date);
+                      onTradeDrop?.(tradeIds, date);
                     }
                   : undefined
               }

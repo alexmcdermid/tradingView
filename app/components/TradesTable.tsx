@@ -4,8 +4,10 @@ import FirstPageIcon from "@mui/icons-material/FirstPage";
 import LastPageIcon from "@mui/icons-material/LastPage";
 import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
 import NavigateNextIcon from "@mui/icons-material/NavigateNext";
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import {
   Box,
+  Button,
   Chip,
   IconButton,
   MenuItem,
@@ -24,12 +26,11 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { alpha, useTheme } from "@mui/material/styles";
 import type { Trade, TradeSortDirection, TradeSortField } from "../api/types";
 import { computeClosingMonthMarginFee, computeMarginFee } from "../utils/tradeMath";
+import { writeTradeIdsToDataTransfer } from "./tradeDragData";
 import { useTouchTradeDrag } from "./useTouchTradeDrag";
-
-const TRADE_DRAG_MIME = "application/x-trade-id";
-const TRADE_DRAG_PREFIX = "trade:";
 
 interface TradesTableProps {
   trades: Trade[];
@@ -37,10 +38,11 @@ interface TradesTableProps {
   loading?: boolean;
   onEdit: (trade: Trade) => void;
   onDelete: (trade: Trade) => void;
-  onTradeDragStart?: (tradeId: string) => void;
+  // Rows can be selected (Cmd/Ctrl+click, Shift+click for a range) only when they can be dragged.
+  onTradeDragStart?: (tradeIds: string[]) => void;
   onTradeDragEnd?: () => void;
   onTradeTouchDropTargetChange?: (date: string | null) => void;
-  onTradeTouchDrop?: (tradeId: string, date: string) => void;
+  onTradeTouchDrop?: (tradeIds: string[], date: string) => void;
   page?: number;
   pageSize?: number;
   totalElements?: number;
@@ -150,6 +152,33 @@ function computeTradePnlPercent(trade: Trade) {
   return Number(((trade.realizedPnl / notional) * 100).toFixed(2));
 }
 
+// The browser's default drag image is the one grabbed row, which hides that the whole selection moves.
+function setTradeCountDragImage(
+  dataTransfer: DataTransfer,
+  tradeCount: number,
+  colors: { main: string; contrastText: string }
+) {
+  if (typeof dataTransfer.setDragImage !== "function") {
+    return;
+  }
+  const dragImage = document.createElement("div");
+  dragImage.textContent = `${tradeCount} trades`;
+  Object.assign(dragImage.style, {
+    position: "fixed",
+    top: "-1000px",
+    left: "-1000px",
+    padding: "4px 12px",
+    borderRadius: "16px",
+    background: colors.main,
+    color: colors.contrastText,
+    font: "600 13px sans-serif",
+  });
+  document.body.appendChild(dragImage);
+  dataTransfer.setDragImage(dragImage, 0, 0);
+  // The browser snapshots the element synchronously, so it can go once this event finishes.
+  setTimeout(() => dragImage.remove(), 0);
+}
+
 const INITIAL_SORT_DIRECTION: Partial<Record<TradeSortField, TradeSortDirection>> = {
   CLOSED_AT: "DESC",
   OPENED_AT: "DESC",
@@ -190,16 +219,83 @@ export function TradesTable({
     onPageChange !== undefined &&
     onPageSizeChange !== undefined;
 
+  const theme = useTheme();
+  const selectionEnabled = Boolean(onTradeDragStart);
+  const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
+  const selectionAnchorTradeIdRef = useRef<string | null>(null);
+  const selectedTradeIdSet = useMemo(() => new Set(selectedTradeIds), [selectedTradeIds]);
+
+  // Paging, filtering or moving trades out of view drops them from the selection.
+  useEffect(() => {
+    const visibleTradeIds = new Set(trades.map((trade) => trade.id));
+    setSelectedTradeIds((previous) => {
+      const stillVisible = previous.filter((tradeId) => visibleTradeIds.has(tradeId));
+      return stillVisible.length === previous.length ? previous : stillVisible;
+    });
+  }, [trades]);
+
+  useEffect(() => {
+    if (selectedTradeIds.length === 0) {
+      return;
+    }
+    const clearSelectionOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSelectedTradeIds([]);
+      }
+    };
+    document.addEventListener("keydown", clearSelectionOnEscape);
+    return () => document.removeEventListener("keydown", clearSelectionOnEscape);
+  }, [selectedTradeIds.length]);
+
+  // Dragging a selected row moves the whole selection (in table order); any other row moves alone.
+  const tradeIdsToDrag = (tradeId: string) =>
+    selectedTradeIdSet.has(tradeId)
+      ? trades.filter((trade) => selectedTradeIdSet.has(trade.id)).map((trade) => trade.id)
+      : [tradeId];
+
+  const toggleTradeSelection = (tradeId: string) => {
+    selectionAnchorTradeIdRef.current = tradeId;
+    setSelectedTradeIds((previous) =>
+      previous.includes(tradeId) ? previous.filter((id) => id !== tradeId) : [...previous, tradeId]
+    );
+  };
+
+  // Selecting starts with Cmd/Ctrl/Shift+click, or a long press on touch. While anything is selected,
+  // a plain click or tap adds or removes the row too; the row's edit button still opens the editor.
+  const handleRowClick = (event: ReactMouseEvent<HTMLTableRowElement>, trade: Trade) => {
+    const selectionGesture = event.metaKey || event.ctrlKey || event.shiftKey;
+    if (!selectionEnabled || (!selectionGesture && selectedTradeIds.length === 0)) {
+      onEdit(trade);
+      return;
+    }
+    // The anchor only counts while something is selected, so Shift+click after clearing starts afresh.
+    const anchorIndex =
+      selectedTradeIds.length > 0
+        ? trades.findIndex((item) => item.id === selectionAnchorTradeIdRef.current)
+        : -1;
+    if (event.shiftKey && anchorIndex !== -1) {
+      const clickedIndex = trades.findIndex((item) => item.id === trade.id);
+      const rangeTradeIds = trades
+        .slice(Math.min(anchorIndex, clickedIndex), Math.max(anchorIndex, clickedIndex) + 1)
+        .map((item) => item.id);
+      setSelectedTradeIds((previous) => Array.from(new Set([...previous, ...rangeTradeIds])));
+      return;
+    }
+    toggleTradeSelection(trade.id);
+  };
+
   const touchDrag = useTouchTradeDrag({
     enabled: Boolean(onTradeTouchDrop),
-    onDragStart: onTradeDragStart,
+    onDragStart: (tradeId) => onTradeDragStart?.(tradeIdsToDrag(tradeId)),
     onDragEnd: onTradeDragEnd,
     onDropTargetChange: onTradeTouchDropTargetChange,
-    onDrop: onTradeTouchDrop,
+    onDrop: (tradeId, date) => onTradeTouchDrop?.(tradeIdsToDrag(tradeId), date),
+    onLongPress: selectionEnabled ? toggleTradeSelection : undefined,
   });
   const touchDraggedTrade = touchDrag.touchDrag
     ? trades.find((trade) => trade.id === touchDrag.touchDrag?.tradeId)
     : undefined;
+  const touchDraggedTradeCount = touchDrag.touchDrag ? tradeIdsToDrag(touchDrag.touchDrag.tradeId).length : 0;
 
   const handleSortChange = (field: TradeSortField) => {
     if (!onSortChange) {
@@ -325,11 +421,18 @@ export function TradesTable({
                 <TableRow
                   key={trade.id}
                   hover
-                  selected={touchDrag.touchDrag?.tradeId === trade.id}
+                  selected={touchDrag.touchDrag?.tradeId === trade.id || selectedTradeIdSet.has(trade.id)}
+                  aria-selected={selectionEnabled ? selectedTradeIdSet.has(trade.id) : undefined}
                   draggable
                   onTouchStart={(event) => touchDrag.handleRowTouchStart(event, trade.id)}
                   onContextMenu={(event) => {
                     if (touchDrag.isTouchTracking()) {
+                      event.preventDefault();
+                    }
+                  }}
+                  onMouseDown={(event) => {
+                    // Shift+click extends the row selection, so don't let it select page text too.
+                    if (selectionEnabled && event.shiftKey) {
                       event.preventDefault();
                     }
                   }}
@@ -339,13 +442,15 @@ export function TradesTable({
                       event.preventDefault();
                       return;
                     }
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData(TRADE_DRAG_MIME, trade.id);
-                    event.dataTransfer.setData("text/plain", `${TRADE_DRAG_PREFIX}${trade.id}`);
-                    onTradeDragStart?.(trade.id);
+                    const draggedTradeIds = tradeIdsToDrag(trade.id);
+                    writeTradeIdsToDataTransfer(event.dataTransfer, draggedTradeIds);
+                    if (draggedTradeIds.length > 1) {
+                      setTradeCountDragImage(event.dataTransfer, draggedTradeIds.length, theme.palette.primary);
+                    }
+                    onTradeDragStart?.(draggedTradeIds);
                   }}
                   onDragEnd={() => onTradeDragEnd?.()}
-                  onClick={() => onEdit(trade)}
+                  onClick={(event) => handleRowClick(event, trade)}
                   sx={{
                     cursor: "grab",
                     // A long-press on a row starts a touch drag, so keep it from selecting text.
@@ -495,7 +600,11 @@ export function TradesTable({
           >
             <Chip
               label={
-                touchDraggedTrade ? (
+                touchDraggedTradeCount > 1 ? (
+                  <Box component="span" sx={{ fontWeight: 700 }}>
+                    {`${touchDraggedTradeCount} trades`}
+                  </Box>
+                ) : touchDraggedTrade ? (
                   <>
                     <Box component="span" sx={{ display: "block", fontWeight: 700 }}>
                       {touchDraggedTrade.symbol}
@@ -534,6 +643,29 @@ export function TradesTable({
             />
           </Box>
         </Portal>
+      )}
+      {selectedTradeIds.length > 0 && (
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 1,
+            px: 1.5,
+            py: 0.5,
+            borderTop: 1,
+            borderColor: "divider",
+            bgcolor: alpha(theme.palette.primary.main, 0.08),
+          }}
+        >
+          <Typography variant="body2">
+            {`${selectedTradeIds.length} selected · tap rows to add or remove · drag one onto a day to move them all`}
+          </Typography>
+          <Button size="small" onClick={() => setSelectedTradeIds([])}>
+            Clear
+          </Button>
+        </Box>
       )}
       {paginationEnabled && (
         <Box

@@ -66,6 +66,14 @@ export async function updateTrade(tradeId: string, payload: TradePayload) {
   });
 }
 
+// Moves every trade to one close date in a single call, all or nothing.
+export async function moveTradesToClosedAt(tradeIds: string[], closedAt: string) {
+  return request<Trade[]>("/trades/closed-at", {
+    method: "PUT",
+    body: JSON.stringify({ tradeIds, closedAt }),
+  });
+}
+
 export async function deleteTrade(tradeId: string) {
   return request<void>(`/trades/${tradeId}`, {
     method: "DELETE",

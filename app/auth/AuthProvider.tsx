@@ -12,6 +12,7 @@ import {
   FormControlLabel,
   Link,
   Stack,
+  ThemeProvider,
   Typography,
 } from "@mui/material";
 import {
@@ -28,6 +29,7 @@ import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { ApiError } from "../api/client";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserPreferences, UserProfile } from "../api/types";
+import { createAppTheme } from "../theme/appTheme";
 import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } from "../theme/colorMode";
 import {
   cancelGoogleIdentityPrompt,
@@ -162,7 +164,7 @@ export function AuthProvider({
   const [initializing, setInitializing] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [loginWidth, setLoginWidth] = useState("220");
-  const [loginThemeMode, setLoginThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
+  const [appThemeMode, setAppThemeMode] = useState<"light" | "dark">(() => readAuthThemeMode());
   const [oneTapSuppressed, setOneTapSuppressed] = useState(false);
   const [loginRenderNonce, setLoginRenderNonce] = useState(0);
   const googleInteractionInProgressRef = useRef(false);
@@ -307,19 +309,19 @@ export function AuthProvider({
         if (w < 640) return "200";
         return "220";
       };
-      const syncLoginTheme = () => setLoginThemeMode(readAuthThemeMode());
+      const syncAppThemeMode = () => setAppThemeMode(readAuthThemeMode());
       setLoginWidth(computeWidth());
-      syncLoginTheme();
+      syncAppThemeMode();
       const handler = () => setLoginWidth(computeWidth());
       const storageHandler = (event: StorageEvent) => {
         if (event.key === THEME_STORAGE_KEY) {
-          syncLoginTheme();
+          syncAppThemeMode();
         }
       };
       const themeChangeHandler = (event: Event) => {
         const nextMode = (event as CustomEvent<"light" | "dark">).detail;
         if (nextMode === "light" || nextMode === "dark") {
-          setLoginThemeMode(nextMode);
+          setAppThemeMode(nextMode);
         }
       };
       window.addEventListener("resize", handler);
@@ -338,6 +340,7 @@ export function AuthProvider({
   }, [applyProfileOrRequireAgreement, clearSessionState]);
 
   const legalAgreementRequired = Boolean(legalAgreementProfile);
+  const legalAgreementTheme = useMemo(() => createAppTheme(appThemeMode), [appThemeMode]);
 
   useEffect(() => {
     if (
@@ -459,7 +462,7 @@ export function AuthProvider({
       {signingIn ? (
         <Button
           disabled
-          variant={loginThemeMode === "dark" ? "contained" : "outlined"}
+          variant={appThemeMode === "dark" ? "contained" : "outlined"}
           startIcon={<CircularProgress size={16} color="inherit" />}
           sx={{
             width: "100%",
@@ -480,10 +483,10 @@ export function AuthProvider({
           }}
         >
           <GoogleSignInButton
-            key={`${loginWidth}:${loginThemeMode}:${loginRenderNonce}`}
+            key={`${loginWidth}:${appThemeMode}:${loginRenderNonce}`}
             clientId={clientId}
             scriptLoaded={scriptLoadedSuccessfully}
-            theme={loginThemeMode === "dark" ? "filled_black" : "outline"}
+            theme={appThemeMode === "dark" ? "filled_black" : "outline"}
             width={loginWidth}
             onClick={startGoogleButtonInteraction}
           />
@@ -606,12 +609,15 @@ export function AuthProvider({
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <LegalAgreementDialog
-        open={legalAgreementRequired && !suppressLegalAgreementDialog}
-        error={legalAgreementError}
-        onAccept={acceptLegalAgreement}
-        onSignOut={logout}
-      />
+      {/* Rendered above the app's ThemeProvider, so give it the app's theme for the current mode. */}
+      <ThemeProvider theme={legalAgreementTheme}>
+        <LegalAgreementDialog
+          open={legalAgreementRequired && !suppressLegalAgreementDialog}
+          error={legalAgreementError}
+          onAccept={acceptLegalAgreement}
+          onSignOut={logout}
+        />
+      </ThemeProvider>
     </AuthContext.Provider>
   );
 }

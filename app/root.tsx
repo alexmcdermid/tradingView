@@ -15,7 +15,6 @@ import {
   Stack,
   ThemeProvider,
   Typography,
-  createTheme,
   type PaletteMode,
 } from "@mui/material";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
@@ -23,6 +22,7 @@ import { Link as RouterLink, useLocation } from "react-router";
 import type { Route } from "./+types/root";
 import "./app.css";
 import { AuthWrapper, useAuth } from "./auth/AuthProvider";
+import { createAppTheme } from "./theme/appTheme";
 import { securityHeaders, validateRequestHost } from "./config/security";
 import {
   ColorModeContext,
@@ -157,23 +157,7 @@ function AppProviders() {
     }
   }, [mapThemeMode, preferences?.themeMode, setMode, token, user]);
 
-  const theme = useMemo(
-    () =>
-      createTheme({
-        palette: {
-          mode,
-          primary: { main: mode === "dark" ? "#d4d4d8" : "#0f4d92" },
-          secondary: { main: mode === "dark" ? "#f59e0b" : "#ff7043" },
-          background:
-            mode === "dark"
-              ? { default: "#0b0b0c", paper: "#151515" }
-              : { default: "#f4f7fb" },
-        },
-        shape: { borderRadius: 10 },
-        typography: { fontFamily: "Inter, system-ui, -apple-system, sans-serif" },
-      }),
-    [mode]
-  );
+  const theme = useMemo(() => createAppTheme(mode), [mode]);
 
   const colorMode = useMemo(
     () => ({
