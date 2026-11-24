@@ -5,7 +5,7 @@ import { AuthProvider, AuthWrapper, useAuth } from "../auth/AuthProvider";
 import { loginWithGoogleCredential, logoutSession } from "../api/auth";
 import { acceptUserLegalAgreement, fetchUserProfile } from "../api/users";
 import type { UserProfile } from "../api/types";
-import { THEME_CHANGE_EVENT } from "../theme/colorMode";
+import { THEME_CHANGE_EVENT, THEME_STORAGE_KEY } from "../theme/colorMode";
 
 const originalMatchMedia = window.matchMedia;
 
@@ -529,6 +529,37 @@ describe("AuthProvider", () => {
       expect(screen.getByTestId("auth-user")).toHaveTextContent("auth-id");
     });
     expect(screen.getByTestId("legal-required")).toHaveTextContent("no");
+  });
+
+  it("shows the legal agreement dialog in the app's current colour mode", async () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "dark");
+    vi.mocked(fetchUserProfile).mockResolvedValue({
+      id: "user-id",
+      authId: "auth-id",
+      email: "trader@example.com",
+      admin: false,
+      premium: false,
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+      displayCurrency: "USD",
+    });
+
+    render(
+      <AuthProvider disableLoginPrompts>
+        <AuthProbe />
+      </AuthProvider>
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Terms and Privacy Agreement" });
+    // The app theme's dark paper colour, #151515.
+    expect(getComputedStyle(dialog).backgroundColor).toBe("rgb(21, 21, 21)");
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(THEME_CHANGE_EVENT, { detail: "light" }));
+    });
+    await waitFor(() => {
+      expect(getComputedStyle(dialog).backgroundColor).toBe("rgb(255, 255, 255)");
+    });
   });
 
   it("keeps legal review pages readable while agreement is pending", async () => {
