@@ -268,7 +268,11 @@ export function TradesTable({
       onEdit(trade);
       return;
     }
-    const anchorIndex = trades.findIndex((item) => item.id === selectionAnchorTradeIdRef.current);
+    // The anchor only counts while something is selected, so Shift+click after clearing starts afresh.
+    const anchorIndex =
+      selectedTradeIds.length > 0
+        ? trades.findIndex((item) => item.id === selectionAnchorTradeIdRef.current)
+        : -1;
     if (event.shiftKey && anchorIndex !== -1) {
       const clickedIndex = trades.findIndex((item) => item.id === trade.id);
       const rangeTradeIds = trades

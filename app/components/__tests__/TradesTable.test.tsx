@@ -136,6 +136,19 @@ describe("TradesTable", () => {
       expect(rowFor("MSFT")).not.toHaveClass("Mui-selected");
     });
 
+    it("starts a fresh selection on Shift+click once the previous one was cleared", () => {
+      const { rowFor } = renderSelectableTable();
+
+      fireEvent.click(rowFor("AAPL"), { metaKey: true });
+      fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+      fireEvent.click(rowFor("NVDA"), { shiftKey: true });
+
+      expect(screen.getByText(/^1 selected/)).toBeInTheDocument();
+      expect(rowFor("NVDA")).toHaveClass("Mui-selected");
+      expect(rowFor("AAPL")).not.toHaveClass("Mui-selected");
+      expect(rowFor("MSFT")).not.toHaveClass("Mui-selected");
+    });
+
     it("drags the whole selection from a selected row, and only the row itself otherwise", async () => {
       const { rowFor, onTradeDragStart } = renderSelectableTable();
       fireEvent.click(rowFor("NVDA"), { metaKey: true });
