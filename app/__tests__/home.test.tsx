@@ -56,6 +56,7 @@ const mockFetchAggregateStats = vi.fn();
 const mockFetchTaxablePnl = vi.fn();
 const mockCreateTrade = vi.fn();
 const mockUpdateTrade = vi.fn();
+const mockMoveTradesToClosedAt = vi.fn();
 const mockDeleteTrade = vi.fn();
 const mockFetchTradeHistory = vi.fn();
 const mockUpdateUserPreferences = vi.fn();
@@ -90,6 +91,8 @@ vi.mock("../api/trades", () => ({
   fetchTaxablePnl: (...args: Parameters<typeof mockFetchTaxablePnl>) => mockFetchTaxablePnl(...args),
   createTrade: (...args: Parameters<typeof mockCreateTrade>) => mockCreateTrade(...args),
   updateTrade: (...args: Parameters<typeof mockUpdateTrade>) => mockUpdateTrade(...args),
+  moveTradesToClosedAt: (...args: Parameters<typeof mockMoveTradesToClosedAt>) =>
+    mockMoveTradesToClosedAt(...args),
   deleteTrade: (...args: Parameters<typeof mockDeleteTrade>) => mockDeleteTrade(...args),
   fetchTradeHistory: (...args: Parameters<typeof mockFetchTradeHistory>) => mockFetchTradeHistory(...args),
 }));
@@ -745,10 +748,50 @@ describe("Home (authenticated)", () => {
     fireEvent.drop(targetDay, { dataTransfer });
 
     await waitFor(() => {
-      expect(mockUpdateTrade).toHaveBeenCalledWith(
-        "1",
-        expect.objectContaining({ closedAt: targetDate })
-      );
+      expect(mockMoveTradesToClosedAt).toHaveBeenCalledWith(["1"], targetDate);
+    });
+  });
+
+  it("moves every Cmd-clicked trade with one request when a selected row is dropped on a day", async () => {
+    const firstPage = await mockFetchTrades();
+    const [baseTrade] = firstPage.items;
+    mockFetchTrades.mockResolvedValue({
+      ...firstPage,
+      items: [baseTrade, { ...baseTrade, id: "2", symbol: "AMD" }, { ...baseTrade, id: "3", symbol: "NVDA" }],
+      totalElements: 3,
+    });
+    mockFetchTrades.mockClear();
+    const router = createMemoryRouter([
+      { path: "/", element: <Home /> },
+    ]);
+    render(
+      <ColorModeContext.Provider value={{ mode: "light", setMode: vi.fn(), toggleMode: vi.fn() }}>
+        <RouterProvider router={router} />
+      </ColorModeContext.Provider>
+    );
+
+    const rowFor = async (symbol: string) => (await screen.findByText(symbol)).closest("tr") as HTMLElement;
+    fireEvent.click(await rowFor("TSLA"), { metaKey: true });
+    fireEvent.click(await rowFor("NVDA"), { metaKey: true });
+    expect(screen.getByText(/^2 selected/)).toBeInTheDocument();
+    const fetchesBeforeDrop = mockFetchTrades.mock.calls.length;
+
+    const targetDay = screen.getAllByRole("button", {
+      name: /select \d{4}-\d{2}-\d{2}/i,
+    })[0];
+    const targetDate = targetDay.getAttribute("data-trade-drop-date");
+    const dataTransfer = { ...createDataTransfer(), setDragImage: vi.fn() };
+    fireEvent.dragStart(await rowFor("NVDA"), { dataTransfer });
+    fireEvent.dragOver(targetDay, { dataTransfer });
+    fireEvent.drop(targetDay, { dataTransfer });
+
+    await waitFor(() => {
+      expect(mockMoveTradesToClosedAt).toHaveBeenCalledTimes(1);
+    });
+    expect(mockMoveTradesToClosedAt).toHaveBeenCalledWith(["1", "3"], targetDate);
+    expect(mockUpdateTrade).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockFetchTrades).toHaveBeenCalledTimes(fetchesBeforeDrop + 1);
     });
   });
 
@@ -788,10 +831,7 @@ describe("Home (authenticated)", () => {
     }
 
     await waitFor(() => {
-      expect(mockUpdateTrade).toHaveBeenCalledWith(
-        "1",
-        expect.objectContaining({ closedAt: targetDate })
-      );
+      expect(mockMoveTradesToClosedAt).toHaveBeenCalledWith(["1"], targetDate);
     });
   });
 

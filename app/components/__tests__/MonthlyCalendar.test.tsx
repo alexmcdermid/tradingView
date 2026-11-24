@@ -241,7 +241,7 @@ describe("MonthlyCalendar", () => {
         daily={daily}
         initialMonth="2024-05-01"
         onDateSelect={vi.fn()}
-        draggingTradeId="trade-123"
+        draggingTradeIds={["trade-123"]}
         onTradeDrop={onTradeDrop}
       />
     );
@@ -256,7 +256,29 @@ describe("MonthlyCalendar", () => {
     expect(day).toHaveAttribute("data-drop-target", "true");
     fireEvent.drop(day, { dataTransfer });
 
-    expect(onTradeDrop).toHaveBeenCalledWith("trade-123", "2024-05-03");
+    expect(onTradeDrop).toHaveBeenCalledWith(["trade-123"], "2024-05-03");
+  });
+
+  it("drops every trade id the dragged row carries", () => {
+    const onTradeDrop = vi.fn();
+    render(
+      <MonthlyCalendar
+        daily={daily}
+        initialMonth="2024-05-01"
+        onDateSelect={vi.fn()}
+        draggingTradeIds={["trade-1", "trade-2"]}
+        onTradeDrop={onTradeDrop}
+      />
+    );
+
+    const day = screen.getByRole("button", { name: /select 2024-05-03/i });
+    const dataTransfer = {
+      getData: (type: string) => (type === "application/x-trade-ids" ? "trade-1,trade-2" : ""),
+      dropEffect: "none",
+    };
+    fireEvent.drop(day, { dataTransfer });
+
+    expect(onTradeDrop).toHaveBeenCalledWith(["trade-1", "trade-2"], "2024-05-03");
   });
 
   it("highlights the day under the finger during a touch drag", () => {
@@ -265,7 +287,7 @@ describe("MonthlyCalendar", () => {
         daily={daily}
         initialMonth="2024-05-01"
         onDateSelect={vi.fn()}
-        draggingTradeId="trade-123"
+        draggingTradeIds={["trade-123"]}
         onTradeDrop={vi.fn()}
         touchDropTargetDate="2024-05-03"
       />

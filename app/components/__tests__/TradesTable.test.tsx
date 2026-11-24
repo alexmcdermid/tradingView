@@ -76,6 +76,101 @@ describe("TradesTable", () => {
     expect(screen.queryByText(/this month/)).not.toBeInTheDocument();
   });
 
+  describe("row selection", () => {
+    const secondTrade: Trade = { ...trade, id: "trade-2", symbol: "MSFT" };
+    const thirdTrade: Trade = { ...trade, id: "trade-3", symbol: "NVDA" };
+
+    const renderSelectableTable = () => {
+      const handlers = { onEdit: vi.fn(), onTradeDragStart: vi.fn() };
+      render(<TradesTable trades={[trade, secondTrade, thirdTrade]} onDelete={vi.fn()} {...handlers} />);
+      const rowFor = (symbol: string) => screen.getByText(symbol).closest("tr") as HTMLElement;
+      return { rowFor, ...handlers };
+    };
+
+    const recordingDataTransfer = () => {
+      const data: Record<string, string> = {};
+      const dataTransfer = {
+        effectAllowed: "none",
+        setData: (type: string, value: string) => {
+          data[type] = value;
+        },
+        setDragImage: vi.fn(),
+      };
+      return { data, dataTransfer };
+    };
+
+    it("toggles rows with Cmd/Ctrl+click instead of opening the editor", () => {
+      const { rowFor, onEdit } = renderSelectableTable();
+
+      fireEvent.click(rowFor("AAPL"), { metaKey: true });
+      fireEvent.click(rowFor("NVDA"), { ctrlKey: true });
+      expect(onEdit).not.toHaveBeenCalled();
+      expect(rowFor("AAPL")).toHaveClass("Mui-selected");
+      expect(rowFor("MSFT")).not.toHaveClass("Mui-selected");
+      expect(rowFor("NVDA")).toHaveClass("Mui-selected");
+      expect(screen.getByText(/^2 selected/)).toBeInTheDocument();
+
+      fireEvent.click(rowFor("AAPL"), { metaKey: true });
+      expect(rowFor("AAPL")).not.toHaveClass("Mui-selected");
+
+      fireEvent.click(rowFor("MSFT"));
+      expect(onEdit).toHaveBeenCalledWith(secondTrade);
+    });
+
+    it("selects a range with Shift+click and clears it with Escape", () => {
+      const { rowFor } = renderSelectableTable();
+
+      fireEvent.click(rowFor("AAPL"), { metaKey: true });
+      fireEvent.click(rowFor("NVDA"), { shiftKey: true });
+      expect(screen.getByText(/^3 selected/)).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByText(/selected ·/)).not.toBeInTheDocument();
+      expect(rowFor("MSFT")).not.toHaveClass("Mui-selected");
+    });
+
+    it("drags the whole selection from a selected row, and only the row itself otherwise", () => {
+      const { rowFor, onTradeDragStart } = renderSelectableTable();
+      fireEvent.click(rowFor("NVDA"), { metaKey: true });
+      fireEvent.click(rowFor("AAPL"), { metaKey: true });
+
+      const selectedDrag = recordingDataTransfer();
+      fireEvent.dragStart(rowFor("NVDA"), { dataTransfer: selectedDrag.dataTransfer });
+      expect(onTradeDragStart).toHaveBeenLastCalledWith(["trade-1", "trade-3"]);
+      expect(selectedDrag.data["application/x-trade-ids"]).toBe("trade-1,trade-3");
+      expect(selectedDrag.dataTransfer.setDragImage).toHaveBeenCalled();
+
+      const unselectedDrag = recordingDataTransfer();
+      fireEvent.dragStart(rowFor("MSFT"), { dataTransfer: unselectedDrag.dataTransfer });
+      expect(onTradeDragStart).toHaveBeenLastCalledWith(["trade-2"]);
+      expect(unselectedDrag.data["application/x-trade-ids"]).toBe("trade-2");
+      expect(unselectedDrag.dataTransfer.setDragImage).not.toHaveBeenCalled();
+    });
+
+    it("drops rows that leave the table from the selection", () => {
+      const onTradeDragStart = vi.fn();
+      const { rerender } = render(
+        <TradesTable trades={[trade, secondTrade]} onEdit={vi.fn()} onDelete={vi.fn()} onTradeDragStart={onTradeDragStart} />
+      );
+      fireEvent.click(screen.getByText("AAPL").closest("tr") as HTMLElement, { metaKey: true });
+      fireEvent.click(screen.getByText("MSFT").closest("tr") as HTMLElement, { metaKey: true });
+
+      rerender(
+        <TradesTable trades={[secondTrade]} onEdit={vi.fn()} onDelete={vi.fn()} onTradeDragStart={onTradeDragStart} />
+      );
+      expect(screen.getByText(/^1 selected/)).toBeInTheDocument();
+    });
+
+    it("doesn't select rows in a table that can't drag them", () => {
+      const onEdit = vi.fn();
+      render(<TradesTable trades={[trade]} onEdit={onEdit} onDelete={vi.fn()} />);
+
+      fireEvent.click(screen.getByText("AAPL").closest("tr") as HTMLElement, { metaKey: true });
+      expect(onEdit).toHaveBeenCalledWith(trade);
+      expect(screen.queryByText(/selected ·/)).not.toBeInTheDocument();
+    });
+  });
+
   describe("touch drag", () => {
     const originalElementFromPoint = document.elementFromPoint;
     let dropTarget: HTMLElement;
@@ -118,7 +213,7 @@ describe("TradesTable", () => {
       act(() => {
         vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS);
       });
-      expect(onTradeDragStart).toHaveBeenCalledWith("trade-1");
+      expect(onTradeDragStart).toHaveBeenCalledWith(["trade-1"]);
       expect(row).toHaveClass("Mui-selected");
       const ghostChip = screen.getAllByText("AAPL").find((el) => el.closest("[aria-hidden]"));
       expect(ghostChip?.closest(".MuiChip-root")).toHaveClass("MuiChip-colorSuccess");
@@ -132,7 +227,7 @@ describe("TradesTable", () => {
       const end = createEvent.touchEnd(row, { changedTouches: touchAt(50, 40) });
       fireEvent(row, end);
       expect(end.defaultPrevented).toBe(true);
-      expect(onTradeTouchDrop).toHaveBeenCalledWith("trade-1", "2024-05-03");
+      expect(onTradeTouchDrop).toHaveBeenCalledWith(["trade-1"], "2024-05-03");
       expect(onTradeTouchDropTargetChange).toHaveBeenLastCalledWith(null);
       expect(onTradeDragEnd).toHaveBeenCalled();
       expect(onEdit).not.toHaveBeenCalled();
@@ -178,7 +273,7 @@ describe("TradesTable", () => {
         expect(onTradeTouchDropTargetChange).toHaveBeenLastCalledWith("2024-05-03");
 
         fireEvent.touchEnd(row, { changedTouches: touchAt(50, 10) });
-        expect(onTradeTouchDrop).toHaveBeenCalledWith("trade-1", "2024-05-03");
+        expect(onTradeTouchDrop).toHaveBeenCalledWith(["trade-1"], "2024-05-03");
         const callsAtDrop = scrollBy.mock.calls.length;
         act(() => {
           vi.advanceTimersByTime(100);

@@ -60,6 +60,7 @@ import {
   fetchTradeCountStats,
   fetchTradeHistory,
   fetchTrades,
+  moveTradesToClosedAt,
   updateTrade,
 } from "../api/trades";
 import type {
@@ -994,7 +995,7 @@ export default function Home() {
   const [tradeHistoryRows, setTradeHistoryRows] = useState<TradeHistory[]>([]);
   const [tradeHistorySubject, setTradeHistorySubject] = useState<Trade | null>(null);
   const [loadingTradeHistory, setLoadingTradeHistory] = useState(false);
-  const [draggingTradeId, setDraggingTradeId] = useState<string | null>(null);
+  const [draggingTradeIds, setDraggingTradeIds] = useState<string[]>([]);
   const [touchDropTargetDate, setTouchDropTargetDate] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tradeToDelete, setTradeToDelete] = useState<Trade | null>(null);
@@ -2224,18 +2225,18 @@ export default function Home() {
     }
   };
 
-  const handleDropTradeToDate = async (tradeId: string, date: string) => {
-    setDraggingTradeId(null);
-    const trade = trades.find((item) => item.id === tradeId);
-    if (!trade || trade.closedAt === date) {
+  const handleDropTradesToDate = async (tradeIds: string[], date: string) => {
+    setDraggingTradeIds([]);
+    const tradeIdsToMove = new Set(
+      trades.filter((trade) => tradeIds.includes(trade.id) && trade.closedAt !== date).map((trade) => trade.id)
+    );
+    if (tradeIdsToMove.size === 0) {
       return;
     }
 
-    const payload = tradeToPayload(trade, { closedAt: date });
-
     try {
       if (user && token) {
-        await updateTrade(trade.id, payload);
+        await moveTradesToClosedAt(Array.from(tradeIdsToMove), date);
         if (selectedDate) {
           await loadTrades(page, pageSize, selectedDate);
         } else {
@@ -2245,26 +2246,32 @@ export default function Home() {
         await loadAggregateStats();
         await loadSelectedExtendedWidgetData();
       } else {
-        const realizedPnl = computePnl(payload);
         const now = new Date().toISOString();
         const rate = summary?.cadToUsdRate;
         const fxDate = summary?.fxDate;
         setTrades((prev) => {
-          const next = prev.map((item) =>
-            item.id === trade.id
-              ? {
-                  ...item,
-                  ...payload,
-                  accountId: payload.accountId ?? null,
-                  optionType: payload.optionType ?? null,
-                  strikePrice: payload.strikePrice ?? null,
-                  expiryDate: payload.expiryDate ?? null,
-                  notes: payload.notes ?? null,
-                  realizedPnl,
-                  updatedAt: now,
-                }
-              : item
-          );
+          const next = prev.map((item) => {
+            if (!tradeIdsToMove.has(item.id)) {
+              return item;
+            }
+            // Same rule as the API: an option expiring on its close date keeps its expiry on the close date.
+            const expiryFollowsClose = item.assetType === "OPTION" && item.expiryDate === item.closedAt;
+            const payload = tradeToPayload(item, {
+              closedAt: date,
+              ...(expiryFollowsClose ? { expiryDate: date } : {}),
+            });
+            return {
+              ...item,
+              ...payload,
+              accountId: payload.accountId ?? null,
+              optionType: payload.optionType ?? null,
+              strikePrice: payload.strikePrice ?? null,
+              expiryDate: payload.expiryDate ?? null,
+              notes: payload.notes ?? null,
+              realizedPnl: computePnl(payload),
+              updatedAt: now,
+            };
+          });
           setSummary(computeSummary(next, calendarMonth, rate, fxDate));
           setAggregateStats(
             buildScopedAggregateStats(
@@ -3042,8 +3049,8 @@ export default function Home() {
                 onMonthChange={handleMonthChange}
                 selectedDate={selectedDate}
                 onDateSelect={handleDateSelect}
-                draggingTradeId={draggingTradeId}
-                onTradeDrop={handleDropTradeToDate}
+                draggingTradeIds={draggingTradeIds}
+                onTradeDrop={handleDropTradesToDate}
                 touchDropTargetDate={touchDropTargetDate}
                 valueMode={calendarValueMode}
                 marginMode={calendarMarginMode}
@@ -3153,10 +3160,10 @@ export default function Home() {
               loading={loadingTrades}
               onEdit={handleEditTrade}
               onDelete={handleDeleteTrade}
-              onTradeDragStart={setDraggingTradeId}
-              onTradeDragEnd={() => setDraggingTradeId(null)}
+              onTradeDragStart={setDraggingTradeIds}
+              onTradeDragEnd={() => setDraggingTradeIds([])}
               onTradeTouchDropTargetChange={setTouchDropTargetDate}
-              onTradeTouchDrop={handleDropTradeToDate}
+              onTradeTouchDrop={handleDropTradesToDate}
               sortBy={user && token ? tradeSort.sortBy : undefined}
               sortDirection={user && token ? tradeSort.sortDirection : undefined}
               onSortChange={user && token ? handleTradeSortChange : undefined}
