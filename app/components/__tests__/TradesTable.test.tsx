@@ -99,7 +99,7 @@ describe("TradesTable", () => {
       return { data, dataTransfer };
     };
 
-    it("toggles rows with Cmd/Ctrl+click instead of opening the editor", () => {
+    it("toggles rows with Cmd/Ctrl+click, then with plain clicks until the selection is empty", () => {
       const { rowFor, onEdit } = renderSelectableTable();
 
       fireEvent.click(rowFor("AAPL"), { metaKey: true });
@@ -113,6 +113,13 @@ describe("TradesTable", () => {
       fireEvent.click(rowFor("AAPL"), { metaKey: true });
       expect(rowFor("AAPL")).not.toHaveClass("Mui-selected");
 
+      fireEvent.click(rowFor("MSFT"));
+      expect(onEdit).not.toHaveBeenCalled();
+      expect(rowFor("MSFT")).toHaveClass("Mui-selected");
+
+      fireEvent.click(rowFor("MSFT"));
+      fireEvent.click(rowFor("NVDA"));
+      expect(screen.queryByText(/selected ·/)).not.toBeInTheDocument();
       fireEvent.click(rowFor("MSFT"));
       expect(onEdit).toHaveBeenCalledWith(secondTrade);
     });
@@ -129,7 +136,7 @@ describe("TradesTable", () => {
       expect(rowFor("MSFT")).not.toHaveClass("Mui-selected");
     });
 
-    it("drags the whole selection from a selected row, and only the row itself otherwise", () => {
+    it("drags the whole selection from a selected row, and only the row itself otherwise", async () => {
       const { rowFor, onTradeDragStart } = renderSelectableTable();
       fireEvent.click(rowFor("NVDA"), { metaKey: true });
       fireEvent.click(rowFor("AAPL"), { metaKey: true });
@@ -138,7 +145,10 @@ describe("TradesTable", () => {
       fireEvent.dragStart(rowFor("NVDA"), { dataTransfer: selectedDrag.dataTransfer });
       expect(onTradeDragStart).toHaveBeenLastCalledWith(["trade-1", "trade-3"]);
       expect(selectedDrag.data["application/x-trade-ids"]).toBe("trade-1,trade-3");
-      expect(selectedDrag.dataTransfer.setDragImage).toHaveBeenCalled();
+      const dragImage = selectedDrag.dataTransfer.setDragImage.mock.calls[0][0] as HTMLElement;
+      expect(dragImage).toHaveTextContent("2 trades");
+      await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+      expect(dragImage).not.toBeInTheDocument();
 
       const unselectedDrag = recordingDataTransfer();
       fireEvent.dragStart(rowFor("MSFT"), { dataTransfer: unselectedDrag.dataTransfer });
@@ -204,6 +214,59 @@ describe("TradesTable", () => {
       const row = screen.getByText("AAPL").closest("tr") as HTMLElement;
       return { row, ...handlers };
     };
+
+    it("selects a row held still and released, toggles tapped rows, and drags the selection together", () => {
+      const secondTrade: Trade = { ...trade, id: "trade-2", symbol: "MSFT" };
+      const handlers = {
+        onEdit: vi.fn(),
+        onTradeDragStart: vi.fn(),
+        onTradeDragEnd: vi.fn(),
+        onTradeTouchDropTargetChange: vi.fn(),
+        onTradeTouchDrop: vi.fn(),
+      };
+      render(<TradesTable trades={[trade, secondTrade]} onDelete={vi.fn()} {...handlers} />);
+      const firstRow = screen.getByText("AAPL").closest("tr") as HTMLElement;
+      const secondRow = screen.getByText("MSFT").closest("tr") as HTMLElement;
+
+      fireEvent.touchStart(firstRow, { touches: touchAt(50, 300) });
+      act(() => {
+        vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS);
+      });
+      const release = createEvent.touchEnd(firstRow, { changedTouches: touchAt(52, 302) });
+      fireEvent(firstRow, release);
+      expect(release.defaultPrevented).toBe(true);
+      expect(handlers.onTradeTouchDrop).not.toHaveBeenCalled();
+      expect(firstRow).toHaveClass("Mui-selected");
+      expect(screen.getByText(/^1 selected/)).toBeInTheDocument();
+
+      fireEvent.click(secondRow);
+      expect(handlers.onEdit).not.toHaveBeenCalled();
+      expect(secondRow).toHaveClass("Mui-selected");
+
+      fireEvent.touchStart(secondRow, { touches: touchAt(50, 320) });
+      act(() => {
+        vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS);
+      });
+      expect(handlers.onTradeDragStart).toHaveBeenLastCalledWith(["trade-1", "trade-2"]);
+      expect(screen.getByText("2 trades")).toBeInTheDocument();
+      fireEvent.touchMove(secondRow, { changedTouches: touchAt(50, 40) });
+      fireEvent.touchEnd(secondRow, { changedTouches: touchAt(50, 40) });
+      expect(handlers.onTradeTouchDrop).toHaveBeenCalledWith(["trade-1", "trade-2"], "2024-05-03");
+    });
+
+    it("doesn't select a row that was dragged away and released off the calendar", () => {
+      const { row, onTradeTouchDrop } = renderTable();
+
+      fireEvent.touchStart(row, { touches: touchAt(50, 300) });
+      act(() => {
+        vi.advanceTimersByTime(TOUCH_DRAG_DELAY_MS);
+      });
+      fireEvent.touchMove(row, { changedTouches: touchAt(50, 400) });
+      fireEvent.touchEnd(row, { changedTouches: touchAt(50, 300) });
+
+      expect(onTradeTouchDrop).not.toHaveBeenCalled();
+      expect(row).not.toHaveClass("Mui-selected");
+    });
 
     it("drops a long-pressed row onto the day under the finger", () => {
       const { row, onEdit, onTradeDragStart, onTradeDragEnd, onTradeTouchDropTargetChange, onTradeTouchDrop } =

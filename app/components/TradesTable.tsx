@@ -253,8 +253,18 @@ export function TradesTable({
       ? trades.filter((trade) => selectedTradeIdSet.has(trade.id)).map((trade) => trade.id)
       : [tradeId];
 
+  const toggleTradeSelection = (tradeId: string) => {
+    selectionAnchorTradeIdRef.current = tradeId;
+    setSelectedTradeIds((previous) =>
+      previous.includes(tradeId) ? previous.filter((id) => id !== tradeId) : [...previous, tradeId]
+    );
+  };
+
+  // Selecting starts with Cmd/Ctrl/Shift+click, or a long press on touch. While anything is selected,
+  // a plain click or tap adds or removes the row too; the row's edit button still opens the editor.
   const handleRowClick = (event: ReactMouseEvent<HTMLTableRowElement>, trade: Trade) => {
-    if (!selectionEnabled || !(event.metaKey || event.ctrlKey || event.shiftKey)) {
+    const selectionGesture = event.metaKey || event.ctrlKey || event.shiftKey;
+    if (!selectionEnabled || (!selectionGesture && selectedTradeIds.length === 0)) {
       onEdit(trade);
       return;
     }
@@ -267,12 +277,7 @@ export function TradesTable({
       setSelectedTradeIds((previous) => Array.from(new Set([...previous, ...rangeTradeIds])));
       return;
     }
-    selectionAnchorTradeIdRef.current = trade.id;
-    setSelectedTradeIds((previous) =>
-      previous.includes(trade.id)
-        ? previous.filter((tradeId) => tradeId !== trade.id)
-        : [...previous, trade.id]
-    );
+    toggleTradeSelection(trade.id);
   };
 
   const touchDrag = useTouchTradeDrag({
@@ -281,6 +286,7 @@ export function TradesTable({
     onDragEnd: onTradeDragEnd,
     onDropTargetChange: onTradeTouchDropTargetChange,
     onDrop: (tradeId, date) => onTradeTouchDrop?.(tradeIdsToDrag(tradeId), date),
+    onLongPress: selectionEnabled ? toggleTradeSelection : undefined,
   });
   const touchDraggedTrade = touchDrag.touchDrag
     ? trades.find((trade) => trade.id === touchDrag.touchDrag?.tradeId)
@@ -650,7 +656,7 @@ export function TradesTable({
           }}
         >
           <Typography variant="body2">
-            {`${selectedTradeIds.length} selected · drag one onto a calendar day to move them all`}
+            {`${selectedTradeIds.length} selected · tap rows to add or remove · drag one onto a day to move them all`}
           </Typography>
           <Button size="small" onClick={() => setSelectedTradeIds([])}>
             Clear
