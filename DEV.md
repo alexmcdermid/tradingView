@@ -300,17 +300,11 @@ Comment on a PR to get an AI code review: a summary plus inline comments, like C
 /ai-review [light|standard|deep|security] [anthropic|openai|both]
 ```
 
-| Tier | Anthropic | OpenAI | Context |
-|---|---|---|---|
-| `light` | Claude Haiku 5.5 | GPT-6 Luna | diff only |
-| `standard` (default) | Claude Sonnet 5.5 | GPT-6.1 Sol | diff + full changed files |
-| `deep` | Claude Opus 5.5 | GPT-6 Astra | diff + full changed files, highest effort |
-| `security` | Claude Opus 5.5 | GPT-6 Sol (Daybreak Blue) | diff + full changed files, security-focused prompt |
-
-- Defaults to `standard` with both providers. Override with the repo variables `AI_REVIEW_DEFAULT_TIER` and `AI_REVIEW_DEFAULT_PROVIDERS`.
+- The workflow calls the shared [alexmcdermid/ai-review](https://github.com/alexmcdermid/ai-review) action at `@main`. Tiers, models, and prices live there, in `REVIEW_TIERS`; its [architecture doc](https://github.com/alexmcdermid/ai-review/blob/main/docs/architecture.md) describes each tier.
+- Defaults to `standard` with both providers. Override with the action's `default-tier` and `default-providers` inputs in `.github/workflows/ai-review.yml`.
 - Only the repo owner can trigger it. Comments from anyone else, collaborators and bots included, are ignored. Each review's footer shows the model, tokens, and estimated cost.
-- Secrets: `ANTHROPIC_REVIEWER_API_KEY` and `OPENAI_API_REVIEWER_KEY`. They are dedicated keys, so review spend shows separately in each provider's usage console. The security tier's OpenAI review needs Daybreak Blue enabled on that key's OpenAI project.
-- Comment-triggered workflows run from `main`, so workflow changes take effect after merge. Tiers, models, and prices live in `.github/ai-review/review-pull-request.mjs`.
+- Secrets: `ANTHROPIC_REVIEWER_API_KEY` and `OPENAI_API_REVIEWER_KEY`. They are dedicated keys, so review spend shows separately in each provider's usage console.
+- Comment-triggered workflows run from `main`, so workflow changes take effect after merge.
 
 ## Tech Stack Details
 
