@@ -20,6 +20,16 @@ export function clearCsrfToken() {
 
 type RequestOptions = RequestInit & { skipAuthHeader?: boolean };
 
+type BlobRequestOptions = RequestOptions & { fallbackFilename?: string };
+
+export type BlobDownload = {
+  blob: Blob;
+  filename: string;
+};
+
+const DEFAULT_DOWNLOAD_FILENAME = "tradelog-export.csv";
+const MAX_DOWNLOAD_FILENAME_LENGTH = 120;
+
 type HeaderAuthOptions = {
   isDev: boolean;
   useHeaderAuth: boolean;
@@ -37,6 +47,51 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}) {
+  const response = await sendRequest(path, options);
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return (await response.json()) as T;
+}
+
+// Error statuses throw ApiError, so an error body is never handed back as a file.
+export async function requestBlob(
+  path: string,
+  options: BlobRequestOptions = {}
+): Promise<BlobDownload> {
+  const { fallbackFilename = DEFAULT_DOWNLOAD_FILENAME, ...requestOptions } = options;
+  const response = await sendRequest(path, requestOptions);
+
+  return {
+    blob: await response.blob(),
+    filename: filenameFromContentDisposition(
+      response.headers.get("Content-Disposition"),
+      fallbackFilename
+    ),
+  };
+}
+
+async function sendRequest(path: string, options: RequestOptions) {
+  const response = await fetch(`${DEFAULT_API_BASE_URL}${path}`, {
+    ...options,
+    headers: await buildHeaders(options),
+    credentials: "include",
+  });
+
+  if (!response.ok) {
+    const message = await safeParseError(response);
+    throw new ApiError(
+      message || `Request failed with status ${response.status}`,
+      response.status
+    );
+  }
+
+  return response;
+}
+
+async function buildHeaders(options: RequestOptions) {
   const headers = new Headers(options.headers || {});
   headers.set("Content-Type", "application/json");
 
@@ -58,25 +113,7 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
     headers.set("X-User-Id", DEFAULT_USER_ID);
   }
 
-  const response = await fetch(`${DEFAULT_API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
-
-  if (!response.ok) {
-    const message = await safeParseError(response);
-    throw new ApiError(
-      message || `Request failed with status ${response.status}`,
-      response.status
-    );
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return (await response.json()) as T;
+  return headers;
 }
 
 export function shouldSendHeaderAuth({
@@ -135,4 +172,43 @@ async function safeParseError(response: Response) {
     // ignore parse errors
   }
   return response.statusText;
+}
+
+function filenameFromContentDisposition(header: string | null, fallbackFilename: string) {
+  if (!header) {
+    return fallbackFilename;
+  }
+
+  // RFC 6266: the RFC 5987 filename* wins over the plain filename when both are present.
+  const encodedValue = /(?:^|;)\s*filename\*\s*=\s*([^;]+)/i.exec(header)?.[1];
+  const plainMatch = /(?:^|;)\s*filename\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^";]*))/i.exec(header);
+  const plainValue = plainMatch
+    ? plainMatch[1]?.replace(/\\(.)/g, "$1") ?? plainMatch[2]
+    : undefined;
+  const encodedFilename = encodedValue ? decodeRfc5987Value(encodedValue.trim()) : null;
+  const candidate = encodedFilename || plainValue?.trim();
+
+  return (candidate && sanitizeDownloadFilename(candidate)) || fallbackFilename;
+}
+
+function decodeRfc5987Value(value: string) {
+  const match = /^UTF-8'[^']*'(.+)$/i.exec(value);
+  if (!match) {
+    return null;
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+// Keeps only the base name in a conservative ASCII set; anything doubtful falls back.
+function sanitizeDownloadFilename(filename: string) {
+  const baseName = filename.split(/[\\/]/).pop() ?? "";
+  const safeName = baseName.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^[._]+/, "");
+  if (!/[A-Za-z0-9]/.test(safeName) || safeName.length > MAX_DOWNLOAD_FILENAME_LENGTH) {
+    return null;
+  }
+  return safeName;
 }
