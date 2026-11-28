@@ -2,7 +2,7 @@
 name: Dev App Runner Cleanup
 
 on:
-  pull_request_target:
+  pull_request:
     branches: [ "main" ]
     types: [closed]
 
@@ -12,6 +12,8 @@ env:
 
 jobs:
   pause-when-idle:
+    # Fork PRs never resume dev (see ci.yml) and get no secrets under pull_request.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     environment: dev
     concurrency:
